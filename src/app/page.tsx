@@ -1,6 +1,6 @@
 "use client";
 import { useDispatch, useSelector } from "react-redux";
-import { addPost } from "@/store/postSlice";
+import { addPost, likePost, addComment, openShareModal, closeShareModal } from "@/store/postSlice";
 import { RootState } from "@/store/index";
 import { useState } from "react";
 import {
@@ -18,6 +18,10 @@ import {
   Divider,
   Badge,
   Container,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
 import { Image, Event, Tag } from "@mui/icons-material";
 import {
@@ -25,40 +29,31 @@ import {
   Comment as CommentIcon,
   Share as ShareIcon,
 } from "@mui/icons-material";
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField as InputField,
-} from "@mui/material";
-import {
-  likePost,
-  addComment,
-  openShareModal,
-  closeShareModal,
-} from "@/store/postSlice";
 
 export default function Feed() {
   const dispatch = useDispatch();
   const posts = useSelector((state: RootState) => state.posts.items);
-
-  const selectedPost = useSelector(
-    (state: RootState) => state.posts.selectedPost
-  );
+  const selectedPost = useSelector((state: RootState) => state.posts.selectedPost);
 
   const [content, setContent] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [activeCommentPost, setActiveCommentPost] = useState<string | null>(
-    null
-  );
+  const [activeCommentPost, setActiveCommentPost] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
+
+  // For Add Photo
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  // For Add Event
+  const [openEventDialog, setOpenEventDialog] = useState(false);
+  const [eventTitle, setEventTitle] = useState("");
+  const [eventDate, setEventDate] = useState("");
 
   const handleTagMenuOpen = (event: React.MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget);
   };
   const handleClose = () => setAnchorEl(null);
+
   const handleTagSelect = (tag: string) => {
     if (!selectedTags.includes(tag)) setSelectedTags([...selectedTags, tag]);
     setAnchorEl(null);
@@ -67,17 +62,35 @@ export default function Feed() {
     setSelectedTags(selectedTags.filter((t) => t !== tag));
 
   const handlePost = () => {
-    if (!content.trim()) return;
+    if (!content.trim() && !selectedImage) return;
     dispatch(
       addPost({
         user: "John Doe",
         avatar: "/avatar.png",
         content,
         tags: selectedTags,
+        image: selectedImage,
       })
     );
     setContent("");
     setSelectedTags([]);
+    setSelectedImage(null);
+  };
+
+  const handleAddEventPost = () => {
+    if (!eventTitle || !eventDate) return;
+    dispatch(
+      addPost({
+        user: "John Doe",
+        avatar: "/avatar.png",
+        content: `📅 Event: ${eventTitle}`,
+        tags: ["Event"],
+        eventDate,
+      })
+    );
+    setOpenEventDialog(false);
+    setEventTitle("");
+    setEventDate("");
   };
 
   const contacts = [
@@ -94,7 +107,8 @@ export default function Feed() {
   return (
     <Container>
       <Grid container spacing={3}>
-        <Grid size={{ xs: 12, md: 9 }}>
+        {/* Main Feed */}
+<Grid size={{ xs: 12, md: 9 }}>
           <Paper sx={{ p: 2, mb: 3, borderRadius: 3 }}>
             <Box display="flex" alignItems="center" gap={2}>
               <Avatar alt="User" src="/avatar.png" />
@@ -108,6 +122,22 @@ export default function Feed() {
               />
             </Box>
 
+            {/* Hidden Image Upload */}
+            <input
+              accept="image/*"
+              type="file"
+              id="photo-upload"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  const file = e.target.files[0];
+                  const imageUrl = URL.createObjectURL(file);
+                  setSelectedImage(imageUrl);
+                }
+              }}
+            />
+
+            {/* Tag Chips */}
             {selectedTags.length > 0 && (
               <Stack direction="row" spacing={1} mt={2} flexWrap="wrap">
                 {selectedTags.map((tag) => (
@@ -122,6 +152,23 @@ export default function Feed() {
               </Stack>
             )}
 
+            {/* Image Preview */}
+            {selectedImage && (
+              <Box mt={2}>
+                <img
+                  src={selectedImage}
+                  alt="Preview"
+                  style={{
+                    width: "100%",
+                    maxHeight: 300,
+                    borderRadius: 12,
+                    objectFit: "cover",
+                  }}
+                />
+              </Box>
+            )}
+
+            {/* Post Buttons */}
             <Box
               display="flex"
               justifyContent="space-between"
@@ -129,12 +176,22 @@ export default function Feed() {
               mt={2}
             >
               <Stack direction="row" spacing={1}>
-                <Button variant="text" startIcon={<Image />}>
+                <Button
+                  variant="text"
+                  startIcon={<Image />}
+                  onClick={() => document.getElementById("photo-upload")?.click()}
+                >
                   Add Photo
                 </Button>
-                <Button variant="text" startIcon={<Event />}>
+
+                <Button
+                  variant="text"
+                  startIcon={<Event />}
+                  onClick={() => setOpenEventDialog(true)}
+                >
                   Add Event
                 </Button>
+
                 <Button
                   variant="text"
                   startIcon={<Tag />}
@@ -143,26 +200,16 @@ export default function Feed() {
                   Add Tag
                 </Button>
 
-                <Menu
-                  anchorEl={anchorEl}
-                  open={Boolean(anchorEl)}
-                  onClose={handleClose}
-                >
-                  {["Conversation", "Event", "Giveaway", "Announcement"].map(
-                    (tag) => (
-                      <MenuItem key={tag} onClick={() => handleTagSelect(tag)}>
-                        {tag}
-                      </MenuItem>
-                    )
-                  )}
+                <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleClose}>
+                  {["Conversation", "Event", "Giveaway", "Announcement"].map((tag) => (
+                    <MenuItem key={tag} onClick={() => handleTagSelect(tag)}>
+                      {tag}
+                    </MenuItem>
+                  ))}
                 </Menu>
               </Stack>
 
-              <Button
-                variant="contained"
-                sx={{ borderRadius: 3 }}
-                onClick={handlePost}
-              >
+              <Button variant="contained" sx={{ borderRadius: 3 }} onClick={handlePost}>
                 Post
               </Button>
             </Box>
@@ -180,11 +227,36 @@ export default function Feed() {
                   </Typography>
                 </Box>
               </Box>
-              <Divider />
+
               <Typography variant="body1" my={1}>
                 {post.content}
               </Typography>
-              <Stack direction="row" spacing={1} mb={1}>
+
+              {post.image && (
+                <Box mt={1}>
+                  <img
+                    src={post.image}
+                    alt="Post"
+                    style={{
+                      width: "100%",
+                      borderRadius: 12,
+                      objectFit: "cover",
+                    }}
+                  />
+                </Box>
+              )}
+
+              {post.eventDate && (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 0.5, fontStyle: "italic" }}
+                >
+                  Event Date: {new Date(post.eventDate).toLocaleDateString()}
+                </Typography>
+              )}
+
+              <Stack direction="row" spacing={1} mb={1} mt={1}>
                 {post.tags.map((tag) => (
                   <Chip key={tag} label={tag} variant="outlined" size="small" />
                 ))}
@@ -194,13 +266,18 @@ export default function Feed() {
 
               <Stack direction="row" spacing={2}>
                 <Button
-  size="small"
-  startIcon={<ThumbUp color={post.likedBy.includes("John Doe") ? "primary" : "inherit"} />}
-  onClick={() => dispatch(likePost({ postId: post.id, user: "John Doe" }))}
->
-  {post.likes > 0 ? `Like (${post.likes})` : "Like"}
-</Button>
-
+                  size="small"
+                  startIcon={
+                    <ThumbUp
+                      color={post.likedBy.includes("John Doe") ? "primary" : "inherit"}
+                    />
+                  }
+                  onClick={() =>
+                    dispatch(likePost({ postId: post.id, user: "John Doe" }))
+                  }
+                >
+                  {post.likes > 0 ? `Like (${post.likes})` : "Like"}
+                </Button>
 
                 <Button
                   size="small"
@@ -222,7 +299,7 @@ export default function Feed() {
               {/* Comment Box */}
               {activeCommentPost === post.id && (
                 <Box mt={1}>
-                  <InputField
+                  <TextField
                     fullWidth
                     size="small"
                     placeholder="Write a comment..."
@@ -254,8 +331,9 @@ export default function Feed() {
             </Paper>
           ))}
         </Grid>
-        {/* Right Sidebar */}
-        <Grid size={{ xs: 12, md: 3 }}>
+
+        {/* Sidebar */}
+<Grid size={{ xs: 12, md: 3 }}>
           <Paper sx={{ p: 2, borderRadius: 3, mb: 3 }}>
             <Typography variant="h6" gutterBottom>
               Online Contacts
@@ -277,8 +355,8 @@ export default function Feed() {
               ))}
             </Box>
           </Paper>
+
           <Paper sx={{ p: 2, borderRadius: 3, mb: 3 }}>
-            {/* Upcoming Events */}
             <Typography variant="h6" gutterBottom>
               Upcoming Events
             </Typography>
@@ -307,10 +385,9 @@ export default function Feed() {
           </Paper>
         </Grid>
       </Grid>
-      <Dialog
-        open={Boolean(selectedPost)}
-        onClose={() => dispatch(closeShareModal())}
-      >
+
+      {/* Share Dialog */}
+      <Dialog open={Boolean(selectedPost)} onClose={() => dispatch(closeShareModal())}>
         <DialogTitle>Share Post</DialogTitle>
         <DialogContent dividers>
           {selectedPost && (
@@ -330,6 +407,35 @@ export default function Feed() {
         <DialogActions>
           <Button onClick={() => dispatch(closeShareModal())}>Close</Button>
           <Button variant="contained">Copy Link</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add Event Dialog */}
+      <Dialog open={openEventDialog} onClose={() => setOpenEventDialog(false)}>
+        <DialogTitle>Add Event</DialogTitle>
+        <DialogContent dividers>
+          <TextField
+            label="Event Title"
+            fullWidth
+            margin="dense"
+            value={eventTitle}
+            onChange={(e) => setEventTitle(e.target.value)}
+          />
+          <TextField
+            label="Event Date"
+            type="date"
+            fullWidth
+            margin="dense"
+            InputLabelProps={{ shrink: true }}
+            value={eventDate}
+            onChange={(e) => setEventDate(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenEventDialog(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleAddEventPost}>
+            Post Event
+          </Button>
         </DialogActions>
       </Dialog>
     </Container>
