@@ -1,8 +1,16 @@
 "use client";
 import { useDispatch, useSelector } from "react-redux";
-import { addPost, likePost, addComment, openShareModal, closeShareModal } from "@/store/postSlice";
-import { RootState } from "@/store/index";
-import { useState } from "react";
+import {
+  addPost,
+  likePost,
+  addComment,
+  openShareModal,
+  closeShareModal,
+  deletePost,
+  updatePost,
+} from "@/store/postSlice";
+import { RootState } from "@/store";
+import { useMemo, useState } from "react";
 import {
   Grid,
   Paper,
@@ -22,8 +30,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  IconButton,
 } from "@mui/material";
-import { Image, Event, Tag } from "@mui/icons-material";
+import { Image, Event, Tag, MoreVert, Delete, Edit } from "@mui/icons-material";
 import {
   ThumbUp,
   Comment as CommentIcon,
@@ -49,6 +58,78 @@ export default function Feed() {
   const [eventTitle, setEventTitle] = useState("");
   const [eventDate, setEventDate] = useState("");
 
+  // Kebab menu per-post
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [menuPostId, setMenuPostId] = useState<string | null>(null);
+  const openPostMenu = (e: React.MouseEvent<HTMLElement>, postId: string) => {
+    setMenuAnchor(e.currentTarget);
+    setMenuPostId(postId);
+  };
+  const closePostMenu = () => {
+    setMenuAnchor(null);
+    setMenuPostId(null);
+  };
+
+  // Delete confirmation dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const askDeleteFor = (postId: string) => {
+    setDeleteTargetId(postId);
+    setDeleteDialogOpen(true);
+    closePostMenu();
+  };
+  const closeDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setDeleteTargetId(null);
+  };
+  const confirmDelete = () => {
+    if (deleteTargetId) dispatch(deletePost({ postId: deleteTargetId }));
+    closeDeleteDialog();
+  };
+
+  // Edit dialog
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editTargetId, setEditTargetId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [editImage, setEditImage] = useState<string | null | undefined>(undefined); // undefined means untouched, null = remove, string = new URL
+
+  const currentEditPost = useMemo(
+    () => posts.find((p) => p.id === editTargetId) || null,
+    [posts, editTargetId]
+  );
+
+  const startEditFor = (postId: string) => {
+    const p = posts.find((x) => x.id === postId);
+    if (!p) return;
+    setEditTargetId(postId);
+    setEditContent(p.content);
+    setEditTags([...p.tags]);
+    setEditImage(undefined); // default: do not change image unless user acts
+    setEditDialogOpen(true);
+    closePostMenu();
+  };
+  const closeEditDialog = () => {
+    setEditDialogOpen(false);
+    setEditTargetId(null);
+    setEditContent("");
+    setEditTags([]);
+    setEditImage(undefined);
+  };
+  const saveEdit = () => {
+    if (!editTargetId) return;
+    dispatch(
+      updatePost({
+        postId: editTargetId,
+        content: editContent.trim(),
+        tags: editTags,
+        image: editImage, // undefined = no change, null = remove, string = replace
+      })
+    );
+    closeEditDialog();
+  };
+
+  // Tag popover for composer
   const handleTagMenuOpen = (event: React.MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget);
   };
@@ -69,7 +150,7 @@ export default function Feed() {
         avatar: "/avatar.png",
         content,
         tags: selectedTags,
-        image: selectedImage,
+        image: selectedImage || undefined,
       })
     );
     setContent("");
@@ -108,7 +189,7 @@ export default function Feed() {
     <Container>
       <Grid container spacing={3}>
         {/* Main Feed */}
-<Grid size={{ xs: 12, md: 9 }}>
+        <Grid size={{ xs: 12, md: 9 }}>
           <Paper sx={{ p: 2, mb: 3, borderRadius: 3 }}>
             <Box display="flex" alignItems="center" gap={2}>
               <Avatar alt="User" src="/avatar.png" />
@@ -218,15 +299,44 @@ export default function Feed() {
           {/* Render Posts */}
           {posts.map((post) => (
             <Paper key={post.id} sx={{ p: 2, mb: 2, borderRadius: 3 }}>
-              <Box display="flex" alignItems="center" gap={2} mb={1}>
-                <Avatar src={post.avatar} />
-                <Box>
-                  <Typography variant="subtitle2">{post.user}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {post.date}
-                  </Typography>
+              {/* Header with kebab */}
+              <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <Avatar src={post.avatar} />
+                  <Box>
+                    <Typography variant="subtitle2">{post.user}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {post.date}
+                    </Typography>
+                  </Box>
                 </Box>
+
+                <IconButton
+                  aria-label="post options"
+                  onClick={(e) => openPostMenu(e, post.id)}
+                  size="small"
+                >
+                  <MoreVert />
+                </IconButton>
               </Box>
+
+              {/* Per-post menu */}
+              <Menu
+                anchorEl={menuAnchor}
+                open={menuPostId === post.id}
+                onClose={closePostMenu}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                transformOrigin={{ vertical: "top", horizontal: "right" }}
+              >
+                <MenuItem onClick={() => startEditFor(post.id)}>
+                  <Edit fontSize="small" style={{ marginRight: 8 }} />
+                  Edit
+                </MenuItem>
+                <MenuItem onClick={() => askDeleteFor(post.id)}>
+                  <Delete fontSize="small" style={{ marginRight: 8 }} />
+                  Delete
+                </MenuItem>
+              </Menu>
 
               <Typography variant="body1" my={1}>
                 {post.content}
@@ -306,12 +416,12 @@ export default function Feed() {
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") {
+                      if (e.key === "Enter" && commentText.trim()) {
                         dispatch(
                           addComment({
                             postId: post.id,
                             user: "John Doe",
-                            text: commentText,
+                            text: commentText.trim(),
                           })
                         );
                         setCommentText("");
@@ -333,7 +443,7 @@ export default function Feed() {
         </Grid>
 
         {/* Sidebar */}
-<Grid size={{ xs: 12, md: 3 }}>
+        <Grid size={{ xs: 12, md: 3 }}>
           <Paper sx={{ p: 2, borderRadius: 3, mb: 3 }}>
             <Typography variant="h6" gutterBottom>
               Online Contacts
@@ -406,7 +516,15 @@ export default function Feed() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => dispatch(closeShareModal())}>Close</Button>
-          <Button variant="contained">Copy Link</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              if (!selectedPost) return;
+              navigator.clipboard.writeText(`${location.origin}/post/${selectedPost.id}`);
+            }}
+          >
+            Copy Link
+          </Button>
         </DialogActions>
       </Dialog>
 
@@ -435,6 +553,120 @@ export default function Feed() {
           <Button onClick={() => setOpenEventDialog(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleAddEventPost}>
             Post Event
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={closeDeleteDialog}>
+        <DialogTitle>Delete post?</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2">
+            This action can’t be undone. Are you sure you want to delete this post?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeDeleteDialog}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={confirmDelete}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Post Dialog */}
+      <Dialog open={editDialogOpen} onClose={closeEditDialog} fullWidth maxWidth="sm">
+        <DialogTitle>Edit Post</DialogTitle>
+        <DialogContent dividers>
+          <TextField
+            label="Content"
+            fullWidth
+            multiline
+            minRows={3}
+            margin="dense"
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+          />
+
+          {/* Tag editor (simple quick-add) */}
+          <Box mt={2}>
+            <Typography variant="subtitle2" gutterBottom>Tags</Typography>
+            <Stack direction="row" spacing={1} flexWrap="wrap">
+              {editTags.map((t) => (
+                <Chip key={t} label={t} onDelete={() => setEditTags(editTags.filter(x => x !== t))} />
+              ))}
+              {["Conversation", "Event", "Giveaway", "Announcement"].map((t) => (
+                <Chip
+                  key={`picker-${t}`}
+                  label={`+ ${t}`}
+                  variant="outlined"
+                  onClick={() => {
+                    if (!editTags.includes(t)) setEditTags([...editTags, t]);
+                  }}
+                />
+              ))}
+            </Stack>
+          </Box>
+
+          {/* Image controls */}
+          <Box mt={3}>
+            <Typography variant="subtitle2" gutterBottom>Image</Typography>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  const el = document.createElement("input");
+                  el.type = "file";
+                  el.accept = "image/*";
+                  el.onchange = (evt: any) => {
+                    const f = evt?.target?.files?.[0];
+                    if (f) {
+                      const url = URL.createObjectURL(f);
+                      setEditImage(url); // replace
+                    }
+                  };
+                  el.click();
+                }}
+              >
+                Replace Image
+              </Button>
+              <Button
+                variant="text"
+                color="error"
+                onClick={() => setEditImage(null)}
+                disabled={!currentEditPost?.image && editImage !== null}
+              >
+                Remove Image
+              </Button>
+              <Typography variant="caption" color="text.secondary">
+                (Leave unchanged if you don’t pick anything)
+              </Typography>
+            </Stack>
+
+            {/* Preview current/next image */}
+            <Box mt={2}>
+              <Typography variant="caption" color="text.secondary">Preview</Typography>
+              <Box mt={1}>
+                {editImage === null ? (
+                  <Typography variant="body2" color="text.secondary">Image will be removed</Typography>
+                ) : (
+                  <img
+                    src={editImage ?? currentEditPost?.image}
+                    alt="Preview"
+                    style={{ width: "100%", maxHeight: 250, objectFit: "cover", borderRadius: 12 }}
+                  />
+                )}
+              </Box>
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeEditDialog}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={saveEdit}
+            disabled={!editContent.trim() && !(editImage !== undefined)}
+          >
+            Save
           </Button>
         </DialogActions>
       </Dialog>

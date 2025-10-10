@@ -1,6 +1,6 @@
-import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, nanoid, PayloadAction } from "@reduxjs/toolkit";
 
-interface Comment {
+export interface Comment {
   id: string;
   user: string;
   text: string;
@@ -12,134 +12,144 @@ export interface Post {
   user: string;
   avatar: string;
   content: string;
-  tags: string[];
   image?: string;
-  eventDate?: string;
+  eventDate?: string; // ISO string "YYYY-MM-DD"
+  tags: string[];
+  date: string; // e.g., "Oct 10, 2025, 10:05 AM"
   likes: number;
   likedBy: string[];
   comments: Comment[];
-  date: string;
 }
 
 interface PostsState {
   items: Post[];
-  selectedPost: Post | null;
+  selectedPost: Post | null; // for Share modal
 }
 
 const initialState: PostsState = {
-  items: [
-    {
-      id: "1",
-      user: "John Doe",
-      avatar: "/avatars/avatar1.jpg",
-      content: "Excited to announce our new AI-driven solution! 🚀",
-      tags: ["Announcement"],
-      image: "/posts/ai-announcement.jpg",
-      likes: 12,
-      likedBy: ["Alice"],
-      comments: [
-        { id: "c1", user: "Alice", text: "Amazing!", date: new Date().toISOString() },
-      ],
-      date: new Date().toISOString(),
-    },
-    {
-      id: "2",
-      user: "Infra.Health",
-      avatar: "/avatars/avatar2.jpg",
-      content:
-        "Join us for our Healthcare Infra Expo 2025 — meet industry leaders and explore smart hospital solutions.",
-      tags: ["Event"],
-      eventDate: "2025-03-10",
-      likes: 35,
-      likedBy: [],
-      comments: [],
-      date: new Date().toISOString(),
-    },
-  ],
+  items: [],
   selectedPost: null,
 };
 
-// --- Payload Types ---
+const fmtNow = () =>
+  new Date().toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
 type AddPostPayload = {
   user: string;
-  avatar?: string;
-  content?: string;
-  tags?: string[];
-  image?: string | null;
-  eventDate?: string | null;
+  avatar: string;
+  content: string;
+  tags: string[];
+  image?: string;
+  eventDate?: string; // "YYYY-MM-DD"
 };
 
-type LikePostPayload = { postId: string; user: string };
-type AddCommentPayload = { postId: string; user: string; text: string };
+type UpdatePostPayload = {
+  postId: string;
+  content?: string;
+  tags?: string[];
+  image?: string | null; // pass null to remove image
+};
 
-const postSlice = createSlice({
+const postsSlice = createSlice({
   name: "posts",
   initialState,
   reducers: {
-    // ADD POST
     addPost: (state, action: PayloadAction<AddPostPayload>) => {
-      const payload = action.payload;
-      const newPost: Post = {
-        id: Date.now().toString() + Math.random().toString(36).slice(2, 8),
-        user: payload.user,
-        avatar: payload.avatar ?? "/avatars/default.png",
-        content: payload.content ?? "",
-        tags: payload.tags ?? [],
-        image: payload.image ?? undefined,
-        eventDate: payload.eventDate ?? undefined,
+      const { user, avatar, content, tags, image, eventDate } = action.payload;
+      const post: Post = {
+        id: nanoid(),
+        user,
+        avatar,
+        content,
+        image,
+        eventDate,
+        tags,
+        date: fmtNow(),
         likes: 0,
         likedBy: [],
         comments: [],
-        date: new Date().toISOString(),
       };
-      state.items.unshift(newPost); // add new post at top
+      state.items.unshift(post);
     },
 
-    // LIKE / UNLIKE POST
-    likePost: (state, action: PayloadAction<LikePostPayload>) => {
+    likePost: (
+      state,
+      action: PayloadAction<{ postId: string; user: string }>
+    ) => {
       const { postId, user } = action.payload;
       const post = state.items.find((p) => p.id === postId);
       if (!post) return;
-
-      const index = post.likedBy.indexOf(user);
-      if (index === -1) {
-        post.likedBy.push(user);
+      const i = post.likedBy.indexOf(user);
+      if (i >= 0) {
+        post.likedBy.splice(i, 1);
+        post.likes = Math.max(0, post.likes - 1);
       } else {
-        post.likedBy.splice(index, 1);
+        post.likedBy.push(user);
+        post.likes += 1;
       }
-      post.likes = post.likedBy.length;
     },
 
-    // ADD COMMENT
-    addComment: (state, action: PayloadAction<AddCommentPayload>) => {
+    addComment: (
+      state,
+      action: PayloadAction<{ postId: string; user: string; text: string }>
+    ) => {
       const { postId, user, text } = action.payload;
       const post = state.items.find((p) => p.id === postId);
       if (!post) return;
-
-      const newComment: Comment = {
-        id: Date.now().toString() + Math.random().toString(36).slice(2, 8),
+      post.comments.push({
+        id: nanoid(),
         user,
         text,
-        date: new Date().toISOString(),
-      };
-      post.comments.push(newComment);
+        date: fmtNow(),
+      });
     },
 
-    // OPEN SHARE MODAL
-    openShareModal: (state, action: PayloadAction<string>) => {
-      const postId = action.payload;
-      const post = state.items.find((p) => p.id === postId) ?? null;
+    openShareModal: (state, action: PayloadAction<string /* postId */>) => {
+      const post = state.items.find((p) => p.id === action.payload) || null;
       state.selectedPost = post;
     },
 
-    // CLOSE SHARE MODAL
     closeShareModal: (state) => {
       state.selectedPost = null;
+    },
+
+    deletePost: (state, action: PayloadAction<{ postId: string }>) => {
+      const pid = action.payload.postId;
+      state.items = state.items.filter((p) => p.id !== pid);
+      if (state.selectedPost?.id === pid) state.selectedPost = null;
+    },
+
+    updatePost: (state, action: PayloadAction<UpdatePostPayload>) => {
+      const { postId, content, tags, image } = action.payload;
+      const post = state.items.find((p) => p.id === postId);
+      if (!post) return;
+      if (typeof content === "string") post.content = content;
+      if (Array.isArray(tags)) post.tags = tags;
+      if (image !== undefined) {
+        // undefined means "don't change"; null means "remove"
+        if (image === null) delete post.image;
+        else post.image = image;
+      }
+      // optional: bump edited timestamp
+      post.date = fmtNow();
     },
   },
 });
 
-export const { addPost, likePost, addComment, openShareModal, closeShareModal } =
-  postSlice.actions;
+export const {
+  addPost,
+  likePost,
+  addComment,
+  openShareModal,
+  closeShareModal,
+  deletePost,
+  updatePost,
+} = postsSlice.actions;
 
-export default postSlice.reducer;
+export default postsSlice.reducer;
