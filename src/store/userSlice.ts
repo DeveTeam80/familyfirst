@@ -5,20 +5,17 @@ export interface UserProfile {
   username: string;
   name: string;
   email?: string;
-  avatar?: string;
+  avatar?: string | null;   
   bio?: string;
   location?: string;
 }
-
 interface UserState {
   currentUser: { username: string } | null;
   profiles: Record<string, UserProfile>;
 }
 
 const initialState: UserState = {
-  // Simulate an authenticated user for now
   currentUser: { username: "john" },
-  // Seed some profiles
   profiles: {
     john: {
       id: "1",
@@ -53,18 +50,48 @@ const userSlice = createSlice({
     setCurrentUser(state, action: PayloadAction<{ username: string } | null>) {
       state.currentUser = action.payload;
     },
-    updateProfile(state, action: PayloadAction<UpdatePayload>) {
+   updateProfile(
+      state,
+      action: PayloadAction<{
+        username: string;
+        changes: Partial<UserProfile>; 
+      }>
+    ) {
       const { username, changes } = action.payload;
-      const p = state.profiles[username];
-      if (!p) return;
-      state.profiles[username] = { ...p, ...changes };
+      if (!state.profiles[username]) return;
+      state.profiles[username] = { ...state.profiles[username], ...changes };
     },
-    // helper for local dev to create new profiles quickly
     upsertProfile(state, action: PayloadAction<UserProfile>) {
       state.profiles[action.payload.username] = action.payload;
     },
+    // add to your existing createSlice reducers:
+
+changeEmail(
+  state,
+  action: PayloadAction<{ username: string; newEmail: string }>
+) {
+  const { username, newEmail } = action.payload;
+  const p = state.profiles[username];
+  if (p) p.email = newEmail;
+},
+
+// purely frontend flag; real change will be handled by Firebase Auth
+passwordChangeRequested(
+  state,
+  _action: PayloadAction<{ username: string }>
+) {
+  // you might set a timestamp/flag here if you want UI feedback
+},
+
   },
 });
 
-export const { setCurrentUser, updateProfile, upsertProfile } = userSlice.actions;
+export const {
+  setCurrentUser,
+  updateProfile,
+  upsertProfile,
+  changeEmail,
+  passwordChangeRequested,
+} = userSlice.actions;
+
 export default userSlice.reducer;

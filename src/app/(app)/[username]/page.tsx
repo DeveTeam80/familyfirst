@@ -1,16 +1,16 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
-import { useSelector } from "react-redux";
+import { useParams } from "next/navigation";
+import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store";
+import { likePost, addComment, deletePost, updatePost } from "@/store/postSlice";
+import { updateProfile } from "@/store/userSlice";
+
 import {
   Avatar,
   Box,
   Button,
   Divider,
-  ImageList,
-  ImageListItem,
-  Paper,
   Stack,
   Tab,
   Tabs,
@@ -18,13 +18,21 @@ import {
 } from "@mui/material";
 import * as React from "react";
 
+import PostCard from "@/components/feed/PostCard";
+import CommentBox from "@/components/feed/CommentBox";
+import ShareDialog from "@/components/dialogs/ShareDialog";
+import EditPostDialog from "@/components/dialogs/EditPostDialog";
+import DeleteDialog from "@/components/dialogs/DeleteDialog";
+import EditProfileDialog from "@/components/dialogs/EditProfileDialog";
+
 export default function UserProfilePage() {
   const params = useParams<{ username: string }>();
   const username = params.username;
+  const dispatch = useDispatch();
 
-  const router = useRouter();
   const currentUser = useSelector((s: RootState) => s.user.currentUser);
-  const profile = useSelector((s: RootState) => s.user.profiles[username]);
+  const profiles = useSelector((s: RootState) => s.user.profiles);
+  const profile = profiles[username];
   const allPosts = useSelector((s: RootState) => s.posts.items);
 
   if (!profile) {
@@ -40,15 +48,111 @@ export default function UserProfilePage() {
 
   const isOwner = !!currentUser && currentUser.username === username;
 
+  const currentUserName =
+    (currentUser && profiles[currentUser.username]?.name) || "John Doe";
+
   const userPosts = allPosts.filter(
     (p: any) => p.username === username || p.user === profile.name
   );
 
-  const galleryImages = userPosts
-    .filter((p: any) => !!p.image)
-    .map((p: any) => ({ id: p.id, src: p.image as string }));
-
+  // ----- Tabs: only Posts now -----
   const [tab, setTab] = React.useState(0);
+
+  // ----- Comments -----
+  const [activeCommentPost, setActiveCommentPost] = React.useState<string | null>(null);
+  const [commentText, setCommentText] = React.useState("");
+
+  // ----- Share -----
+  const [shareOpen, setShareOpen] = React.useState(false);
+  const [sharePostId, setSharePostId] = React.useState<string | undefined>();
+  const sharePost = allPosts.find((p) => p.id === sharePostId);
+
+  // ----- Edit Post -----
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [editTargetId, setEditTargetId] = React.useState<string | null>(null);
+  const [editContent, setEditContent] = React.useState("");
+  const [editTags, setEditTags] = React.useState<string[]>([]);
+  const [editImage, setEditImage] = React.useState<string | null | undefined>(undefined);
+  const currentEditPost = allPosts.find((p) => p.id === editTargetId) || null;
+
+  // ----- Delete Post -----
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [deleteTargetId, setDeleteTargetId] = React.useState<string | null>(null);
+
+  // ----- Edit Profile -----
+  const [editProfileOpen, setEditProfileOpen] = React.useState(false);
+  const [name, setName] = React.useState(profile.name || "");
+  const [bio, setBio] = React.useState(profile.bio || "");
+  const [avatar, setAvatar] = React.useState<string | null | undefined>(undefined); 
+
+  const onLike = (postId: string) =>
+    dispatch(likePost({ postId, user: currentUserName }));
+
+  const onCommentClick = (postId: string) => setActiveCommentPost(postId);
+
+  const onSubmitComment = (postId: string) => {
+    if (!commentText.trim()) return;
+    dispatch(addComment({ postId, user: currentUserName, text: commentText.trim() }));
+    setCommentText("");
+    setActiveCommentPost(null);
+  };
+
+  const onShare = (postId: string) => {
+    setSharePostId(postId);
+    setShareOpen(true);
+  };
+
+  const startEditFor = (postId: string) => {
+    if (!isOwner) return;
+    const p = allPosts.find((x) => x.id === postId);
+    if (!p) return;
+    setEditTargetId(postId);
+    setEditContent(p.content ?? "");
+    setEditTags([...p.tags]);
+    setEditImage(undefined);
+    setEditOpen(true);
+  };
+
+  const saveEdit = () => {
+    if (!editTargetId) return;
+    dispatch(
+      updatePost({
+        postId: editTargetId,
+        content: editContent.trim(),
+        tags: editTags,
+        image: editImage, 
+      })
+    );
+    setEditOpen(false);
+    setEditTargetId(null);
+    setEditContent("");
+    setEditTags([]);
+    setEditImage(undefined);
+  };
+
+  const askDeleteFor = (postId: string) => {
+    if (!isOwner) return;
+    setDeleteTargetId(postId);
+    setDeleteOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (deleteTargetId) dispatch(deletePost({ postId: deleteTargetId }));
+    setDeleteOpen(false);
+    setDeleteTargetId(null);
+  };
+
+  const openEditProfile = () => {
+    setName(profile.name || "");
+    setBio(profile.bio || "");
+    setAvatar(undefined); 
+    setEditProfileOpen(true);
+  };
+
+  const saveProfile = (changes: { name?: string; bio?: string; avatar?: string | null }) => {
+    dispatch(updateProfile({ username, changes }));
+    setEditProfileOpen(false);
+  };
 
   return (
     <Box sx={{ p: 3, maxWidth: 1100, mx: "auto" }}>
@@ -62,11 +166,7 @@ export default function UserProfilePage() {
         }}
       >
         <Box sx={{ display: "grid", placeItems: "center" }}>
-          <Avatar
-            src={profile.avatar}
-            alt={profile.name}
-            sx={{ width: 140, height: 140 }}
-          />
+          <Avatar src={profile.avatar || undefined} alt={profile.name} sx={{ width: 140, height: 140 }} />
         </Box>
 
         <Box>
@@ -82,11 +182,7 @@ export default function UserProfilePage() {
 
             {isOwner ? (
               <Stack direction="row" spacing={1}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => router.push("/settings/profile")}
-                >
+                <Button variant="outlined" size="small" onClick={openEditProfile}>
                   Edit Profile
                 </Button>
               </Stack>
@@ -113,146 +209,82 @@ export default function UserProfilePage() {
         </Box>
       </Box>
 
-      <Box sx={{ mt: 2 }}>
-        <Tabs
-          value={tab}
-          onChange={(_, v) => setTab(v)}
-          aria-label="profile sections"
-          variant="scrollable"
-          allowScrollButtonsMobile
-        >
-          <Tab label={`Posts (${userPosts.length})`} />
-          <Tab label={`Gallery (${galleryImages.length})`} />
-        </Tabs>
-        <Divider sx={{ mb: 2 }} />
-      </Box>
-
-      <Box role="tabpanel" hidden={tab !== 0}>
-        {tab === 0 && <PostsTab posts={userPosts} />}
-      </Box>
-
-      <Box role="tabpanel" hidden={tab !== 1}>
-        {tab === 1 && <GalleryTab images={galleryImages} />}
-      </Box>
-    </Box>
-  );
-}
-
-
-function PostsTab({ posts }: { posts: any[] }) {
-  if (posts.length === 0) {
-    return (
-      <Typography variant="body2" color="text.secondary">
-        No posts yet.
-      </Typography>
-    );
-  }
-
-  return (
-    <Stack spacing={2}>
-      {posts.map((post) => (
-        <Paper key={post.id} sx={{ p: 2, borderRadius: 3 }}>
-          {/* header */}
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Avatar src={post.avatar} />
-            <Box>
-              <Typography variant="subtitle2">{post.user || post.username}</Typography>
-              {post.date && (
-                <Typography variant="caption" color="text.secondary">
-                  {post.date}
-                </Typography>
-              )}
-            </Box>
-          </Stack>
-
-          {/* content */}
-          {post.content && (
-            <Typography variant="body1" sx={{ mt: 1.5 }}>
-              {post.content}
-            </Typography>
+      {/* ===== Posts Tab ===== */}
+      {tab === 0 && (
+        <Stack spacing={2}>
+          {userPosts.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">No posts yet.</Typography>
+          ) : (
+            userPosts.map((post: any) => (
+              <React.Fragment key={post.id}>
+                <PostCard
+                  post={post}
+                  currentUserName={currentUserName}
+                  onLike={onLike}
+                  onCommentClick={onCommentClick}
+                  onEdit={startEditFor}
+                  onDelete={askDeleteFor}
+                  onShare={onShare}
+                  canEdit={isOwner}
+                />
+                <CommentBox
+                  openForPostId={activeCommentPost}
+                  postId={post.id}
+                  comments={post.comments}
+                  value={commentText}
+                  setValue={setCommentText}
+                  onSubmit={() => onSubmitComment(post.id)}
+                />
+              </React.Fragment>
+            ))
           )}
+        </Stack>
+      )}
 
-          {/* image */}
-          {post.image && (
-            <Box sx={{ mt: 1.5 }}>
-              <img
-                src={post.image}
-                alt=""
-                style={{
-                  width: "100%",
-                  borderRadius: 12,
-                  objectFit: "cover",
-                }}
-              />
-            </Box>
-          )}
-        </Paper>
-      ))}
-    </Stack>
-  );
-}
+      {/* ===== Dialogs ===== */}
+      <ShareDialog
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        user={sharePost?.user}
+        content={sharePost?.content}
+        tags={sharePost?.tags}
+        postId={sharePost?.id}
+      />
 
-/* ---------------- Gallery: Pinterest-like Masonry ---------------- */
+      <EditPostDialog
+        open={editOpen}
+        onCancel={() => {
+          setEditOpen(false);
+          setEditTargetId(null);
+          setEditContent("");
+          setEditTags([]);
+          setEditImage(undefined);
+        }}
+        onSave={saveEdit}
+        content={editContent}
+        setContent={setEditContent}
+        tags={editTags}
+        setTags={setEditTags}
+        image={editImage}
+        setImage={setEditImage}
+        currentImage={currentEditPost?.image}
+      />
 
-function GalleryTab({ images }: { images: { id: string; src: string }[] }) {
-  if (images.length === 0) {
-    return (
-      <Typography variant="body2" color="text.secondary">
-        No photos yet.
-      </Typography>
-    );
-  }
+      <DeleteDialog open={deleteOpen} onCancel={() => setDeleteOpen(false)} onConfirm={confirmDelete} />
 
-  // Use MUI ImageList with masonry layout
-  return (
-    <ImageList variant="masonry" cols={getCols()} gap={8}>
-      {images.map((img) => (
-        <ImageListItem key={img.id}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`${img.src}`}
-            alt=""
-            loading="lazy"
-            style={{ borderRadius: 12, width: "100%", display: "block" }}
-          />
-        </ImageListItem>
-      ))}
-    </ImageList>
-  );
-}
-
-// responsive columns helper
-function getCols() {
-  if (typeof window === "undefined") return 3;
-  const w = window.innerWidth;
-  if (w < 600) return 2;
-  if (w < 900) return 3;
-  if (w < 1200) return 4;
-  return 5;
-}
-
-/* ---------------- About panel (extra details) ---------------- */
-
-function AboutTab({ profile }: { profile: any }) {
-  return (
-    <Paper sx={{ p: 2, borderRadius: 3 }}>
-      <Stack spacing={1}>
-        <Row label="Name" value={profile.name} />
-        <Row label="Username" value={`@${profile.username}`} />
-        {profile.location && <Row label="Location" value={profile.location} />}
-        {profile.bio && <Row label="Bio" value={profile.bio} />}
-      </Stack>
-    </Paper>
-  );
-}
-
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <Box sx={{ display: "grid", gridTemplateColumns: "160px 1fr", gap: 2 }}>
-      <Typography variant="body2" color="text.secondary">
-        {label}
-      </Typography>
-      <Typography variant="body2">{value}</Typography>
+      {/* ===== Edit Profile Dialog ===== */}
+      <EditProfileDialog
+        open={editProfileOpen}
+        onClose={() => setEditProfileOpen(false)}
+        onSave={saveProfile}
+        name={name}
+        setName={setName}
+        bio={bio}
+        setBio={setBio}
+        avatar={avatar}
+        setAvatar={setAvatar}
+        currentAvatar={profile.avatar}
+      />
     </Box>
   );
 }

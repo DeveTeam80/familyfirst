@@ -430,7 +430,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
                 minHeight: 48,
                 px: 2.5,
                 justifyContent: "initial",
-                ...(pathname.startsWith("/") && {
+                ...(pathname.startsWith(`/${currentUser}`) && {
                   bgcolor: (t) => t.palette.action.selected,
                 }),
               }}
