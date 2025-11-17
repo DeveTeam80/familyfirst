@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { addPost, likePost, addComment, deletePost, updatePost } from "@/store/postSlice";
 import { RootState } from "@/store";
 import * as React from "react";
-import { Grid, Paper, Box, Container, Typography } from "@mui/material";
+import { Container, Box, Typography, Paper, alpha, useTheme } from "@mui/material";
 
 import PostComposer from "@/components/feed/PostComposer";
 import PostCard from "@/components/feed/PostCard";
@@ -14,6 +14,7 @@ import DeleteDialog from "@/components/dialogs/DeleteDialog";
 import EditPostDialog from "@/components/dialogs/EditPostDialog";
 
 export default function Feed() {
+  const theme = useTheme();
   const dispatch = useDispatch();
   const posts = useSelector((s: RootState) => s.posts.items);
 
@@ -31,7 +32,7 @@ export default function Feed() {
   const [activeCommentPost, setActiveCommentPost] = React.useState<string | null>(null);
   const [commentText, setCommentText] = React.useState("");
 
-  // Share dialog (local, reusable)
+  // Share dialog
   const [shareOpen, setShareOpen] = React.useState(false);
   const [sharePostId, setSharePostId] = React.useState<string | undefined>();
   const sharePost = posts.find((p) => p.id === sharePostId);
@@ -77,7 +78,7 @@ export default function Feed() {
         content: `📅 Event: ${eventTitle}`,
         tags: ["Event"],
         eventDate,
-      } as any) // if your addPost payload type already allows eventDate, remove 'as any'
+      } as any)
     );
     setOpenEventDialog(false);
     setEventTitle("");
@@ -115,6 +116,7 @@ export default function Feed() {
     setDeleteTargetId(postId);
     setDeleteOpen(true);
   };
+
   const confirmDelete = () => {
     if (deleteTargetId) dispatch(deletePost({ postId: deleteTargetId }));
     setDeleteOpen(false);
@@ -127,23 +129,68 @@ export default function Feed() {
   };
 
   return (
-    <Container>
-      <Grid container spacing={3}>
-        <Grid size={{ xs: 12, md:12 }}>
-          <Paper sx={{ p: 2, mb: 3, borderRadius: 3 }}>
-            <PostComposer
-              content={content}
-              setContent={setContent}
-              selectedImage={selectedImage}
-              setSelectedImage={setSelectedImage}
-              selectedTags={selectedTags}
-              setSelectedTags={setSelectedTags}
-              onOpenEvent={() => setOpenEventDialog(true)}
-              onPost={handlePost}
-            />
-          </Paper>
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      {/* Welcome Header */}
+      <Box sx={{ mb: 4, textAlign: 'center' }}>
+        <Typography 
+          variant="h4" 
+          gutterBottom 
+          sx={{ 
+            fontWeight: 700,
+            background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}
+        >
+          Family Feed
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Share moments and stay connected with your family
+        </Typography>
+      </Box>
 
-          {/* Posts */}
+      {/* Post Composer */}
+      <Box sx={{ mb: 3 }}>
+        <PostComposer
+          content={content}
+          setContent={setContent}
+          selectedImage={selectedImage}
+          setSelectedImage={setSelectedImage}
+          selectedTags={selectedTags}
+          setSelectedTags={setSelectedTags}
+          onOpenEvent={() => setOpenEventDialog(true)}
+          onPost={handlePost}
+        />
+      </Box>
+
+      {/* Posts Feed */}
+      {posts.length === 0 ? (
+        <Paper
+          elevation={0}
+          sx={{
+            p: 6,
+            textAlign: 'center',
+            border: '2px dashed',
+            borderColor: 'divider',
+            borderRadius: 3,
+            backgroundColor: alpha(theme.palette.background.default, 0.5),
+          }}
+        >
+          <Typography 
+            variant="h6" 
+            color="text.secondary" 
+            gutterBottom
+            sx={{ mb: 1 }}
+          >
+            No posts yet
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Be the first to share something with your family! 🎉
+          </Typography>
+        </Paper>
+      ) : (
+        <Box>
           {posts.map((post) => (
             <React.Fragment key={post.id}>
               <PostCard
@@ -163,15 +210,17 @@ export default function Feed() {
                 value={commentText}
                 setValue={setCommentText}
                 onSubmit={() => {
-                  dispatch(addComment({ postId: post.id, user: currentUserName, text: commentText.trim() }));
-                  setCommentText("");
-                  setActiveCommentPost(null);
+                  if (commentText.trim()) {
+                    dispatch(addComment({ postId: post.id, user: currentUserName, text: commentText.trim() }));
+                    setCommentText("");
+                    setActiveCommentPost(null);
+                  }
                 }}
               />
             </React.Fragment>
           ))}
-        </Grid>
-      </Grid>
+        </Box>
+      )}
 
       {/* Dialogs */}
       <ShareDialog
@@ -193,7 +242,11 @@ export default function Feed() {
         onSubmit={handleAddEventPost}
       />
 
-      <DeleteDialog open={deleteOpen} onCancel={() => setDeleteOpen(false)} onConfirm={confirmDelete} />
+      <DeleteDialog 
+        open={deleteOpen} 
+        onCancel={() => setDeleteOpen(false)} 
+        onConfirm={confirmDelete} 
+      />
 
       <EditPostDialog
         open={editOpen}
