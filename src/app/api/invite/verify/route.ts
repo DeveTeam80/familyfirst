@@ -1,37 +1,88 @@
-import { NextResponse } from "next/server";
+// src/app/api/invite/verify/route.ts
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const code = searchParams.get("code");
+
+  if (!code) {
+    return NextResponse.json({ error: "Invite code required" }, { status: 400 });
+  }
+
   try {
-    const { searchParams } = new URL(req.url);
-    const code = searchParams.get("code");
-
-    if (!code) return NextResponse.json({ error: "Missing code" }, { status: 400 });
-
-    // Find invite
-    const invite = await prisma.invitation.findFirst({
+    const invitation = await prisma.invitation.findUnique({
       where: { inviteCode: code },
-      include: { treeNode: true, family: true },
+      include: {
+        family: { select: { name: true, avatarUrl: true } },
+        treeNode: {
+          select: {
+            firstName: true,
+            lastName: true,
+            birthDate: true,
+            gender: true,
+            photoUrl: true,
+          },
+        },
+        inviter: {
+          select: { name: true, avatarUrl: true },
+        },
+      },
     });
 
-    if (!invite) {
-      return NextResponse.json({ error: "Invalid invite" }, { status: 404 });
+    if (!invitation) {
+      return NextResponse.json(
+        { error: "Invalid invite code", valid: false },
+        { status: 404 }
+      );
     }
 
-    if (invite.status !== "PENDING") {
-      return NextResponse.json({ error: "Invite is not active" }, { status: 400 });
+    // Check if expired
+    if (new Date() > invitation.expiresAt) {
+      return NextResponse.json(
+        { error: "Invite code has expired", valid: false },
+        { status: 410 }
+      );
     }
 
-    if (invite.expiresAt < new Date()) {
-      return NextResponse.json({ error: "Invite expired" }, { status: 400 });
+    // Check if already accepted
+    if (invitation.status === "ACCEPTED") {
+      return NextResponse.json(
+        { error: "Invite already accepted", valid: false },
+        { status: 409 }
+      );
+    }
+
+    // Check if email already registered
+    const existingUser = await prisma.user.findUnique({
+      where: { email: invitation.email },
+    });
+
+    if (existingUser) {
+      return NextResponse.json(
+        { error: "Email already registered. Please login instead.", valid: false },
+        { status: 409 }
+      );
     }
 
     return NextResponse.json({
-      success: true,
-      invite,
+      valid: true,
+      invitation: {
+        id: invitation.id,
+        email: invitation.email,
+        familyName: invitation.family.name,
+        familyAvatar: invitation.family.avatarUrl,
+        invitedBy: invitation.inviter.name,
+        inviterAvatar: invitation.inviter.avatarUrl,
+        treeNode: invitation.treeNode,
+        expiresAt: invitation.expiresAt,
+      },
     });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    console.error("Error verifying invite:", error);
+    return NextResponse.json(
+      { error: "Failed to verify invite code", valid: false },
+      { status: 500 }
+    );
   }
 }
