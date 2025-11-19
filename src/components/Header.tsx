@@ -3,7 +3,13 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { styled, CSSObject, Theme, useTheme, alpha } from "@mui/material/styles";
+import {
+  styled,
+  CSSObject,
+  Theme,
+  useTheme,
+  alpha,
+} from "@mui/material/styles";
 import {
   Box,
   Drawer as MuiDrawer,
@@ -52,6 +58,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
 import { toggleMode } from "@/store/themeSlice";
 import { Style_Script } from "next/font/google";
+import Image from "next/image";
 
 const styleScript = Style_Script({
   subsets: ["latin"],
@@ -76,7 +83,14 @@ type Contact = {
 type UpcomingEvent = {
   title: string;
   date: string;
-  color: "primary" | "secondary" | "default" | "error" | "info" | "success" | "warning";
+  color:
+    | "primary"
+    | "secondary"
+    | "default"
+    | "error"
+    | "info"
+    | "success"
+    | "warning";
 };
 
 const drawerWidth = 240;
@@ -143,9 +157,11 @@ export default function Header({ children }: { children: React.ReactNode }) {
   const theme = useTheme();
   const dispatch = useDispatch();
   const mode = useSelector((state: RootState) => state.theme.mode);
-  const currentUser = useSelector((state: RootState) => state.user?.currentUser);
+  const currentUser = useSelector(
+    (state: RootState) => state.user?.currentUser
+  );
   const pathname = usePathname();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   // Mobile drawer state
   const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -177,7 +193,9 @@ export default function Header({ children }: { children: React.ReactNode }) {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const [notifAnchorEl, setNotifAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [notifAnchorEl, setNotifAnchorEl] = React.useState<null | HTMLElement>(
+    null
+  );
   const notifOpen = Boolean(notifAnchorEl);
   const notifId = notifOpen ? "notifications-popover" : undefined;
 
@@ -200,43 +218,43 @@ export default function Header({ children }: { children: React.ReactNode }) {
     href: string;
     match: (p: string) => boolean;
   }[] = [
-      {
-        text: "Activity",
-        icon: <Home />,
-        href: "/feed",
-        match: (p) => p.startsWith("/feed") || p === "/",
-      },
-      {
-        text: "Calendar",
-        icon: <EventIcon />,
-        href: "/calendar",
-        match: (p) => p.startsWith("/calendar"),
-      },
-      {
-        text: "Family Tree",
-        icon: <TbBinaryTree />,
-        href: "/tree",
-        match: (p) => p.startsWith("/tree"),
-      },
-      {
-        text: "Gallery",
-        icon: <PhotoCameraBack />,
-        href: "/gallery",
-        match: (p) => p.startsWith("/gallery"),
-      },
-      {
-        text: "Recipe Book",
-        icon: <MenuBook />,
-        href: "/recipes",
-        match: (p) => p.startsWith("/recipes"),
-      },
-      {
-        text: "Memories",
-        icon: <EventRepeat />,
-        href: "/memories",
-        match: (p) => p.startsWith("/memories"),
-      },
-    ];
+    {
+      text: "Activity",
+      icon: <Home />,
+      href: "/feed",
+      match: (p) => p.startsWith("/feed") || p === "/",
+    },
+    {
+      text: "Calendar",
+      icon: <EventIcon />,
+      href: "/calendar",
+      match: (p) => p.startsWith("/calendar"),
+    },
+    {
+      text: "Family Tree",
+      icon: <TbBinaryTree />,
+      href: "/tree",
+      match: (p) => p.startsWith("/tree"),
+    },
+    {
+      text: "Gallery",
+      icon: <PhotoCameraBack />,
+      href: "/gallery",
+      match: (p) => p.startsWith("/gallery"),
+    },
+    {
+      text: "Recipe Book",
+      icon: <MenuBook />,
+      href: "/recipes",
+      match: (p) => p.startsWith("/recipes"),
+    },
+    {
+      text: "Memories",
+      icon: <EventRepeat />,
+      href: "/memories",
+      match: (p) => p.startsWith("/memories"),
+    },
+  ];
 
   const secondaryMenu: {
     text: string;
@@ -245,24 +263,24 @@ export default function Header({ children }: { children: React.ReactNode }) {
     href?: string;
     match?: (p: string) => boolean;
   }[] = [
-      {
-        text: mode === "light" ? "Dark Mode" : "Light Mode",
-        icon: mode === "light" ? <DarkModeIcon /> : <LightModeIcon />,
-        onClick: () => dispatch(toggleMode()),
-      },
-      {
-        text: "Settings",
-        icon: <SettingsIcon />,
-        href: "/settings",
-        match: (p) => p.startsWith("/settings"),
-      },
-      {
-        text: "Help",
-        icon: <HelpOutlineIcon />,
-        href: "/help",
-        match: (p) => p.startsWith("/help"),
-      },
-    ];
+    {
+      text: mode === "light" ? "Dark Mode" : "Light Mode",
+      icon: mode === "light" ? <DarkModeIcon /> : <LightModeIcon />,
+      onClick: () => dispatch(toggleMode()),
+    },
+    {
+      text: "Settings",
+      icon: <SettingsIcon />,
+      href: "/settings",
+      match: (p) => p.startsWith("/settings"),
+    },
+    {
+      text: "Help",
+      icon: <HelpOutlineIcon />,
+      href: "/help",
+      match: (p) => p.startsWith("/help"),
+    },
+  ];
 
   const profileHref = currentUser ? `/${currentUser.username}` : "/john";
 
@@ -345,7 +363,6 @@ export default function Header({ children }: { children: React.ReactNode }) {
             : { onClick: item.onClick };
 
           return (
-
             <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
               <ListItemButton
                 {...buttonProps}
@@ -454,23 +471,28 @@ export default function Header({ children }: { children: React.ReactNode }) {
             </IconButton>
           )}
 
-          <Typography
-            variant="h6"
-            noWrap
+          {/* Logo Instead of Typography */}
+          <Box
             sx={{
               flexGrow: 1,
-              fontFamily: styleScript.style.fontFamily,
-              fontSize: isMobile ? "1.5rem" : "1.8rem",
-              letterSpacing: 0.5,
-              background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-              backgroundClip: "text",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
+              display: "flex",
+              alignItems: "center",
             }}
           >
-            Family First
-          </Typography>
+            <Image
+              src="/assets/FF logo.png"
+              alt="First Family Logo"
+              width={isMobile ? 110 : 150}
+              height={isMobile ? 34 : 46}
+              style={{
+                objectFit: "contain",
+                cursor: "pointer",
+              }}
+              // onClick={() => router.push("/")}
+            />
+          </Box>
 
+          {/* Notification Button */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Tooltip title="Notifications">
               <IconButton
@@ -479,18 +501,14 @@ export default function Header({ children }: { children: React.ReactNode }) {
                 onClick={handleNotifClick}
                 sx={{
                   transition: "all 0.2s",
-                  "&:hover": {
-                    transform: "scale(1.05)",
-                  },
+                  "&:hover": { transform: "scale(1.05)" },
                 }}
               >
                 <Badge
                   badgeContent={unreadCount}
                   color="error"
                   sx={{
-                    "& .MuiBadge-badge": {
-                      fontWeight: 600,
-                    },
+                    "& .MuiBadge-badge": { fontWeight: 600 },
                   }}
                 >
                   <NotificationsIcon />
@@ -513,7 +531,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
           paper: {
             elevation: 8,
             sx: {
-              width: isMobile ? '90vw' : 380,
+              width: isMobile ? "90vw" : 380,
               maxWidth: "90vw",
               borderRadius: 3,
               mt: 1.5,
@@ -532,7 +550,11 @@ export default function Header({ children }: { children: React.ReactNode }) {
             borderBottom: `1px solid ${theme.palette.divider}`,
           }}
         >
-          <Typography variant="h6" fontWeight={600} fontSize={isMobile ? "1rem" : "1.25rem"}>
+          <Typography
+            variant="h6"
+            fontWeight={600}
+            fontSize={isMobile ? "1rem" : "1.25rem"}
+          >
             Notifications
           </Typography>
           <Button
@@ -559,8 +581,12 @@ export default function Header({ children }: { children: React.ReactNode }) {
                 sx={{
                   px: 2,
                   py: 1.5,
-                  bgcolor: n.read ? "transparent" : alpha(theme.palette.primary.main, 0.08),
-                  borderLeft: n.read ? "none" : `3px solid ${theme.palette.primary.main}`,
+                  bgcolor: n.read
+                    ? "transparent"
+                    : alpha(theme.palette.primary.main, 0.08),
+                  borderLeft: n.read
+                    ? "none"
+                    : `3px solid ${theme.palette.primary.main}`,
                   transition: "all 0.2s",
                   "&:hover": {
                     bgcolor: alpha(theme.palette.action.hover, 0.8),
@@ -582,13 +608,20 @@ export default function Header({ children }: { children: React.ReactNode }) {
                 </ListItemAvatar>
                 <ListItemText
                   primary={
-                    <Typography variant="body2" sx={{ fontWeight: n.read ? 400 : 600 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{ fontWeight: n.read ? 400 : 600 }}
+                    >
                       {n.title}
                     </Typography>
                   }
                   secondary={
                     <>
-                      <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
+                      <Typography
+                        variant="caption"
+                        display="block"
+                        sx={{ mb: 0.5 }}
+                      >
                         {n.body}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -614,8 +647,8 @@ export default function Header({ children }: { children: React.ReactNode }) {
             keepMounted: true, // Better mobile performance
           }}
           sx={{
-            display: { xs: 'block', md: 'none' },
-            '& .MuiDrawer-paper': {
+            display: { xs: "block", md: "none" },
+            "& .MuiDrawer-paper": {
               width: drawerWidth,
               backgroundColor: theme.palette.background.paper,
             },
@@ -667,7 +700,12 @@ export default function Header({ children }: { children: React.ReactNode }) {
                 borderColor: "divider",
               }}
             >
-              <Typography variant="h6" gutterBottom fontWeight={600} sx={{ mb: 2 }}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                fontWeight={600}
+                sx={{ mb: 2 }}
+              >
                 Online Now
               </Typography>
               <Box display="flex" flexDirection="column" gap={1.5}>
@@ -704,7 +742,10 @@ export default function Header({ children }: { children: React.ReactNode }) {
                         ) : null
                       }
                     >
-                      <Avatar src={contact.avatar} sx={{ width: 40, height: 40 }} />
+                      <Avatar
+                        src={contact.avatar}
+                        sx={{ width: 40, height: 40 }}
+                      />
                     </Badge>
                     <Typography variant="body2" fontWeight={500}>
                       {contact.name}
@@ -724,7 +765,12 @@ export default function Header({ children }: { children: React.ReactNode }) {
                 borderColor: "divider",
               }}
             >
-              <Typography variant="h6" gutterBottom fontWeight={600} sx={{ mb: 2 }}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                fontWeight={600}
+                sx={{ mb: 2 }}
+              >
                 Upcoming Events
               </Typography>
               <Box display="flex" flexDirection="column" gap={1.5}>
@@ -741,7 +787,10 @@ export default function Header({ children }: { children: React.ReactNode }) {
                       "&:hover": {
                         borderColor: theme.palette.primary.main,
                         transform: "translateY(-2px)",
-                        boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.15)}`,
+                        boxShadow: `0 4px 12px ${alpha(
+                          theme.palette.primary.main,
+                          0.15
+                        )}`,
                         cursor: "pointer",
                       },
                     }}

@@ -1,0 +1,529 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USERS & AUTHENTICATION
+// ============================================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  emailVerified DateTime? @map("email_verified")
+  name          String
+  passwordHash  String    @map("password_hash")
+  avatarUrl     String?   @map("avatar_url")
+
+  // Soft delete
+  deletedAt DateTime? @map("deleted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  familyMemberships FamilyMember[]
+  createdFamilies   Family[]         @relation("FamilyCreator")
+  posts             Post[]
+  postComments      Comment[]
+  recipes           Recipe[]
+  recipeComments    RecipeComment[]
+  calendarEvents    CalendarEvent[]
+  eventAttendees    EventAttendee[]
+  sentInvitations   Invitation[]     @relation("InvitationSender")
+  treeNode          FamilyTreeNode?  @relation("UserTreeNode")
+  uploadedPhotos    Photo[]
+  createdTreeNodes  FamilyTreeNode[] @relation("TreeNodeCreator")
+
+  @@map("users")
+}
+
+// ============================================
+// FAMILIES & MEMBERSHIPS
+// ============================================
+
+model Family {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  avatarUrl   String? @map("avatar_url")
+
+  // Invitation system
+  inviteCode String @unique @map("invite_code") // Unique code for joining
+
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  creator        User               @relation("FamilyCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  members        FamilyMember[]
+  posts          Post[]
+  photos         Photo[]
+  recipes        Recipe[]
+  calendarEvents CalendarEvent[]
+  treeNodes      FamilyTreeNode[]
+  invitations    Invitation[]
+  inviteCodes    FamilyInviteCode[]
+
+  @@map("families")
+}
+
+enum FamilyRole {
+  ADMIN
+  MEMBER
+  VIEWER
+
+  @@map("family_role")
+}
+
+model FamilyMember {
+  userId   String     @map("user_id")
+  familyId String     @map("family_id")
+  role     FamilyRole @default(MEMBER)
+
+  // Status (for approval workflows)
+  status MemberStatus @default(ACTIVE)
+
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  // Relations
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, familyId])
+  @@map("family_members")
+}
+
+enum MemberStatus {
+  PENDING // Waiting for admin approval
+  ACTIVE // Active member
+  BLOCKED // Blocked by admin
+
+  @@map("member_status")
+}
+
+// ============================================
+// INVITATIONS
+// ============================================
+
+model Invitation {
+  id       String @id @default(uuid())
+  familyId String @map("family_id")
+
+  // Who's being invited
+  email      String
+  treeNodeId String? @map("tree_node_id") // Link to tree node (optional)
+
+  // Invite details
+  inviteCode String @unique @map("invite_code") // e.g., "FAM-XY7K9A"
+  invitedBy  String @map("invited_by")
+
+  // Status
+  status     InvitationStatus @default(PENDING)
+  expiresAt  DateTime         @map("expires_at")
+  acceptedAt DateTime?        @map("accepted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  family   Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  inviter  User            @relation("InvitationSender", fields: [invitedBy], references: [id], onDelete: Cascade)
+  treeNode FamilyTreeNode? @relation(fields: [treeNodeId], references: [id], onDelete: SetNull)
+
+  @@index([inviteCode])
+  @@index([email, status])
+  @@map("invitations")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+
+  @@map("invitation_status")
+}
+
+// Family-wide invite codes (anyone can join)
+model FamilyInviteCode {
+  id       String @id @default(uuid())
+  familyId String @map("family_id")
+  code     String @unique
+
+  createdBy String    @map("created_by")
+  expiresAt DateTime? @map("expires_at")
+
+  // Usage limits
+  maxUses   Int? @map("max_uses") // NULL = unlimited
+  timesUsed Int  @default(0) @map("times_used")
+
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@map("family_invite_codes")
+}
+
+// ============================================
+// FAMILY TREE
+// ============================================
+
+model FamilyTreeNode {
+  id       String @id @default(uuid())
+  familyId String @map("family_id")
+
+  // Basic info
+  firstName String    @map("first_name")
+  lastName  String?   @map("last_name")
+  birthDate DateTime? @map("birth_date") @db.Date
+  deathDate DateTime? @map("death_date") @db.Date
+  gender    String?
+  photoUrl  String?   @map("photo_url")
+  bio       String?   @db.Text
+
+  // Link to user account (if they have one)
+  userId          String? @unique @map("user_id")
+  isAccountHolder Boolean @default(false) @map("is_account_holder")
+
+  // Metadata
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  family  Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user    User?  @relation("UserTreeNode", fields: [userId], references: [id], onDelete: SetNull)
+  creator User   @relation("TreeNodeCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+
+  // Self-relations for family tree
+  relationshipsFrom FamilyRelationship[] @relation("Person1")
+  relationshipsTo   FamilyRelationship[] @relation("Person2")
+
+  invitations Invitation[]
+
+  @@index([familyId])
+  @@index([userId])
+  @@map("family_tree_nodes")
+}
+
+model FamilyRelationship {
+  id        String @id @default(uuid())
+  person1Id String @map("person1_id")
+  person2Id String @map("person2_id")
+
+  relationshipType RelationshipType @map("relationship_type")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  person1 FamilyTreeNode @relation("Person1", fields: [person1Id], references: [id], onDelete: Cascade)
+  person2 FamilyTreeNode @relation("Person2", fields: [person2Id], references: [id], onDelete: Cascade)
+
+  @@unique([person1Id, person2Id, relationshipType])
+  @@map("family_relationships")
+}
+
+enum RelationshipType {
+  PARENT
+  CHILD
+  SPOUSE
+  SIBLING
+  GRANDPARENT
+  GRANDCHILD
+  AUNT_UNCLE
+  NIECE_NEPHEW
+  COUSIN
+
+  @@map("relationship_type")
+}
+
+// ============================================
+// POSTS & FEED
+// ============================================
+
+model Post {
+  id       String  @id @default(uuid())
+  familyId String  @map("family_id")
+  authorId String? @map("author_id") // NULL if user deleted
+
+  content  String? @db.Text
+  location String?
+
+  // Privacy
+  visibility Visibility @default(FAMILY)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  family    Family     @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  author    User?      @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  photos    Photo[]
+  comments  Comment[]
+  reactions Reaction[]
+
+  @@index([familyId, createdAt(sort: Desc)])
+  @@map("posts")
+}
+
+enum Visibility {
+  FAMILY // All family members
+  PRIVATE // Only author
+  CUSTOM // Custom list (future feature)
+
+  @@map("visibility")
+}
+
+model Photo {
+  id         String  @id @default(uuid())
+  postId     String? @map("post_id")
+  familyId   String  @map("family_id")
+  uploadedBy String? @map("uploaded_by")
+
+  // Cloudinary data
+  cloudinaryId String  @map("cloudinary_id")
+  url          String
+  thumbnailUrl String? @map("thumbnail_url")
+
+  // Metadata
+  caption   String? @db.Text
+  sizeBytes Int?    @map("size_bytes")
+  width     Int?
+  height    Int?
+
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+
+  // Relations
+  post     Post?      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  family   Family     @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  uploader User?      @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+  tags     PhotoTag[]
+
+  @@index([familyId])
+  @@index([postId])
+  @@map("photos")
+}
+
+// Tag people in photos
+model PhotoTag {
+  id         String @id @default(uuid())
+  photoId    String @map("photo_id")
+  treeNodeId String @map("tree_node_id")
+
+  // Position on photo (for future feature)
+  x Float? // Percentage: 0-100
+  y Float? // Percentage: 0-100
+
+  taggedAt DateTime @default(now()) @map("tagged_at")
+
+  // Relations
+  photo Photo @relation(fields: [photoId], references: [id], onDelete: Cascade)
+
+  @@unique([photoId, treeNodeId])
+  @@map("photo_tags")
+}
+
+model Comment {
+  id     String  @id @default(uuid())
+  postId String  @map("post_id")
+  userId String? @map("user_id")
+
+  content String @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  post Post  @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([postId])
+  @@map("comments")
+}
+
+model Reaction {
+  id     String @id @default(uuid())
+  postId String @map("post_id")
+  userId String @map("user_id")
+
+  type ReactionType
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId]) // One reaction per user per post
+  @@map("reactions")
+}
+
+enum ReactionType {
+  LIKE
+  LOVE
+  LAUGH
+  WOW
+  SAD
+
+  @@map("reaction_type")
+}
+
+// ============================================
+// RECIPES
+// ============================================
+
+model Recipe {
+  id       String  @id @default(uuid())
+  familyId String  @map("family_id")
+  authorId String? @map("author_id")
+
+  title       String
+  description String? @db.Text
+
+  // Recipe data (stored as JSON)
+  ingredients  Json // Array of {item: string, quantity: string}
+  instructions String @db.Text
+
+  // Metadata
+  prepTime Int?    @map("prep_time") // minutes
+  cookTime Int?    @map("cook_time") // minutes
+  servings Int?
+  category String? // Dessert, Main Course, etc.
+
+  photoUrl String? @map("photo_url")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  family   Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  author   User?           @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  comments RecipeComment[]
+
+  @@index([familyId])
+  @@map("recipes")
+}
+
+model RecipeComment {
+  id       String  @id @default(uuid())
+  recipeId String  @map("recipe_id")
+  userId   String? @map("user_id")
+
+  content String @db.Text
+  rating  Int? // 1-5 stars (optional)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([recipeId])
+  @@map("recipe_comments")
+}
+
+// ============================================
+// CALENDAR & EVENTS
+// ============================================
+
+model CalendarEvent {
+  id        String  @id @default(uuid())
+  familyId  String  @map("family_id")
+  creatorId String? @map("creator_id")
+
+  title       String
+  description String? @db.Text
+  location    String?
+
+  // Timing
+  startTime DateTime  @map("start_time")
+  endTime   DateTime? @map("end_time")
+  timezone  String    @default("UTC") // IANA timezone: "America/New_York"
+  allDay    Boolean   @default(false) @map("all_day")
+
+  // Recurrence (future feature)
+  isRecurring    Boolean @default(false) @map("is_recurring")
+  recurrenceRule String? @map("recurrence_rule") // iCal RRULE format
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  family    Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  creator   User?           @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  attendees EventAttendee[]
+
+  @@index([familyId, startTime])
+  @@map("calendar_events")
+}
+
+model EventAttendee {
+  eventId String @map("event_id")
+  userId  String @map("user_id")
+
+  status      RsvpStatus @default(NO_RESPONSE)
+  respondedAt DateTime?  @map("responded_at")
+
+  // Relations
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, userId])
+  @@map("event_attendees")
+}
+
+enum RsvpStatus {
+  GOING
+  MAYBE
+  NOT_GOING
+  NO_RESPONSE
+
+  @@map("rsvp_status")
+}
+
+// ============================================
+// NOTIFICATIONS (Future feature)
+// ============================================
+
+model Notification {
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+
+  type    NotificationType
+  title   String
+  message String           @db.Text
+
+  // Link to related entity
+  relatedId   String? @map("related_id") // postId, eventId, etc.
+  relatedType String? @map("related_type") // "post", "event", etc.
+
+  isRead Boolean @default(false) @map("is_read")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  NEW_POST
+  NEW_COMMENT
+  NEW_REACTION
+  EVENT_REMINDER
+  EVENT_INVITATION
+  FAMILY_INVITATION
+  MEMBER_JOINED
+  RECIPE_ADDED
+
+  @@map("notification_type")
+}

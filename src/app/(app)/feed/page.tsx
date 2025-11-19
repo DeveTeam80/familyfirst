@@ -129,9 +129,9 @@ export default function Feed() {
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
+    <Container maxWidth="md" sx={{ py: 4, pt:0 }}>
       {/* Welcome Header */}
-      <Box sx={{ mb: 4, textAlign: 'center' }}>
+      {/* <Box sx={{ mb: 4, textAlign: 'center' }}>
         <Typography 
           variant="h4" 
           gutterBottom 
@@ -148,7 +148,7 @@ export default function Feed() {
         <Typography variant="body2" color="text.secondary">
           Share moments and stay connected with your family
         </Typography>
-      </Box>
+      </Box> */}
 
       {/* Post Composer */}
       <Box sx={{ mb: 3 }}>

@@ -38,7 +38,7 @@ export default async function LoginPage() {
             fontWeight: 500,
           }}
         >
-          Welcome to Family First
+          Welcome to First Family
         </Typography>
       <p style={{ textAlign: "center", color: "#888", marginTop: -6 }}>
         Login to your private family space.

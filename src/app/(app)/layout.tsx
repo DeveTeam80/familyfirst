@@ -4,8 +4,11 @@ import Providers from "../providers";
 import Header from "@/components/Header";
 
 export const metadata: Metadata = {
-  title: "Family First",
+  title: "First Family",
   description: "Stay connected with your family",
+  icons: {
+  icon: "/favicon.ico",
+},
 };
 
 export default function RootLayout({

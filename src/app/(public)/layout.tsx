@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Providers from "../providers";
 
 export const metadata: Metadata = {
-  title: "Family First",
+  title: "First Family",
   description: "A private family social space",
 };
 
