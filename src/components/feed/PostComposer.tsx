@@ -17,7 +17,6 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import { 
-  Image, 
   Event, 
   Tag,
   Close,
@@ -27,8 +26,8 @@ import {
 type Props = {
   content: string;
   setContent: (v: string) => void;
-  selectedImage: string | null;
-  setSelectedImage: (v: string | null) => void;
+  selectedImages: string[];  // Changed from selectedImage
+  setSelectedImages: (v: string[]) => void;  // Changed
   selectedTags: string[];
   setSelectedTags: (tags: string[]) => void;
   onOpenEvent: () => void;
@@ -38,8 +37,8 @@ type Props = {
 export default function PostComposer({
   content,
   setContent,
-  selectedImage,
-  setSelectedImage,
+  selectedImages,
+  setSelectedImages,
   selectedTags,
   setSelectedTags,
   onOpenEvent,
@@ -58,8 +57,30 @@ export default function PostComposer({
     setAnchorEl(null);
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files);
+      const newImages: string[] = [];
+      
+      filesArray.forEach((file) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          newImages.push(reader.result as string);
+          if (newImages.length === filesArray.length) {
+            setSelectedImages([...selectedImages, ...newImages]);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setSelectedImages(selectedImages.filter((_, i) => i !== index));
+  };
+
   const availableTags = ["Family", "Memories", "Celebration", "Update", "Question", "Event", "Announcement"];
-  const canPost = Boolean(content?.trim() || selectedImage);
+  const canPost = Boolean(content?.trim() || selectedImages.length > 0);
 
   return (
     <Paper
@@ -121,61 +142,74 @@ export default function PostComposer({
         />
       </Box>
 
-      {/* Hidden Image Upload */}
+      {/* Hidden Image Upload - Multiple */}
       <input
         accept="image/*"
         type="file"
         id="photo-upload"
+        multiple
         style={{ display: "none" }}
-        onChange={(e) => {
-          if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            const imageUrl = URL.createObjectURL(file);
-            setSelectedImage(imageUrl);
-          }
-        }}
+        onChange={handleImageUpload}
       />
 
-      {/* Image Preview */}
-      {selectedImage && (
-        <Box 
-          sx={{ 
-            position: 'relative',
-            mb: 2,
-            borderRadius: 2,
-            overflow: 'hidden',
-            backgroundColor: alpha(theme.palette.common.black, 0.02),
-          }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={selectedImage}
-            alt="Preview"
-            style={{
-              width: "100%",
-              maxHeight: isMobile ? 250 : 400,
-              objectFit: "cover",
-              display: 'block',
-            }}
-          />
-          <IconButton
-            onClick={() => setSelectedImage(null)}
+      {/* Multiple Images Preview */}
+      {selectedImages.length > 0 && (
+        <Box sx={{ mb: 2 }}>
+          <Stack 
+            direction="row" 
+            spacing={1} 
+            flexWrap="wrap" 
+            useFlexGap
             sx={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              backgroundColor: alpha(theme.palette.common.black, 0.6),
-              color: 'white',
-              backdropFilter: 'blur(8px)',
-              '&:hover': {
-                backgroundColor: alpha(theme.palette.common.black, 0.8),
-              },
-              padding: isMobile ? '6px' : '8px',
+              maxHeight: isMobile ? 200 : 300,
+              overflowY: 'auto',
+              pb: 1,
             }}
-            size="small"
           >
-            <Close fontSize="small" />
-          </IconButton>
+            {selectedImages.map((imageUrl, index) => (
+              <Box
+                key={index}
+                sx={{
+                  position: 'relative',
+                  width: isMobile ? 80 : 120,
+                  height: isMobile ? 80 : 120,
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                  backgroundColor: alpha(theme.palette.common.black, 0.02),
+                  border: '2px solid',
+                  borderColor: 'divider',
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imageUrl}
+                  alt={`Preview ${index + 1}`}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                  }}
+                />
+                <IconButton
+                  onClick={() => handleRemoveImage(index)}
+                  sx={{
+                    position: 'absolute',
+                    top: 4,
+                    right: 4,
+                    backgroundColor: alpha(theme.palette.common.black, 0.6),
+                    color: 'white',
+                    padding: '4px',
+                    '&:hover': {
+                      backgroundColor: alpha(theme.palette.common.black, 0.8),
+                    },
+                  }}
+                  size="small"
+                >
+                  <Close fontSize="small" />
+                </IconButton>
+              </Box>
+            ))}
+          </Stack>
         </Box>
       )}
 
@@ -290,7 +324,7 @@ export default function PostComposer({
                   },
                 }}
               >
-                Photo
+                Photo {selectedImages.length > 0 && `(${selectedImages.length})`}
               </Button>
 
               <Button

@@ -2,6 +2,7 @@
 
 import { ReactNode, useMemo } from "react";
 import { Provider as ReduxProvider, useSelector } from "react-redux";
+import { SessionProvider } from "next-auth/react";
 import { ThemeProvider, createTheme, CssBaseline, alpha } from "@mui/material";
 import { store, RootState } from "@/store";
 
@@ -9,7 +10,6 @@ interface Props {
   children: ReactNode;
 }
 
-// ⚠ Inner component to consume Redux state
 function InnerThemeProvider({ children }: { children: ReactNode }) {
   const mode = useSelector((state: RootState) => state.theme.mode);
 
@@ -58,8 +58,8 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
             primary: mode === "dark" ? "#f3f0ff" : "#1e1b29",
             secondary: mode === "dark" ? "#c4b5fd" : "#6b5b95",
           },
-          divider: mode === "dark" 
-            ? "rgba(167, 139, 250, 0.12)" 
+          divider: mode === "dark"
+            ? "rgba(167, 139, 250, 0.12)"
             : "rgba(124, 58, 237, 0.08)",
           action: {
             hover: mode === "dark"
@@ -88,29 +88,30 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
             'sans-serif',
           ].join(','),
           h1: {
+            fontWeight: 800,
+            fontSize: '2.75rem',
+            lineHeight: 1.15,
+            letterSpacing: '-0.025em',
+            '@media (max-width:600px)': {
+              fontSize: '2rem',
+            },
+          },
+          h2: {
             fontWeight: 700,
-            fontSize: '2.5rem',
-            lineHeight: 1.2,
+            fontSize: '2.25rem',
+            lineHeight: 1.25,
             letterSpacing: '-0.02em',
             '@media (max-width:600px)': {
               fontSize: '1.75rem',
             },
           },
-          h2: {
+          h3: {
             fontWeight: 700,
-            fontSize: '2rem',
+            fontSize: '1.875rem',
             lineHeight: 1.3,
-            letterSpacing: '-0.01em',
+            letterSpacing: '-0.015em',
             '@media (max-width:600px)': {
               fontSize: '1.5rem',
-            },
-          },
-          h3: {
-            fontWeight: 600,
-            fontSize: '1.75rem',
-            lineHeight: 1.3,
-            '@media (max-width:600px)': {
-              fontSize: '1.25rem',
             },
           },
           h4: {
@@ -118,7 +119,7 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
             fontSize: '1.5rem',
             lineHeight: 1.4,
             '@media (max-width:600px)': {
-              fontSize: '1.125rem',
+              fontSize: '1.25rem',
             },
           },
           h5: {
@@ -126,15 +127,15 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
             fontSize: '1.25rem',
             lineHeight: 1.4,
             '@media (max-width:600px)': {
-              fontSize: '1rem',
+              fontSize: '1.125rem',
             },
           },
           h6: {
             fontWeight: 600,
             fontSize: '1.125rem',
-            lineHeight: 1.4,
+            lineHeight: 1.5,
             '@media (max-width:600px)': {
-              fontSize: '0.95rem',
+              fontSize: '1rem',
             },
           },
           subtitle1: {
@@ -146,32 +147,92 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
           subtitle2: {
             fontWeight: 600,
             fontSize: '0.875rem',
-            lineHeight: 1.5,
+            lineHeight: 1.57,
           },
           body1: {
-            fontSize: '0.95rem',
-            lineHeight: 1.6,
+            fontSize: '1rem',
+            lineHeight: 1.7,
             letterSpacing: '0.01em',
           },
           body2: {
             fontSize: '0.875rem',
-            lineHeight: 1.6,
+            lineHeight: 1.7,
           },
           button: {
             fontWeight: 600,
             textTransform: 'none',
-            fontSize: '0.9rem',
+            fontSize: '0.9375rem',
             letterSpacing: '0.02em',
           },
           caption: {
             fontSize: '0.75rem',
-            lineHeight: 1.5,
+            lineHeight: 1.66,
             letterSpacing: '0.03em',
+          },
+          overline: {
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            lineHeight: 2.66,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
           },
         },
         shape: {
-          borderRadius: 8,
+          borderRadius: 12,
         },
+        // Around line 183 - Fix shadows array
+        shadows: [
+          'none',
+          mode === "dark"
+            ? '0 2px 4px rgba(0,0,0,0.4)'
+            : '0 2px 4px rgba(124,58,237,0.08)',
+          mode === "dark"
+            ? '0 4px 8px rgba(0,0,0,0.4)'
+            : '0 4px 8px rgba(124,58,237,0.08)',
+          mode === "dark"
+            ? '0 6px 12px rgba(0,0,0,0.4)'
+            : '0 6px 12px rgba(124,58,237,0.10)',
+          mode === "dark"
+            ? '0 8px 16px rgba(0,0,0,0.45)'
+            : '0 8px 16px rgba(124,58,237,0.12)',
+          mode === "dark"
+            ? '0 12px 20px rgba(0,0,0,0.5)'
+            : '0 12px 20px rgba(124,58,237,0.14)',
+          mode === "dark"
+            ? '0 16px 24px rgba(0,0,0,0.5)'
+            : '0 16px 24px rgba(124,58,237,0.15)',
+          mode === "dark"
+            ? '0 20px 28px rgba(0,0,0,0.55)'
+            : '0 20px 28px rgba(124,58,237,0.16)',
+          mode === "dark"
+            ? '0 24px 32px rgba(0,0,0,0.6)'
+            : '0 24px 32px rgba(124,58,237,0.18)',
+          mode === "dark"
+            ? '0 28px 36px rgba(0,0,0,0.6)'
+            : '0 28px 36px rgba(124,58,237,0.20)',
+          mode === "dark"
+            ? '0 32px 40px rgba(0,0,0,0.65)'
+            : '0 32px 40px rgba(124,58,237,0.22)',
+          mode === "dark"
+            ? '0 36px 44px rgba(0,0,0,0.65)'
+            : '0 36px 44px rgba(124,58,237,0.24)',
+          mode === "dark"
+            ? '0 40px 48px rgba(0,0,0,0.7)'
+            : '0 40px 48px rgba(124,58,237,0.26)',
+          // Fill remaining array slots (indices 13-24)
+          mode === "dark" ? '0 40px 48px rgba(0,0,0,0.7)' : '0 40px 48px rgba(124,58,237,0.26)',
+          mode === "dark" ? '0 40px 48px rgba(0,0,0,0.7)' : '0 40px 48px rgba(124,58,237,0.26)',
+          mode === "dark" ? '0 40px 48px rgba(0,0,0,0.7)' : '0 40px 48px rgba(124,58,237,0.26)',
+          mode === "dark" ? '0 40px 48px rgba(0,0,0,0.7)' : '0 40px 48px rgba(124,58,237,0.26)',
+          mode === "dark" ? '0 40px 48px rgba(0,0,0,0.7)' : '0 40px 48px rgba(124,58,237,0.26)',
+          mode === "dark" ? '0 40px 48px rgba(0,0,0,0.7)' : '0 40px 48px rgba(124,58,237,0.26)',
+          mode === "dark" ? '0 40px 48px rgba(0,0,0,0.7)' : '0 40px 48px rgba(124,58,237,0.26)',
+          mode === "dark" ? '0 40px 48px rgba(0,0,0,0.7)' : '0 40px 48px rgba(124,58,237,0.26)',
+          mode === "dark" ? '0 40px 48px rgba(0,0,0,0.7)' : '0 40px 48px rgba(124,58,237,0.26)',
+          mode === "dark" ? '0 40px 48px rgba(0,0,0,0.7)' : '0 40px 48px rgba(124,58,237,0.26)',
+          mode === "dark" ? '0 40px 48px rgba(0,0,0,0.7)' : '0 40px 48px rgba(124,58,237,0.26)',
+          mode === "dark" ? '0 40px 48px rgba(0,0,0,0.7)' : '0 40px 48px rgba(124,58,237,0.26)',
+        ],
         breakpoints: {
           values: {
             xs: 0,
@@ -184,36 +245,52 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
         components: {
           MuiCssBaseline: {
             styleOverrides: {
+              '*': {
+                boxSizing: 'border-box',
+              },
+              html: {
+                MozOsxFontSmoothing: 'grayscale',
+                WebkitFontSmoothing: 'antialiased',
+              },
               body: {
                 scrollbarWidth: 'thin',
-                scrollbarColor: mode === "dark" 
+                scrollbarColor: mode === "dark"
                   ? '#a78bfa40 #1a1229'
                   : '#7c3aed20 #faf8ff',
                 '&::-webkit-scrollbar': {
-                  width: '8px',
-                  height: '8px',
+                  width: '10px',
+                  height: '10px',
                 },
                 '&::-webkit-scrollbar-track': {
                   background: mode === "dark" ? '#1a1229' : '#faf8ff',
+                  borderRadius: '10px',
                 },
                 '&::-webkit-scrollbar-thumb': {
-                  background: mode === "dark" 
-                    ? alpha('#a78bfa', 0.3)
-                    : alpha('#7c3aed', 0.2),
-                  borderRadius: '4px',
+                  background: mode === "dark"
+                    ? alpha('#a78bfa', 0.4)
+                    : alpha('#7c3aed', 0.25),
+                  borderRadius: '10px',
+                  border: `2px solid ${mode === "dark" ? '#1a1229' : '#faf8ff'}`,
                   '&:hover': {
-                    background: mode === "dark" 
-                      ? alpha('#a78bfa', 0.5)
-                      : alpha('#7c3aed', 0.3),
+                    background: mode === "dark"
+                      ? alpha('#a78bfa', 0.6)
+                      : alpha('#7c3aed', 0.4),
                   },
                 },
+              },
+              // Selection styling
+              '::selection': {
+                backgroundColor: mode === "dark"
+                  ? alpha('#a78bfa', 0.3)
+                  : alpha('#7c3aed', 0.2),
+                color: mode === "dark" ? '#ffffff' : '#1e1b29',
               },
             },
           },
           MuiButton: {
             styleOverrides: {
               root: {
-                borderRadius: 8,
+                borderRadius: 10,
                 padding: '10px 24px',
                 fontWeight: 600,
                 textTransform: 'none',
@@ -221,11 +298,14 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 '@media (max-width:600px)': {
                   padding: '8px 16px',
-                  fontSize: '0.85rem',
+                  fontSize: '0.875rem',
                 },
                 '&:hover': {
                   boxShadow: 'none',
-                  transform: 'translateY(-1px)',
+                  transform: 'translateY(-2px)',
+                },
+                '&:active': {
+                  transform: 'translateY(0px)',
                 },
               },
               contained: {
@@ -238,8 +318,8 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
                     ? 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)'
                     : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
                   boxShadow: mode === "dark"
-                    ? '0 8px 16px rgba(139, 92, 246, 0.4)'
-                    : '0 8px 16px rgba(124, 58, 237, 0.4)',
+                    ? '0 8px 20px rgba(139, 92, 246, 0.5)'
+                    : '0 8px 20px rgba(124, 58, 237, 0.4)',
                   color: '#ffffff !important',
                 },
                 '&.Mui-disabled': {
@@ -256,17 +336,17 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
                 },
               },
               outlined: {
-                borderWidth: '1.5px',
-                borderColor: mode === "dark" 
+                borderWidth: '2px',
+                borderColor: mode === "dark"
                   ? alpha('#a78bfa', 0.5)
                   : alpha('#7c3aed', 0.5),
                 color: mode === "dark" ? '#e9d5ff' : '#7c3aed',
                 '&:hover': {
-                  borderWidth: '1.5px',
+                  borderWidth: '2px',
                   borderColor: mode === "dark" ? '#a78bfa' : '#7c3aed',
                   backgroundColor: mode === "dark"
-                    ? alpha('#a78bfa', 0.08)
-                    : alpha('#7c3aed', 0.04),
+                    ? alpha('#a78bfa', 0.1)
+                    : alpha('#7c3aed', 0.08),
                   color: mode === "dark" ? '#ffffff' : '#6d28d9',
                 },
               },
@@ -274,26 +354,26 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
                 color: mode === "dark" ? '#e9d5ff' : '#7c3aed',
                 '&:hover': {
                   backgroundColor: mode === "dark"
-                    ? alpha('#a78bfa', 0.08)
-                    : alpha('#7c3aed', 0.04),
+                    ? alpha('#a78bfa', 0.1)
+                    : alpha('#7c3aed', 0.08),
                   color: mode === "dark" ? '#ffffff' : '#6d28d9',
                 },
               },
               sizeSmall: {
                 padding: '6px 16px',
                 fontSize: '0.8125rem',
-                borderRadius: 6,
+                borderRadius: 8,
                 '@media (max-width:600px)': {
                   padding: '5px 12px',
                   fontSize: '0.75rem',
                 },
               },
               sizeLarge: {
-                padding: '12px 28px',
+                padding: '14px 32px',
                 fontSize: '1rem',
-                borderRadius: 10,
+                borderRadius: 12,
                 '@media (max-width:600px)': {
-                  padding: '10px 20px',
+                  padding: '12px 24px',
                 },
               },
             },
@@ -301,7 +381,7 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
           MuiPaper: {
             styleOverrides: {
               root: {
-                borderRadius: 12,
+                borderRadius: 16,
                 backgroundImage: 'none',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               },
@@ -313,26 +393,53 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
                   ? '0 2px 8px rgba(0, 0, 0, 0.4)'
                   : '0 2px 8px rgba(124, 58, 237, 0.08)',
               },
+              elevation2: {
+                boxShadow: mode === "dark"
+                  ? '0 4px 12px rgba(0, 0, 0, 0.45)'
+                  : '0 4px 12px rgba(124, 58, 237, 0.10)',
+              },
+              elevation3: {
+                boxShadow: mode === "dark"
+                  ? '0 6px 16px rgba(0, 0, 0, 0.5)'
+                  : '0 6px 16px rgba(124, 58, 237, 0.12)',
+              },
+              elevation4: {
+                boxShadow: mode === "dark"
+                  ? '0 8px 20px rgba(0, 0, 0, 0.55)'
+                  : '0 8px 20px rgba(124, 58, 237, 0.14)',
+              },
+              elevation8: {
+                boxShadow: mode === "dark"
+                  ? '0 12px 28px rgba(0, 0, 0, 0.6)'
+                  : '0 12px 28px rgba(124, 58, 237, 0.18)',
+              },
             },
           },
           MuiCard: {
             styleOverrides: {
               root: {
-                borderRadius: 12,
+                borderRadius: 16,
                 boxShadow: mode === "dark"
                   ? '0 4px 16px rgba(0, 0, 0, 0.4)'
-                  : '0 4px 16px rgba(124, 58, 237, 0.06)',
-                border: `1px solid ${mode === "dark" 
-                  ? alpha('#a78bfa', 0.1)
-                  : alpha('#7c3aed', 0.05)}`,
+                  : '0 4px 16px rgba(124, 58, 237, 0.08)',
+                border: `1px solid ${mode === "dark"
+                  ? alpha('#a78bfa', 0.15)
+                  : alpha('#7c3aed', 0.08)}`,
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                '&:hover': {
+                  boxShadow: mode === "dark"
+                    ? '0 8px 24px rgba(0, 0, 0, 0.5)'
+                    : '0 8px 24px rgba(124, 58, 237, 0.12)',
+                  transform: 'translateY(-4px)',
+                },
               },
             },
           },
           MuiChip: {
             styleOverrides: {
               root: {
-                borderRadius: 6,
-                fontWeight: 500,
+                borderRadius: 8,
+                fontWeight: 600,
                 fontSize: '0.8125rem',
                 transition: 'all 0.2s',
                 '@media (max-width:600px)': {
@@ -340,13 +447,16 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
                 },
               },
               outlined: {
-                borderWidth: '1.5px',
+                borderWidth: '2px',
               },
               colorPrimary: {
                 background: mode === "dark"
                   ? alpha('#a78bfa', 0.15)
                   : alpha('#7c3aed', 0.1),
                 color: mode === "dark" ? '#e9d5ff' : '#6d28d9',
+                border: `1px solid ${mode === "dark"
+                  ? alpha('#a78bfa', 0.3)
+                  : alpha('#7c3aed', 0.2)}`,
                 '&:hover': {
                   background: mode === "dark"
                     ? alpha('#a78bfa', 0.25)
@@ -359,24 +469,32 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
             styleOverrides: {
               root: {
                 '& .MuiOutlinedInput-root': {
-                  borderRadius: 10,
+                  borderRadius: 12,
                   transition: 'all 0.2s',
                   '& fieldset': {
-                    borderWidth: '1.5px',
+                    borderWidth: '2px',
                     borderColor: mode === "dark"
                       ? alpha('#a78bfa', 0.2)
                       : alpha('#7c3aed', 0.2),
                   },
                   '&:hover fieldset': {
-                    borderWidth: '1.5px',
+                    borderWidth: '2px',
                     borderColor: mode === "dark"
                       ? alpha('#a78bfa', 0.4)
                       : alpha('#7c3aed', 0.3),
                   },
                   '&.Mui-focused fieldset': {
                     borderWidth: '2px',
+                    borderColor: mode === "dark" ? '#a78bfa' : '#7c3aed',
                   },
                 },
+              },
+            },
+          },
+          MuiInputBase: {
+            styleOverrides: {
+              root: {
+                fontSize: '0.9375rem',
               },
             },
           },
@@ -384,27 +502,51 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
             styleOverrides: {
               root: {
                 fontWeight: 600,
-                border: `2px solid ${mode === "dark" 
+                border: `2px solid ${mode === "dark"
                   ? alpha('#a78bfa', 0.2)
                   : alpha('#7c3aed', 0.1)}`,
+                transition: 'all 0.2s',
+              },
+            },
+          },
+          MuiAvatarGroup: {
+            styleOverrides: {
+              avatar: {
+                borderWidth: '3px',
+                fontSize: '0.875rem',
               },
             },
           },
           MuiIconButton: {
             styleOverrides: {
               root: {
-                borderRadius: 8,
+                borderRadius: 10,
                 transition: 'all 0.2s',
-                color: mode === "dark" ? '#e9d5ff' : '#6b5b95',
+                color: mode === "dark" ? '#c4b5fd' : '#6b5b95',
                 '@media (max-width:600px)': {
                   padding: '8px',
                 },
                 '&:hover': {
-                  transform: 'scale(1.05)',
+                  transform: 'scale(1.08)',
                   backgroundColor: mode === "dark"
-                    ? alpha('#a78bfa', 0.08)
-                    : alpha('#7c3aed', 0.04),
+                    ? alpha('#a78bfa', 0.1)
+                    : alpha('#7c3aed', 0.08),
                   color: mode === "dark" ? '#ffffff' : '#7c3aed',
+                },
+                '&:active': {
+                  transform: 'scale(0.95)',
+                },
+              },
+              sizeSmall: {
+                padding: '6px',
+                '& svg': {
+                  fontSize: '1.25rem',
+                },
+              },
+              sizeLarge: {
+                padding: '14px',
+                '& svg': {
+                  fontSize: '2rem',
                 },
               },
             },
@@ -412,43 +554,49 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
           MuiMenu: {
             styleOverrides: {
               paper: {
-                borderRadius: 10,
+                borderRadius: 12,
                 boxShadow: mode === "dark"
-                  ? '0 12px 32px rgba(0, 0, 0, 0.5)'
-                  : '0 12px 32px rgba(124, 58, 237, 0.15)',
+                  ? '0 12px 32px rgba(0, 0, 0, 0.6)'
+                  : '0 12px 32px rgba(124, 58, 237, 0.18)',
                 border: `1px solid ${mode === "dark"
-                  ? alpha('#a78bfa', 0.1)
-                  : alpha('#7c3aed', 0.08)}`,
+                  ? alpha('#a78bfa', 0.15)
+                  : alpha('#7c3aed', 0.1)}`,
+                backdropFilter: 'blur(12px)',
+                backgroundColor: mode === "dark"
+                  ? alpha('#1a1229', 0.95)
+                  : alpha('#ffffff', 0.95),
+              },
+              list: {
+                padding: '8px',
               },
             },
           },
           MuiMenuItem: {
             styleOverrides: {
               root: {
-                borderRadius: 6,
-                margin: '4px 8px',
-                padding: '10px 12px',
+                borderRadius: 8,
+                margin: '2px 0',
+                padding: '10px 14px',
                 transition: 'all 0.2s',
                 color: mode === "dark" ? '#f3f0ff' : '#1e1b29',
                 '@media (max-width:600px)': {
-                  padding: '8px 10px',
+                  padding: '8px 12px',
                 },
                 '&:hover': {
                   backgroundColor: mode === "dark"
-                    ? alpha('#a78bfa', 0.12)
-                    : alpha('#7c3aed', 0.06),
+                    ? alpha('#a78bfa', 0.15)
+                    : alpha('#7c3aed', 0.08),
                   color: mode === "dark" ? '#ffffff' : '#6d28d9',
                 },
                 '&.Mui-selected': {
                   backgroundColor: mode === "dark"
-                    ? alpha('#a78bfa', 0.16)
-                    : alpha('#7c3aed', 0.1),
+                    ? alpha('#a78bfa', 0.2)
+                    : alpha('#7c3aed', 0.12),
                   color: mode === "dark" ? '#ffffff' : '#6d28d9',
                   '&:hover': {
                     backgroundColor: mode === "dark"
-                      ? alpha('#a78bfa', 0.2)
-                      : alpha('#7c3aed', 0.14),
-                    color: mode === "dark" ? '#ffffff' : '#6d28d9',
+                      ? alpha('#a78bfa', 0.25)
+                      : alpha('#7c3aed', 0.16),
                   },
                 },
               },
@@ -457,25 +605,25 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
           MuiListItemButton: {
             styleOverrides: {
               root: {
-                borderRadius: 8,
+                borderRadius: 10,
+                margin: '2px 8px',
                 transition: 'all 0.2s',
                 color: mode === "dark" ? '#e9d5ff' : '#6b5b95',
                 '&:hover': {
                   backgroundColor: mode === "dark"
-                    ? alpha('#a78bfa', 0.08)
-                    : alpha('#7c3aed', 0.04),
+                    ? alpha('#a78bfa', 0.1)
+                    : alpha('#7c3aed', 0.08),
                   color: mode === "dark" ? '#ffffff' : '#7c3aed',
                 },
                 '&.Mui-selected': {
                   backgroundColor: mode === "dark"
-                    ? alpha('#a78bfa', 0.16)
-                    : alpha('#7c3aed', 0.1),
+                    ? alpha('#a78bfa', 0.2)
+                    : alpha('#7c3aed', 0.12),
                   color: mode === "dark" ? '#ffffff' : '#7c3aed',
                   '&:hover': {
                     backgroundColor: mode === "dark"
-                      ? alpha('#a78bfa', 0.2)
-                      : alpha('#7c3aed', 0.14),
-                    color: mode === "dark" ? '#ffffff' : '#6d28d9',
+                      ? alpha('#a78bfa', 0.25)
+                      : alpha('#7c3aed', 0.16),
                   },
                 },
               },
@@ -485,8 +633,8 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
             styleOverrides: {
               root: {
                 borderColor: mode === "dark"
-                  ? alpha('#a78bfa', 0.12)
-                  : alpha('#7c3aed', 0.08),
+                  ? alpha('#a78bfa', 0.15)
+                  : alpha('#7c3aed', 0.1),
               },
             },
           },
@@ -494,10 +642,10 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
             styleOverrides: {
               root: {
                 boxShadow: mode === "dark"
-                  ? '0 2px 8px rgba(0, 0, 0, 0.4)'
-                  : '0 2px 8px rgba(124, 58, 237, 0.08)',
+                  ? '0 2px 12px rgba(0, 0, 0, 0.4)'
+                  : '0 2px 12px rgba(124, 58, 237, 0.08)',
                 backgroundImage: 'none',
-                backdropFilter: 'blur(8px)',
+                backdropFilter: 'blur(12px)',
                 backgroundColor: mode === "dark"
                   ? alpha('#1a1229', 0.95)
                   : alpha('#ffffff', 0.95),
@@ -507,13 +655,51 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
           MuiDialog: {
             styleOverrides: {
               paper: {
-                borderRadius: 12,
+                borderRadius: 16,
                 boxShadow: mode === "dark"
-                  ? '0 20px 48px rgba(0, 0, 0, 0.6)'
-                  : '0 20px 48px rgba(124, 58, 237, 0.15)',
+                  ? '0 24px 64px rgba(0, 0, 0, 0.7)'
+                  : '0 24px 64px rgba(124, 58, 237, 0.20)',
+                border: `1px solid ${mode === "dark"
+                  ? alpha('#a78bfa', 0.15)
+                  : alpha('#7c3aed', 0.1)}`,
                 '@media (max-width:600px)': {
                   margin: '16px',
                   maxHeight: 'calc(100% - 32px)',
+                  borderRadius: '20px',
+                },
+              },
+            },
+          },
+          MuiDialogTitle: {
+            styleOverrides: {
+              root: {
+                fontSize: '1.5rem',
+                fontWeight: 700,
+                padding: '24px 24px 16px',
+                '@media (max-width:600px)': {
+                  fontSize: '1.25rem',
+                  padding: '20px 20px 12px',
+                },
+              },
+            },
+          },
+          MuiDialogContent: {
+            styleOverrides: {
+              root: {
+                padding: '0 24px 24px',
+                '@media (max-width:600px)': {
+                  padding: '0 20px 20px',
+                },
+              },
+            },
+          },
+          MuiDialogActions: {
+            styleOverrides: {
+              root: {
+                padding: '16px 24px 24px',
+                gap: '12px',
+                '@media (max-width:600px)': {
+                  padding: '12px 20px 20px',
                 },
               },
             },
@@ -521,21 +707,33 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
           MuiTooltip: {
             styleOverrides: {
               tooltip: {
-                borderRadius: 6,
+                borderRadius: 8,
                 fontSize: '0.8125rem',
-                fontWeight: 500,
+                fontWeight: 600,
                 padding: '8px 12px',
                 backgroundColor: mode === "dark"
-                  ? alpha('#1a1229', 0.95)
+                  ? alpha('#1a1229', 0.98)
                   : alpha('#1e1b29', 0.95),
                 color: '#ffffff',
+                boxShadow: mode === "dark"
+                  ? '0 4px 12px rgba(0, 0, 0, 0.5)'
+                  : '0 4px 12px rgba(0, 0, 0, 0.3)',
+              },
+              arrow: {
+                color: mode === "dark"
+                  ? alpha('#1a1229', 0.98)
+                  : alpha('#1e1b29', 0.95),
               },
             },
           },
           MuiBadge: {
             styleOverrides: {
               badge: {
-                fontWeight: 600,
+                fontWeight: 700,
+                fontSize: '0.75rem',
+                minWidth: '20px',
+                height: '20px',
+                padding: '0 6px',
                 boxShadow: mode === "dark"
                   ? '0 2px 8px rgba(0, 0, 0, 0.4)'
                   : '0 2px 8px rgba(0, 0, 0, 0.15)',
@@ -546,9 +744,27 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
             styleOverrides: {
               root: {
                 '@media (max-width:600px)': {
-                  paddingLeft: '12px',
-                  paddingRight: '12px',
+                  paddingLeft: '16px',
+                  paddingRight: '16px',
                 },
+              },
+            },
+          },
+          
+          MuiCollapse: {
+            styleOverrides: {
+              root: {
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important',
+              },
+            },
+          },
+          MuiBackdrop: {
+            styleOverrides: {
+              root: {
+                backgroundColor: mode === "dark"
+                  ? 'rgba(0, 0, 0, 0.7)'
+                  : 'rgba(0, 0, 0, 0.5)',
+                backdropFilter: 'blur(4px)',
               },
             },
           },
@@ -565,11 +781,12 @@ function InnerThemeProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// ✅ Main provider
 export default function Providers({ children }: Props) {
   return (
-    <ReduxProvider store={store}>
-      <InnerThemeProvider>{children}</InnerThemeProvider>
-    </ReduxProvider>
+    <SessionProvider>
+      <ReduxProvider store={store}>
+        <InnerThemeProvider>{children}</InnerThemeProvider>
+      </ReduxProvider>
+    </SessionProvider>
   );
 }

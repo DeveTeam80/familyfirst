@@ -9,9 +9,6 @@ import {
   useTheme,
   alpha,
   useMediaQuery,
-  Stack,
-  FormControlLabel,
-  Switch,
   Button,
   Dialog,
   DialogTitle,
@@ -22,16 +19,30 @@ import {
   CircularProgress,
   Chip,
   Avatar,
+  IconButton,
+  Divider,
+  Stack,
+  Fade,
+  MenuItem,
+  InputAdornment,
+  Slide,
 } from "@mui/material";
 import {
-  AdminPanelSettings as AdminIcon,
-  Add as AddIcon,
-  Edit as EditIcon,
+  Close as CloseIcon,
   Email as EmailIcon,
   CheckCircle,
-  Person,
+  Send as SendIcon,
+  Person as PersonIcon,
+  Cake as CakeIcon,
+  Edit as EditIcon,
+  Visibility as VisibilityIcon,
 } from "@mui/icons-material";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import dayjs, { Dayjs } from "dayjs";
 import { familyTreeData } from "@/data/familyTree";
+import { CloudinaryUpload } from "@/components/CloudinaryUpload";
 
 /* -----------------------
    Type Definitions
@@ -56,14 +67,6 @@ interface FamilyTreeNode {
   };
 }
 
-interface InviteDialogProps {
-  open: boolean;
-  onClose: () => void;
-  node: FamilyTreeNode | null;
-  familyId?: string;
-  adminId?: string;
-}
-
 /* -----------------------
    Family Tree Chart Component
    ----------------------- */
@@ -71,29 +74,40 @@ function FamilyTreeChart({
   isAdmin,
   isMobile,
   theme,
-  onNodeClick,
+  treeData,
+  onNodeSelect,
 }: {
   isAdmin: boolean;
   isMobile: boolean;
   theme: any;
-  onNodeClick?: (node: FamilyTreeNode) => void;
+  treeData: FamilyTreeNode[];
+  onNodeSelect?: (node: FamilyTreeNode) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const f3ChartInstance = useRef<any>(null);
   const chartDataRef = useRef<FamilyTreeNode[]>([]);
+  const onNodeSelectRef = useRef(onNodeSelect);
+
+  // Keep refs updated
+  useEffect(() => {
+    chartDataRef.current = treeData;
+    onNodeSelectRef.current = onNodeSelect;
+    if (f3ChartInstance.current) {
+       f3ChartInstance.current.updateTree({ data: treeData });
+    }
+  }, [treeData, onNodeSelect]);
 
   const createChart = useCallback(
     (f3: any, data: FamilyTreeNode[]) => {
       if (!containerRef.current) return;
 
-      // Store data reference for click handler
       chartDataRef.current = data;
 
       const f3Chart = f3
         .createChart("#FamilyChart", data)
-        .setTransitionTime(800)
-        .setCardXSpacing(isMobile ? 200 : 280)
-        .setCardYSpacing(isMobile ? 140 : 180)
+        .setTransitionTime(1000)
+        .setCardXSpacing(isMobile ? 200 : 250)
+        .setCardYSpacing(isMobile ? 120 : 150)
         .setSingleParentEmptyCard(isAdmin, { label: "ADD" })
         .setShowSiblingsOfMain(true)
         .setOrientationVertical();
@@ -101,116 +115,118 @@ function FamilyTreeChart({
       const f3Card = f3Chart
         .setCardHtml()
         .setCardDisplay([["first name", "last name"], ["birthday"]])
+        .setCardDim({})
         .setMiniTree(true)
         .setStyle("imageCircle")
         .setOnHoverPathToMain();
 
-      // ⭐ FIXED: Click handler that extracts actual node from event
-      try {
-        f3Card.setOnCardClick((eventOrNode: any) => {
-          console.log("🔍 Click event received:", eventOrNode);
+      // ⭐ Use regular function for proper 'this' binding, but wrap logic in arrow function
+      f3Card.setOnCardUpdate(function(this: HTMLElement, d: any) {
+        // Skip if it's a new relative placeholder
+        if (d.data._new_rel_data) return;
 
-          let nodeData: FamilyTreeNode | null = null;
+        // 'this' refers to the card wrapper element
+        const cardInner = this.querySelector('.card-inner') as HTMLElement;
+        if (!cardInner) return;
 
-          // Check if it's a PointerEvent or regular Event
-          if (eventOrNode instanceof Event || eventOrNode?.type) {
-            console.log("📍 Event detected, extracting node from DOM...");
-            
-            // Get the clicked element
-            const target = (eventOrNode.currentTarget || eventOrNode.target) as HTMLElement;
-            
-            // Search up the DOM tree for node ID
-            let element: HTMLElement | null = target;
-            let attempts = 0;
-            const maxAttempts = 10;
+        // Check if button already exists to avoid duplicates
+        if (cardInner.querySelector('.custom-info-btn')) return;
 
-            while (element && !nodeData && attempts < maxAttempts) {
-              // Try various data attributes
-              const nodeId =
-                element.getAttribute("data-id") ||
-                element.getAttribute("data-node-id") ||
-                element.getAttribute("id") ||
-                element.dataset?.id;
+        // Create info button wrapper
+        const btnWrapper = document.createElement('div');
+        btnWrapper.className = 'custom-info-btn';
+        btnWrapper.setAttribute('style', `
+          cursor: pointer;
+          width: 28px;
+          height: 28px;
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          z-index: 10;
+        `);
 
-              if (nodeId) {
-                console.log("✅ Found node ID:", nodeId);
-                // Find the actual node data from our stored reference
-                nodeData = chartDataRef.current.find((n) => n.id === nodeId) || null;
-                if (nodeData) {
-                  console.log("✅ Found node data:", nodeData);
-                  break;
-                }
-              }
+        // Create the actual button
+        btnWrapper.innerHTML = `
+          <div style="
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)'};
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+          ">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="color: ${theme.palette.mode === 'dark' ? '#fff' : '#333'};">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+            </svg>
+          </div>
+        `;
 
-              element = element.parentElement;
-              attempts++;
-            }
-
-            // Fallback: Try to extract from innerText
-            if (!nodeData && target.innerText) {
-              const nameMatch = target.innerText.split("\n")[0]?.trim();
-              if (nameMatch) {
-                nodeData = chartDataRef.current.find(
-                  (n) => `${n.data["first name"]} ${n.data["last name"] || ""}`.trim() === nameMatch
-                ) || null;
-              }
-            }
-          } else if (eventOrNode?.id && eventOrNode?.data) {
-            // Already a node object
-            console.log("✅ Direct node object received");
-            nodeData = eventOrNode as FamilyTreeNode;
-          }
-
-          if (nodeData && onNodeClick) {
-            console.log("🎯 Calling onNodeClick with:", nodeData);
-            onNodeClick(nodeData);
-          } else {
-            console.warn("⚠️ Could not extract node data from click event");
+        // Hover effects
+        const innerBtn = btnWrapper.firstElementChild as HTMLElement;
+        btnWrapper.addEventListener('mouseenter', () => {
+          if (innerBtn) {
+            innerBtn.style.background = 'rgba(102, 126, 234, 0.9)';
+            innerBtn.style.transform = 'scale(1.1)';
+            const svg = innerBtn.querySelector('svg');
+            if (svg) (svg as SVGElement).style.color = '#fff';
           }
         });
-      } catch (err) {
-        console.warn("⚠️ setOnCardClick not supported:", err);
-      }
 
-      if (isAdmin) {
-        const f3EditTree = f3Chart
-          .editTree()
-          .fixed(true)
-          .setFields(["first name", "last name", "birthday", "avatar", "gender"])
-          .setEditFirst(true)
-          .setCardClickOpen(f3Card);
+        btnWrapper.addEventListener('mouseleave', () => {
+          if (innerBtn) {
+            innerBtn.style.background = theme.palette.mode === 'dark' 
+              ? 'rgba(255, 255, 255, 0.15)' 
+              : 'rgba(0, 0, 0, 0.1)';
+            innerBtn.style.transform = 'scale(1)';
+            const svg = innerBtn.querySelector('svg');
+            if (svg) (svg as SVGElement).style.color = theme.palette.mode === 'dark' ? '#fff' : '#333';
+          }
+        });
 
-        f3EditTree.setEdit();
-      }
+        // Click handler
+        btnWrapper.addEventListener('click', (e: MouseEvent) => {
+          e.stopPropagation(); // Don't trigger card expansion
+
+          // Find node data from our stored reference
+          const nodeData = chartDataRef.current.find(n => n.id === d.data.id);
+          
+          if (nodeData && onNodeSelectRef.current) {
+            console.log("🎯 Info button clicked:", nodeData);
+            onNodeSelectRef.current(nodeData);
+          }
+        });
+
+        // Add button to card
+        cardInner.appendChild(btnWrapper);
+      });
 
       f3Chart.updateTree({ initial: true });
       f3ChartInstance.current = f3Chart;
     },
-    [isAdmin, isMobile, onNodeClick]
+    [isAdmin, isMobile, theme]
   );
 
   const loadFamilyChart = useCallback(async () => {
     if (!containerRef.current) return;
-
     try {
       containerRef.current.innerHTML = "";
-
       const f3Module = await import("family-chart");
       const f3 = f3Module.default || f3Module;
-
-      const data = familyTreeData as FamilyTreeNode[];
-      createChart(f3, data);
+      createChart(f3, treeData);
     } catch (error) {
       console.error("❌ Error loading family chart:", error);
     }
-  }, [createChart]);
+  }, [createChart, treeData]);
 
   useEffect(() => {
     loadFamilyChart();
   }, [loadFamilyChart]);
 
   const bgColor = theme.palette.mode === "dark" ? "#1a1229" : "#faf8ff";
-  const textColor = theme.palette.mode === "dark" ? "#fff" : "#333";
 
   return (
     <div
@@ -221,62 +237,150 @@ function FamilyTreeChart({
         width: "100%",
         height: "100%",
         backgroundColor: bgColor,
-        color: textColor,
       }}
     />
   );
 }
 
 /* -----------------------
-   Invite Dialog Component
+   ✨ Floating Quick Actions (FAB / Pill)
    ----------------------- */
-function InviteDialog({
-  open,
-  onClose,
+function FloatingQuickActions({
   node,
-  familyId = "demo-family", // TODO: Get from context
-  adminId = "demo-admin", // TODO: Get from session
-}: InviteDialogProps) {
+  onViewDetails,
+  onDismiss,
+}: {
+  node: FamilyTreeNode | null;
+  onViewDetails: () => void;
+  onDismiss: () => void;
+}) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
+  if (!node) return null;
+
+  const displayName = `${node.data["first name"] || ""} ${node.data["last name"] || ""}`.trim();
+
+  return (
+    <Slide direction="up" in={!!node} mountOnEnter unmountOnExit>
+      <Paper
+        elevation={8}
+        sx={{
+          position: "fixed",
+          bottom: isMobile ? 30 : 40,
+          left: "50%",
+          transform: "translateX(-50%) !important",
+          p: 1.5,
+          pr: 2,
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+          background: theme.palette.mode === 'dark' 
+            ? alpha("#1e1e24", 0.8) 
+            : alpha("#ffffff", 0.8),
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+          borderRadius: "100px",
+          zIndex: 1100,
+          maxWidth: "95%",
+          width: "fit-content",
+          boxShadow: theme.shadows[12],
+        }}
+      >
+        <Avatar
+          src={node.data.avatar}
+          sx={{
+            width: 44,
+            height: 44,
+            bgcolor: node.data.gender === "M" ? "#3b82f6" : "#ec4899",
+            border: `2px solid ${theme.palette.background.paper}`
+          }}
+        >
+          {node.data["first name"]?.[0]}
+        </Avatar>
+
+        <Box sx={{ minWidth: isMobile ? 100 : 140 }}>
+          <Typography variant="subtitle2" fontWeight={700} noWrap>
+            {displayName}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {node.data.birthday || (node.data.gender === "M" ? "Male" : "Female")}
+          </Typography>
+        </Box>
+
+        <Button
+          variant="contained"
+          size="small"
+          endIcon={<VisibilityIcon />}
+          onClick={onViewDetails}
+          sx={{
+            borderRadius: "20px",
+            textTransform: "none",
+            fontWeight: 600,
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            boxShadow: "0 4px 10px rgba(118, 75, 162, 0.3)"
+          }}
+        >
+          Profile
+        </Button>
+
+        <IconButton size="small" onClick={onDismiss} sx={{ ml: -1 }}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Paper>
+    </Slide>
+  );
+}
+
+/* -----------------------
+   🔍 Inspector Panel (Side Pane)
+   ----------------------- */
+interface InspectorPanelProps {
+  node: FamilyTreeNode | null;
+  onClose: () => void;
+  isAdmin: boolean;
+  familyId: string;
+  adminId: string;
+  onEdit: () => void;
+}
+
+function InspectorPanel({
+  node,
+  onClose,
+  isAdmin,
+  familyId,
+  adminId,
+  onEdit,
+}: InspectorPanelProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
   useEffect(() => {
-    if (node?.data?.email) {
-      setEmail(node.data.email);
-    } else {
-      setEmail("");
-    }
-    setError("");
-    setSuccess("");
+    if (node?.data?.email) setEmail(node.data.email);
+    else setEmail("");
+    setStatus(null);
   }, [node]);
 
   const handleSendInvite = async () => {
     if (!email || !node) {
-      setError("Email and node are required");
+      setStatus({ type: "error", msg: "Email is required" });
       return;
     }
 
-    // Validate email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setError("Please enter a valid email address");
+      setStatus({ type: "error", msg: "Invalid email address" });
       return;
     }
 
     setLoading(true);
-    setError("");
-    setSuccess("");
+    setStatus(null);
 
     try {
-      console.log("📤 Sending invite with payload:", {
-        email,
-        treeNodeId: node.id,
-        familyId,
-        invitedBy: adminId,
-      });
-
       const res = await fetch("/api/invite/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -291,16 +395,14 @@ function InviteDialog({
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setError(data.error || `Failed to send invite (${res.status})`);
+        setStatus({ type: "error", msg: data.error || "Failed to send invite" });
       } else {
-        setSuccess("✅ Invite sent successfully!");
-        setTimeout(() => {
-          onClose();
-        }, 2000);
+        setStatus({ type: "success", msg: "Invitation sent!" });
+        setTimeout(() => setStatus(null), 3000);
       }
     } catch (err) {
-      console.error("❌ Error sending invite:", err);
-      setError("Unexpected error while sending invite");
+      console.error("❌ Error:", err);
+      setStatus({ type: "error", msg: "Unexpected error occurred" });
     } finally {
       setLoading(false);
     }
@@ -308,121 +410,280 @@ function InviteDialog({
 
   if (!node) return null;
 
-  const displayName = `${node.data["first name"] || ""} ${node.data["last name"] || ""}`.trim() || node.id;
+  const displayName = `${node.data["first name"] || ""} ${node.data["last name"] || ""}`.trim();
+  const isMale = node.data.gender === "M";
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>
-        Invite {displayName}
-      </DialogTitle>
-      <DialogContent>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Send an invitation email to this family member so they can register and access their
-          profile.
+    <Paper
+      elevation={4}
+      sx={{
+        position: "absolute",
+        top: isMobile ? "auto" : 20,
+        bottom: isMobile ? 0 : 20,
+        right: isMobile ? 0 : 20,
+        left: isMobile ? 0 : "auto",
+        width: isMobile ? "100%" : 340,
+        maxHeight: isMobile ? "85vh" : "calc(100vh - 40px)",
+        borderRadius: isMobile ? "24px 24px 0 0" : 4,
+        background: theme.palette.mode === "dark"
+            ? alpha("#121217", 0.95)
+            : alpha("#ffffff", 0.95),
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        border: "1px solid",
+        borderColor: alpha(theme.palette.divider, 0.1),
+        display: "flex",
+        flexDirection: "column",
+        zIndex: 1000,
+        overflow: "hidden",
+        boxShadow: theme.shadows[24],
+        transition: "transform 0.3s ease",
+      }}
+    >
+      {/* Header */}
+      <Box
+        sx={{
+          p: 2,
+          background: isMale
+            ? `linear-gradient(135deg, ${alpha(theme.palette.info.main, 0.15)}, transparent)`
+            : `linear-gradient(135deg, ${alpha(theme.palette.error.main, 0.15)}, transparent)`,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+        }}
+      >
+        <Chip
+          label={isAdmin ? "Admin Mode" : "View Mode"}
+          size="small"
+          color={isAdmin ? "primary" : "default"}
+          variant="outlined"
+          sx={{ bgcolor: alpha(theme.palette.background.paper, 0.6) }}
+        />
+        <IconButton size="small" onClick={onClose}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Box>
+
+      {/* Profile */}
+      <Box sx={{ px: 3, pb: 2, display: "flex", flexDirection: "column", alignItems: "center", mt: -3 }}>
+        <Avatar
+          src={node.data.avatar}
+          sx={{
+            width: 96,
+            height: 96,
+            border: `4px solid ${theme.palette.background.paper}`,
+            boxShadow: theme.shadows[4],
+            bgcolor: isMale ? "#3b82f6" : "#ec4899",
+            fontSize: "2.5rem",
+          }}
+        >
+          {node.data["first name"]?.[0]}
+        </Avatar>
+
+        <Typography variant="h5" fontWeight={700} sx={{ mt: 2, textAlign: "center" }}>
+          {displayName}
         </Typography>
 
-        {/* Selected Member Info */}
-        <Paper
-          elevation={0}
-          sx={{
-            p: 2,
-            mb: 3,
-            display: "flex",
-            alignItems: "center",
-            gap: 2,
-            bgcolor: alpha("#667eea", 0.1),
-            border: "1px solid",
-            borderColor: alpha("#667eea", 0.3),
-            borderRadius: 2,
-          }}
-        >
-          <Avatar
-            src={node.data.avatar}
-            sx={{
-              width: 56,
-              height: 56,
-              bgcolor: node.data.gender === "M" ? "#3b82f6" : "#ec4899",
-            }}
-          >
-            {node.data["first name"]?.[0]}
-          </Avatar>
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="subtitle1" fontWeight={600}>
-              {displayName}
-            </Typography>
-            {node.data.birthday && (
-              <Typography variant="caption" color="text.secondary">
-                Born: {node.data.birthday}
-              </Typography>
-            )}
-            <Box sx={{ mt: 0.5 }}>
-              <Chip
-                size="small"
-                label={node.data.gender === "M" ? "Male" : "Female"}
-                sx={{
-                  bgcolor: node.data.gender === "M" 
-                    ? alpha("#3b82f6", 0.2) 
-                    : alpha("#ec4899", 0.2),
-                  fontSize: "0.75rem",
-                }}
-              />
+        <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
+          <Chip
+            icon={<PersonIcon sx={{ fontSize: "1rem !important" }} />}
+            label={isMale ? "Male" : "Female"}
+            size="small"
+            sx={{ fontSize: "0.75rem" }}
+          />
+          {node.data.birthday && (
+            <Chip
+              icon={<CakeIcon sx={{ fontSize: "1rem !important" }} />}
+              label={node.data.birthday}
+              size="small"
+              sx={{ fontSize: "0.75rem" }}
+            />
+          )}
+        </Stack>
+      </Box>
+
+      <Divider sx={{ my: 1 }} />
+
+      {/* Content */}
+      <Box sx={{ p: 3, pt: 2, flex: 1, overflowY: "auto" }}>
+        {isAdmin ? (
+          <Stack spacing={2}>
+            <Box>
+                <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', mb:1, display:'block'}}>
+                    Invitation
+                </Typography>
+                <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="member@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    InputProps={{
+                        startAdornment: (
+                        <InputAdornment position="start">
+                            <EmailIcon sx={{ fontSize: 18, color: "text.secondary" }} />
+                        </InputAdornment>
+                        ),
+                    }}
+                />
+                <Button
+                    variant="contained"
+                    fullWidth
+                    onClick={handleSendInvite}
+                    disabled={loading || !email}
+                    endIcon={loading ? <CircularProgress size={14} color="inherit" /> : <SendIcon fontSize="small" />}
+                    sx={{ 
+                      mt: 1, 
+                      borderRadius: 2,
+                      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                    }}
+                >
+                {loading ? "Sending..." : "Send Invite"}
+                </Button>
+                {status && (
+                    <Fade in>
+                        <Alert severity={status.type} sx={{ mt: 1, borderRadius: 2 }}>{status.msg}</Alert>
+                    </Fade>
+                )}
             </Box>
-          </Box>
-        </Paper>
+            
+            <Divider />
 
-        {/* Email Input */}
-        <TextField
-          fullWidth
-          type="email"
-          label="Email Address"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="email@example.com"
-          required
-          disabled={loading}
-          InputProps={{
-            startAdornment: <EmailIcon sx={{ mr: 1, color: "action.active" }} />,
-          }}
-        />
-
-        {/* Error Message */}
-        {error && (
-          <Alert severity="error" sx={{ mt: 2 }}>
-            {error}
-          </Alert>
+            <Box>
+                <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', mb:1, display:'block'}}>
+                    Management
+                </Typography>
+                <Button
+                    variant="outlined"
+                    fullWidth
+                    onClick={onEdit}
+                    startIcon={<EditIcon />}
+                    sx={{ borderRadius: 2 }}
+                >
+                Edit Profile
+                </Button>
+            </Box>
+          </Stack>
+        ) : (
+             <Alert severity="info" variant="outlined" sx={{ borderRadius: 2 }}>
+                You are in View Only mode. Contact an admin to invite or edit members.
+            </Alert>
         )}
+      </Box>
+    </Paper>
+  );
+}
 
-        {/* Success Message */}
-        {success && (
-          <Alert severity="success" icon={<CheckCircle />} sx={{ mt: 2 }}>
-            {success}
-          </Alert>
-        )}
+/* -----------------------
+   📝 Edit Member Dialog
+   ----------------------- */
+function EditMemberDialog({
+  open,
+  onClose,
+  node,
+  onSave,
+}: {
+  open: boolean;
+  onClose: () => void;
+  node: FamilyTreeNode | null;
+  onSave: (updatedNode: FamilyTreeNode) => void;
+}) {
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    birthday: null as Dayjs | null,
+    gender: "",
+    avatar: "",
+  });
+
+  useEffect(() => {
+    if (node) {
+      setFormData({
+        firstName: node.data["first name"] || "",
+        lastName: node.data["last name"] || "",
+        birthday: node.data.birthday ? dayjs(node.data.birthday) : null,
+        gender: node.data.gender || "",
+        avatar: node.data.avatar || "",
+      });
+    }
+  }, [node]);
+
+  const handleSave = () => {
+    if (!node) return;
+
+    const updatedNode: FamilyTreeNode = {
+      ...node,
+      data: {
+        ...node.data,
+        "first name": formData.firstName,
+        "last name": formData.lastName,
+        birthday: formData.birthday ? formData.birthday.format("YYYY") : undefined,
+        gender: formData.gender as "M" | "F" | undefined,
+        avatar: formData.avatar,
+      },
+    };
+
+    onSave(updatedNode);
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 3 } }}>
+      <DialogTitle sx={{ fontWeight: 700 }}>Edit Details</DialogTitle>
+      <DialogContent>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <Stack spacing={3} sx={{ mt: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                <CloudinaryUpload
+                    currentImage={formData.avatar}
+                    onUploadSuccess={(url) => setFormData({ ...formData, avatar: url })}
+                    folder="familyfirst/avatars"
+                />
+            </Box>
+            <Stack direction="row" spacing={2}>
+                <TextField
+                    fullWidth
+                    label="First Name"
+                    value={formData.firstName}
+                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                />
+                <TextField
+                    fullWidth
+                    label="Last Name"
+                    value={formData.lastName}
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                />
+            </Stack>
+            <Stack direction="row" spacing={2}>
+                <DatePicker
+                    label="Birthday"
+                    value={formData.birthday}
+                    onChange={(newValue) => setFormData({ ...formData, birthday: newValue })}
+                    slotProps={{ textField: { fullWidth: true } }}
+                />
+                <TextField
+                    select
+                    fullWidth
+                    label="Gender"
+                    value={formData.gender}
+                    onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                >
+                    <MenuItem value="M">Male</MenuItem>
+                    <MenuItem value="F">Female</MenuItem>
+                </TextField>
+            </Stack>
+          </Stack>
+        </LocalizationProvider>
       </DialogContent>
-
       <DialogActions sx={{ px: 3, pb: 3 }}>
-        <Button onClick={onClose} disabled={loading}>
-          Cancel
-        </Button>
+        <Button onClick={onClose} sx={{ color: 'text.secondary' }}>Cancel</Button>
         <Button
           variant="contained"
-          disabled={loading || !email}
-          onClick={handleSendInvite}
-          sx={{
-            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-            "&:hover": {
-              background: "linear-gradient(135deg, #5568d3 0%, #6a3f8d 100%)",
-            },
-          }}
+          onClick={handleSave}
+          disabled={!formData.firstName}
+          sx={{ borderRadius: 2, background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" }}
         >
-          {loading ? (
-            <>
-              <CircularProgress size={20} sx={{ mr: 1 }} color="inherit" />
-              Sending...
-            </>
-          ) : (
-            "Send Invite"
-          )}
+          Save Changes
         </Button>
       </DialogActions>
     </Dialog>
@@ -430,269 +691,115 @@ function InviteDialog({
 }
 
 /* -----------------------
-   Main Page Component
+   🌳 Main Page Layout
    ----------------------- */
 export default function FamilyTreePage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const [isAdmin, setIsAdmin] = useState(true);
-  const [selectedNode, setSelectedNode] = useState<FamilyTreeNode | null>(null);
-  const [inviteOpen, setInviteOpen] = useState(false);
 
-  const handleAdminToggle = () => {
-    setIsAdmin((prev) => !prev);
+  const [isAdmin, setIsAdmin] = useState(true);
+  const [treeData, setTreeData] = useState<FamilyTreeNode[]>(familyTreeData as FamilyTreeNode[]);
+  
+  const [quickActionNode, setQuickActionNode] = useState<FamilyTreeNode | null>(null);
+  const [inspectorNode, setInspectorNode] = useState<FamilyTreeNode | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+
+  const handleNodeSelect = useCallback((node: FamilyTreeNode) => {
+    const freshNode = treeData.find(n => n.id === node.id) || node;
+    setQuickActionNode(freshNode);
+  }, [treeData]);
+
+  const handleViewDetails = () => {
+    if (quickActionNode) {
+      setInspectorNode(quickActionNode);
+      setQuickActionNode(null);
+    }
   };
 
-  const handleNodeClick = useCallback((node: FamilyTreeNode) => {
-    console.log("🎯 Node clicked in parent:", node);
-
-    // Validate node has required data
-    if (!node || !node.id) {
-      console.warn("⚠️ Invalid node clicked:", node);
-      return;
-    }
-
-    setSelectedNode(node);
-    setInviteOpen(true);
-  }, []);
-
-  const handleCloseInvite = useCallback(() => {
-    setInviteOpen(false);
-    setTimeout(() => {
-      setSelectedNode(null);
-    }, 300);
-  }, []);
+  const handleSaveEdit = (updatedNode: FamilyTreeNode) => {
+    setTreeData(prev => prev.map(n => n.id === updatedNode.id ? updatedNode : n));
+    setInspectorNode(updatedNode);
+  };
 
   return (
-    <Box sx={{ maxWidth: "100%", mx: "auto", pb: 4 }}>
-      {/* Header */}
-      <Paper
-        elevation={0}
-        sx={{
-          p: isMobile ? 2 : 3,
-          mb: 3,
-          borderRadius: 3,
-          background: `linear-gradient(135deg, ${alpha(
-            theme.palette.primary.main,
-            0.1
-          )} 0%, ${alpha(theme.palette.secondary.main, 0.1)} 100%)`,
-          border: "1px solid",
-          borderColor: "divider",
-        }}
-      >
-        <Box>
-          <Typography
-            variant={isMobile ? "h5" : "h4"}
-            sx={{
-              fontWeight: 700,
-              background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-              backgroundClip: "text",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              mb: 0.5,
-            }}
-          >
-            Family Tree
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Interactive family tree • Drag to explore • Click members to invite
-          </Typography>
-        </Box>
-      </Paper>
-
-      {/* Legend / Controls */}
-      <Paper
-        elevation={0}
-        sx={{
-          p: 2,
-          mb: 3,
-          borderRadius: 3,
-          border: "1px solid",
-          borderColor: "divider",
-        }}
-      >
-        <Box
+    <LocalizationProvider dateAdapter={AdapterDayjs}>
+      <Box sx={{ height: "calc(100vh - 64px)", width: "100%", position: "relative", overflow: "hidden" }}>
+        {/* Header */}
+        <Paper
+          elevation={0}
           sx={{
+            position: "absolute",
+            top: 20,
+            left: 20,
+            zIndex: 5,
+            p: 1,
+            px: 2,
+            borderRadius: "12px",
             display: "flex",
-            justifyContent: "space-between",
             alignItems: "center",
-            mb: 2,
-            flexWrap: "wrap",
             gap: 2,
+            background: alpha(theme.palette.background.paper, 0.6),
+            backdropFilter: "blur(10px)",
+            border: "1px solid",
+            borderColor: alpha(theme.palette.divider, 0.1),
           }}
         >
-          <Typography variant="subtitle2" fontWeight={600}>
-            Legend
-          </Typography>
+            <Typography variant="subtitle2" fontWeight={800}>Family Tree</Typography>
+            <Divider orientation="vertical" flexItem sx={{ height: 16, my: 'auto' }} />
+            <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+              Click ⓘ on cards for details
+            </Typography>
+            <Divider orientation="vertical" flexItem sx={{ height: 16, my: 'auto' }} />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="caption" color="text.secondary">Mode:</Typography>
+                <Chip
+                    label={isAdmin ? "Admin" : "Viewer"}
+                    size="small"
+                    color={isAdmin ? "primary" : "default"}
+                    onClick={() => setIsAdmin(!isAdmin)}
+                    sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer' }}
+                />
+            </Box>
+        </Paper>
 
-          <FormControlLabel
-            control={
-              <Switch checked={isAdmin} onChange={handleAdminToggle} color="primary" />
-            }
-            label={
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <AdminIcon fontSize="small" />
-                <Typography variant="caption" fontWeight={600}>
-                  Admin Mode
-                </Typography>
-              </Box>
-            }
-          />
-        </Box>
-
-        <Stack
-          direction={isMobile ? "column" : "row"}
-          spacing={2}
-          flexWrap="wrap"
-          useFlexGap
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <Box
-              sx={{
-                width: 24,
-                height: 24,
-                borderRadius: 1.5,
-                backgroundColor: "rgb(120, 159, 172)",
-              }}
-            />
-            <Typography variant="caption">Male</Typography>
-          </Box>
-
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <Box
-              sx={{
-                width: 24,
-                height: 24,
-                borderRadius: 1.5,
-                backgroundColor: "rgb(196, 138, 146)",
-              }}
-            />
-            <Typography variant="caption">Female</Typography>
-          </Box>
-
-          {isAdmin && (
-            <>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <EditIcon sx={{ fontSize: 16, color: theme.palette.warning.main }} />
-                <Typography variant="caption">Click card to invite (Admin)</Typography>
-              </Box>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <AddIcon sx={{ fontSize: 16, color: theme.palette.success.main }} />
-                <Typography variant="caption">Click + to add member (Admin)</Typography>
-              </Box>
-            </>
-          )}
-        </Stack>
-      </Paper>
-
-      {/* Chart Container */}
-      <Paper
-        elevation={0}
-        sx={{
-          borderRadius: 3,
-          border: "1px solid",
-          borderColor: "divider",
-          overflow: "hidden",
-          position: "relative",
-          height: isMobile ? "600px" : "800px",
-        }}
-      >
+        {/* Chart */}
         <FamilyTreeChart
           isAdmin={isAdmin}
           isMobile={isMobile}
           theme={theme}
-          onNodeClick={handleNodeClick}
+          treeData={treeData}
+          onNodeSelect={handleNodeSelect}
         />
-      </Paper>
 
-      {/* Instructions */}
-      <Paper
-        elevation={0}
-        sx={{
-          p: 2,
-          mt: 3,
-          borderRadius: 3,
-          border: "1px solid",
-          borderColor: "divider",
-          background: `linear-gradient(135deg, ${alpha(
-            theme.palette.info.main,
-            0.05
-          )} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`,
-        }}
-      >
-        <Typography variant="subtitle2" fontWeight={600} mb={1.5} color="primary">
-          💡 How to Use
-        </Typography>
-        <Stack spacing={1}>
-          <Typography variant="body2" color="text.secondary">
-            • <strong>Drag</strong> the canvas to pan around the tree
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            • <strong>Scroll</strong> to zoom in/out
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            • <strong>Click on cards</strong> to invite family members
-          </Typography>
-          {isAdmin && (
-            <>
-              <Typography variant="body2" color="text.secondary">
-                • <strong>Click ADD buttons</strong> to add new family members (Admin)
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                • <strong>Edit mode</strong> allows you to modify member details (Admin)
-              </Typography>
-            </>
-          )}
-          <Typography variant="body2" color="text.secondary">
-            • <strong>Hover over cards</strong> to see connection paths highlighted
-          </Typography>
-        </Stack>
-      </Paper>
+        {/* Quick Action FAB */}
+        <FloatingQuickActions
+          node={quickActionNode}
+          onViewDetails={handleViewDetails}
+          onDismiss={() => setQuickActionNode(null)}
+        />
 
-      {/* Family Statistics */}
-      <Paper
-        elevation={0}
-        sx={{
-          p: 2,
-          mt: 3,
-          borderRadius: 3,
-          border: "1px solid",
-          borderColor: "divider",
-        }}
-      >
-        <Typography variant="subtitle2" fontWeight={600} mb={1.5}>
-          📊 Family Statistics
-        </Typography>
-        <Stack direction={isMobile ? "column" : "row"} spacing={3}>
+        {/* Inspector Panel */}
+        <Fade in={!!inspectorNode} mountOnEnter unmountOnExit>
           <Box>
-            <Typography variant="h4" color="primary" fontWeight={700}>
-              {familyTreeData.length}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Total Members
-            </Typography>
+            <InspectorPanel
+              node={inspectorNode}
+              onClose={() => setInspectorNode(null)}
+              isAdmin={isAdmin}
+              familyId="demo-family"
+              adminId="demo-admin"
+              onEdit={() => setEditOpen(true)}
+            />
           </Box>
-          <Box>
-            <Typography variant="h4" color="secondary" fontWeight={700}>
-              4
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Generations
-            </Typography>
-          </Box>
-          <Box>
-            <Typography variant="h4" color="success.main" fontWeight={700}>
-              25+
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Family Branches
-            </Typography>
-          </Box>
-        </Stack>
-      </Paper>
+        </Fade>
 
-      {/* Invite Dialog */}
-      <InviteDialog open={inviteOpen} onClose={handleCloseInvite} node={selectedNode} />
-    </Box>
+        {/* Edit Dialog */}
+        <EditMemberDialog
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          node={inspectorNode}
+          onSave={handleSaveEdit}
+        />
+      </Box>
+    </LocalizationProvider>
   );
 }

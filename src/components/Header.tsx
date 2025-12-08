@@ -1,8 +1,10 @@
+// src/components/Header.tsx
 "use client";
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { signOut, useSession } from "next-auth/react";
 import {
   styled,
   CSSObject,
@@ -51,6 +53,7 @@ import {
   DarkMode as DarkModeIcon,
   Circle as CircleIcon,
   Menu as MenuIcon,
+  Logout as LogoutIcon,
 } from "@mui/icons-material";
 import { TbBinaryTree } from "react-icons/tb";
 
@@ -156,6 +159,8 @@ const Drawer = styled(MuiDrawer)(({ theme }) => ({
 export default function Header({ children }: { children: React.ReactNode }) {
   const theme = useTheme();
   const dispatch = useDispatch();
+  const router = useRouter();
+  const { data: session } = useSession();
   const mode = useSelector((state: RootState) => state.theme.mode);
   const currentUser = useSelector(
     (state: RootState) => state.user?.currentUser
@@ -165,6 +170,39 @@ export default function Header({ children }: { children: React.ReactNode }) {
 
   // Mobile drawer state
   const [mobileOpen, setMobileOpen] = React.useState(false);
+
+  // ⭐ Helper to get display name and username
+  const getDisplayInfo = () => {
+    if (session?.user) {
+      // User from NextAuth session
+      return {
+        displayName: session.user.name || "User",
+        username: session.user.name?.toLowerCase().replace(/\s+/g, "") || "user",
+        avatar: session.user.image,
+      };
+    } else if (currentUser && "username" in currentUser) {
+      // User from Redux (fallback)
+      return {
+        displayName: currentUser.username,
+        username: currentUser.username,
+        avatar: null,
+      };
+    }
+    // Default fallback
+    return {
+      displayName: "Profile",
+      username: "profile",
+      avatar: null,
+    };
+  };
+
+  const { displayName, username, avatar } = getDisplayInfo();
+
+  // Logout handler
+  const handleLogout = async () => {
+    await signOut({ redirect: false });
+    router.push("/login");
+  };
 
   // Notifications state
   const [notifications, setNotifications] = React.useState<Notification[]>([
@@ -280,9 +318,14 @@ export default function Header({ children }: { children: React.ReactNode }) {
       href: "/help",
       match: (p) => p.startsWith("/help"),
     },
+    {
+      text: "Logout",
+      icon: <LogoutIcon />,
+      onClick: handleLogout,
+    },
   ];
 
-  const profileHref = currentUser ? `/${currentUser.username}` : "/john";
+  const profileHref = `/${username}`;
 
   const contacts: Contact[] = [
     { name: "Alice", avatar: "/avatar4.png", online: true },
@@ -360,18 +403,16 @@ export default function Header({ children }: { children: React.ReactNode }) {
           const active = item.match?.(pathname) ?? false;
           const buttonProps = item.href
             ? { component: Link, href: item.href }
-            : { onClick: item.onClick };
+            : {};
 
           return (
             <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
               <ListItemButton
                 {...buttonProps}
                 onClick={() => {
-                  // Execute the onClick if it exists
                   if (item.onClick) {
                     item.onClick();
                   }
-                  // Close mobile drawer
                   if (isMobile) {
                     setMobileOpen(false);
                   }
@@ -426,7 +467,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
               borderRadius: 2,
               px: 2,
               transition: "all 0.2s",
-              ...(pathname.startsWith(`/${currentUser}`) && {
+              ...(pathname.startsWith(`/${username}`) && {
                 bgcolor: alpha(theme.palette.primary.main, 0.12),
                 color: theme.palette.primary.main,
               }),
@@ -436,10 +477,14 @@ export default function Header({ children }: { children: React.ReactNode }) {
             }}
           >
             <ListItemIcon sx={{ minWidth: 0, mr: 2 }}>
-              <AccountCircle />
+              {avatar ? (
+                <Avatar src={avatar} sx={{ width: 24, height: 24 }} />
+              ) : (
+                <AccountCircle />
+              )}
             </ListItemIcon>
             <ListItemText
-              primary={currentUser ? currentUser.username : "Profile"}
+              primary={displayName}
               primaryTypographyProps={{
                 fontSize: "0.9rem",
                 fontWeight: 500,
@@ -471,7 +516,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
             </IconButton>
           )}
 
-          {/* Logo Instead of Typography */}
+          {/* Logo */}
           <Box
             sx={{
               flexGrow: 1,
@@ -488,7 +533,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
                 objectFit: "contain",
                 cursor: "pointer",
               }}
-              // onClick={() => router.push("/")}
+              onClick={() => router.push("/feed")}
             />
           </Box>
 
@@ -644,7 +689,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
           onClose={() => setMobileOpen(false)}
           onOpen={() => setMobileOpen(true)}
           ModalProps={{
-            keepMounted: true, // Better mobile performance
+            keepMounted: true,
           }}
           sx={{
             display: { xs: "block", md: "none" },

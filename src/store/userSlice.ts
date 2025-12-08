@@ -1,3 +1,4 @@
+// src/store/userSlice.ts
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 export interface UserProfile {
@@ -5,93 +6,119 @@ export interface UserProfile {
   username: string;
   name: string;
   email?: string;
-  avatar?: string | null;   
+  avatar?: string | null;
   bio?: string;
   location?: string;
 }
+
 interface UserState {
-  currentUser: { username: string } | null;
+  currentUser: UserProfile | null;
   profiles: Record<string, UserProfile>;
+  isAuthenticated: boolean;
+  isLoading: boolean;
 }
 
 const initialState: UserState = {
-  currentUser: { username: "john" },
-  profiles: {
-    john: {
-      id: "1",
-      username: "john",
-      name: "John Doe",
-      email: "john@example.com",
-      avatar: "/avatar.png",
-      bio: "Family history buff. Coffee enthusiast.",
-      location: "Bengaluru, IN",
-    },
-    alice: {
-      id: "2",
-      username: "alice",
-      name: "Alice Fernandes",
-      email: "alice@example.com",
-      avatar: "/avatar4.png",
-      bio: "Archivist of memories.",
-      location: "Goa, IN",
-    },
-  },
-};
-
-type UpdatePayload = {
-  username: string;
-  changes: Partial<Pick<UserProfile, "name" | "bio" | "location" | "avatar">>;
+  currentUser: null,
+  profiles: {},
+  isAuthenticated: false,
+  isLoading: true,
 };
 
 const userSlice = createSlice({
   name: "user",
   initialState,
   reducers: {
-    setCurrentUser(state, action: PayloadAction<{ username: string } | null>) {
+    // ⭐ Set current user from NextAuth session
+    setCurrentUser(state, action: PayloadAction<UserProfile | null>) {
       state.currentUser = action.payload;
+      state.isAuthenticated = !!action.payload;
+      state.isLoading = false;
+      
+      // Also add to profiles
+      if (action.payload) {
+        state.profiles[action.payload.username] = action.payload;
+      }
     },
-   updateProfile(
+
+    // ⭐ Set loading state
+    setLoading(state, action: PayloadAction<boolean>) {
+      state.isLoading = action.payload;
+    },
+
+    // Update profile
+    updateProfile(
       state,
       action: PayloadAction<{
         username: string;
-        changes: Partial<UserProfile>; 
+        changes: Partial<UserProfile>;
       }>
     ) {
       const { username, changes } = action.payload;
-      if (!state.profiles[username]) return;
-      state.profiles[username] = { ...state.profiles[username], ...changes };
+      
+      // Update in profiles
+      if (state.profiles[username]) {
+        state.profiles[username] = { 
+          ...state.profiles[username], 
+          ...changes 
+        };
+      }
+      
+      // Update current user if it's them
+      if (state.currentUser?.username === username) {
+        state.currentUser = { 
+          ...state.currentUser, 
+          ...changes 
+        };
+      }
     },
+
+    // Add/update a profile in the profiles record
     upsertProfile(state, action: PayloadAction<UserProfile>) {
       state.profiles[action.payload.username] = action.payload;
     },
-    // add to your existing createSlice reducers:
 
-changeEmail(
-  state,
-  action: PayloadAction<{ username: string; newEmail: string }>
-) {
-  const { username, newEmail } = action.payload;
-  const p = state.profiles[username];
-  if (p) p.email = newEmail;
-},
+    // Change email
+    changeEmail(
+      state,
+      action: PayloadAction<{ username: string; newEmail: string }>
+    ) {
+      const { username, newEmail } = action.payload;
+      
+      if (state.profiles[username]) {
+        state.profiles[username].email = newEmail;
+      }
+      
+      if (state.currentUser?.username === username) {
+        state.currentUser.email = newEmail;
+      }
+    },
 
-// purely frontend flag; real change will be handled by Firebase Auth
-passwordChangeRequested(
-  state,
-  _action: PayloadAction<{ username: string }>
-) {
-  // you might set a timestamp/flag here if you want UI feedback
-},
+    // Clear user on logout
+    clearCurrentUser(state) {
+      state.currentUser = null;
+      state.isAuthenticated = false;
+      state.isLoading = false;
+    },
 
+    // Reset entire user state
+    resetUserState(state) {
+      state.currentUser = null;
+      state.profiles = {};
+      state.isAuthenticated = false;
+      state.isLoading = false;
+    },
   },
 });
 
 export const {
   setCurrentUser,
+  setLoading,
   updateProfile,
   upsertProfile,
   changeEmail,
-  passwordChangeRequested,
+  clearCurrentUser,
+  resetUserState,
 } = userSlice.actions;
 
 export default userSlice.reducer;
