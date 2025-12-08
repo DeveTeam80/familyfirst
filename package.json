@@ -16,6 +16,7 @@
     "@mui/icons-material": "^7.3.4",
     "@mui/material": "^7.3.4",
     "@mui/x-date-pickers": "^8.18.0",
+    "@prisma/client": "6.19.0",
     "@reduxjs/toolkit": "^2.9.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",
@@ -45,6 +46,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
+    "prisma": "6.19.0",
     "tsx": "^4.20.6",
     "typescript": "^5"
   }
