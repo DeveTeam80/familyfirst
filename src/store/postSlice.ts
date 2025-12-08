@@ -1,124 +1,163 @@
-// store/postSlice.ts
-import { createSlice, PayloadAction, nanoid } from "@reduxjs/toolkit";
+// src/store/postSlice.ts
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 interface Comment {
   id: string;
   user: string;
+  userId?: string;
+  avatar?: string;
   text: string;
+  likes?: number;
+  likedBy?: string[];
+  replies?: Comment[];
+  createdAt?: string;
 }
 
-interface Post {
+export interface Post {
   id: string;
+  userId: string;
   user: string;
-  username?: string;
+  username: string;
   avatar?: string;
   content?: string;
   tags: string[];
-  image?: string | null;     // (keep your tri-state if you added it)
-  eventDate?: string;        // ✅ add this
+  image?: string | null;
+  images?: string[];
+  eventDate?: string;
   likes: number;
   likedBy: string[];
   comments: Comment[];
   date: string;
+  createdAt: string;
+  updatedAt: string;
 }
-
 
 interface PostState {
   items: Post[];
-  selectedPost?: Post | null;
+  selectedPost: Post | null;
+  isLoading: boolean;
+  error: string | null;
 }
 
 const initialState: PostState = {
-  items: [
-    {
-      id: nanoid(),
-      user: "John Doe",
-      username: "john",
-      avatar: "/avatar.png",
-      content: "Had a great time with the family this weekend!",
-      tags: ["Memories", "Family"],
-      image: "https://images.unsplash.com/photo-1607746882042-944635dfe10e?w=800",
-      likes: 3,
-      likedBy: ["alice", "bob", "charlie"],
-      comments: [
-        { id: nanoid(), user: "Alice", text: "Beautiful!" },
-        { id: nanoid(), user: "Charlie", text: "Looks fun 😄" },
-      ],
-      date: "Oct 9, 2025",
-    },
-    {
-      id: nanoid(),
-      user: "Alice Fernandes",
-      username: "alice",
-      avatar: "/avatar4.png",
-      content: "Some moments are worth framing forever ❤️",
-      tags: ["Gallery"],
-      image: "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=800",
-      likes: 5,
-      likedBy: ["john", "bob"],
-      comments: [{ id: nanoid(), user: "John Doe", text: "Lovely picture!" }],
-      date: "Oct 8, 2025",
-    },
-    {
-      id: nanoid(),
-      user: "Charlie Pinto",
-      username: "charlie",
-      avatar: "/avatar6.png",
-      content: "Cooking up grandma’s classic biryani recipe 🍛",
-      tags: ["Recipe"],
-      image: "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=800",
-      likes: 8,
-      likedBy: ["alice", "john"],
-      comments: [],
-      date: "Oct 7, 2025",
-    },
-  ],
+  items: [],
   selectedPost: null,
+  isLoading: false,
+  error: null,
 };
 
 const postSlice = createSlice({
   name: "posts",
   initialState,
   reducers: {
-    addPost(state, action: PayloadAction<Omit<Post, "id" | "likes" | "likedBy" | "comments" | "date">>) {
-      state.items.unshift({
-        id: nanoid(),
-        ...action.payload,
-        likes: 0,
-        likedBy: [],
-        comments: [],
-        date: new Date().toLocaleDateString(),
-      });
+    setLoading(state, action: PayloadAction<boolean>) {
+      state.isLoading = action.payload;
     },
-    likePost(state, action: PayloadAction<{ postId: string; user: string }>) {
-      const p = state.items.find((x) => x.id === action.payload.postId);
-      if (!p) return;
-      const hasLiked = p.likedBy.includes(action.payload.user);
+
+    setError(state, action: PayloadAction<string | null>) {
+      state.error = action.payload;
+    },
+
+    setPosts(state, action: PayloadAction<Post[]>) {
+      state.items = action.payload;
+      state.isLoading = false;
+      state.error = null;
+    },
+
+    // ⭐ NEW: Append posts for infinite scroll
+    appendPosts(state, action: PayloadAction<Post[]>) {
+      const existingIds = new Set(state.items.map(p => p.id));
+      const newPosts = action.payload.filter(p => !existingIds.has(p.id));
+      state.items = [...state.items, ...newPosts];
+      state.isLoading = false;
+      state.error = null;
+    },
+
+    addPost(state, action: PayloadAction<Post>) {
+      state.items.unshift(action.payload);
+    },
+
+    likePost(state, action: PayloadAction<{ postId: string; username: string }>) {
+      const post = state.items.find((p) => p.id === action.payload.postId);
+      if (!post) return;
+
+      const hasLiked = post.likedBy.includes(action.payload.username);
       if (hasLiked) {
-        p.likedBy = p.likedBy.filter((u) => u !== action.payload.user);
-        p.likes--;
+        post.likedBy = post.likedBy.filter((u) => u !== action.payload.username);
+        post.likes = Math.max(0, post.likes - 1);
       } else {
-        p.likedBy.push(action.payload.user);
-        p.likes++;
+        post.likedBy.push(action.payload.username);
+        post.likes++;
       }
+      post.updatedAt = new Date().toISOString();
     },
-    addComment(state, action: PayloadAction<{ postId: string; user: string; text: string }>) {
-      const p = state.items.find((x) => x.id === action.payload.postId);
-      if (!p) return;
-      p.comments.push({ id: nanoid(), user: action.payload.user, text: action.payload.text });
+
+    addComment(
+      state,
+      action: PayloadAction<{
+        postId: string;
+        comment: Comment;
+      }>
+    ) {
+      const post = state.items.find((p) => p.id === action.payload.postId);
+      if (!post) return;
+
+      post.comments.push(action.payload.comment);
+      post.updatedAt = new Date().toISOString();
     },
+
+    updatePost(
+      state,
+      action: PayloadAction<{
+        postId: string;
+        content?: string;
+        tags?: string[];
+        images?: string[];
+        eventDate?: string;
+      }>
+    ) {
+      const post = state.items.find((p) => p.id === action.payload.postId);
+      if (!post) return;
+
+      if (action.payload.content !== undefined) {
+        post.content = action.payload.content;
+      }
+      if (action.payload.tags !== undefined) {
+        post.tags = action.payload.tags;
+      }
+      if (action.payload.images !== undefined) {
+        post.images = action.payload.images;
+        post.image = action.payload.images[0] || null;
+      }
+      if (action.payload.eventDate !== undefined) {
+        post.eventDate = action.payload.eventDate;
+      }
+      post.updatedAt = new Date().toISOString();
+    },
+
     deletePost(state, action: PayloadAction<{ postId: string }>) {
-      state.items = state.items.filter((x) => x.id !== action.payload.postId);
+      state.items = state.items.filter((p) => p.id !== action.payload.postId);
     },
-    updatePost(state, action: PayloadAction<{ postId: string; content: string; tags: string[]; image?: string | null }>) {
-      const p = state.items.find((x) => x.id === action.payload.postId);
-      if (!p) return;
-      p.content = action.payload.content;
-      p.tags = action.payload.tags;
-      if (action.payload.image !== undefined) p.image = action.payload.image;
+
+    clearPosts(state) {
+      state.items = [];
+      state.selectedPost = null;
+      state.error = null;
     },
   },
 });
 
-export const { addPost, likePost, addComment, deletePost, updatePost } = postSlice.actions;
+export const {
+  setLoading,
+  setError,
+  setPosts,
+  appendPosts, // ⭐ Export new action
+  addPost,
+  likePost,
+  addComment,
+  updatePost,
+  deletePost,
+  clearPosts,
+} = postSlice.actions;
+
 export default postSlice.reducer;

@@ -32,6 +32,8 @@ model User {
   createdFamilies   Family[]         @relation("FamilyCreator")
   posts             Post[]
   postComments      Comment[]
+  commentLikes      CommentLike[]
+  reactions         Reaction[]       // ⭐ Add this line
   recipes           Recipe[]
   recipeComments    RecipeComment[]
   calendarEvents    CalendarEvent[]
@@ -43,6 +45,7 @@ model User {
 
   @@map("users")
 }
+
 
 // ============================================
 // FAMILIES & MEMBERSHIPS
@@ -251,21 +254,24 @@ enum RelationshipType {
 // POSTS & FEED
 // ============================================
 
+
 model Post {
   id       String  @id @default(uuid())
   familyId String  @map("family_id")
-  authorId String? @map("author_id") // NULL if user deleted
+  authorId String? @map("author_id")
 
   content  String? @db.Text
   location String?
+  
+  // Removed imageUrl field - using photos relation instead
+  tags      String[] @default([])
+  eventDate DateTime? @map("event_date") @db.Date
 
-  // Privacy
   visibility Visibility @default(FAMILY)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Relations
   family    Family     @relation(fields: [familyId], references: [id], onDelete: Cascade)
   author    User?      @relation(fields: [authorId], references: [id], onDelete: SetNull)
   photos    Photo[]
@@ -280,6 +286,7 @@ enum Visibility {
   FAMILY // All family members
   PRIVATE // Only author
   CUSTOM // Custom list (future feature)
+  PUBLIC  
 
   @@map("visibility")
 }
@@ -339,16 +346,39 @@ model Comment {
   userId String? @map("user_id")
 
   content String @db.Text
+  
+  // Reply support
+  parentId String? @map("parent_id")
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  Comment[] @relation("CommentReplies")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  post Post  @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  post      Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  likes     CommentLike[]
 
   @@index([postId])
+  @@index([parentId])
   @@map("comments")
+}
+
+// New model for comment likes
+model CommentLike {
+  id        String @id @default(uuid())
+  commentId String @map("comment_id")
+  userId    String @map("user_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)  // ⭐ Add this line
+
+  @@unique([commentId, userId])
+  @@map("comment_likes")
 }
 
 model Reaction {
@@ -362,8 +392,9 @@ model Reaction {
 
   // Relations
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)  // ⭐ Add this line
 
-  @@unique([postId, userId]) // One reaction per user per post
+  @@unique([postId, userId])
   @@map("reactions")
 }
 

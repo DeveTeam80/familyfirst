@@ -1,27 +1,138 @@
+// src/app/(app)/feed/page.tsx
 "use client";
+
 import { useDispatch, useSelector } from "react-redux";
-import { addPost, likePost, addComment, deletePost, updatePost } from "@/store/postSlice";
+import { addPost, setPosts, appendPosts, likePost } from "@/store/postSlice";
 import { RootState } from "@/store";
 import * as React from "react";
-import { Container, Box, Typography, Paper, alpha, useTheme } from "@mui/material";
+import {
+  Container,
+  Box,
+  Typography,
+  Paper,
+  alpha,
+  useTheme,
+  Skeleton,
+  Stack,
+  CircularProgress,
+  Button
+} from "@mui/material";
+import { KeyboardArrowUp } from "@mui/icons-material";
 
 import PostComposer from "@/components/feed/PostComposer";
-import PostCard from "@/components/feed/PostCard";
+import PostCard, { PostCardData, Comment as PostComment } from "@/components/feed/PostCard";
 import CommentBox from "@/components/feed/CommentBox";
 import ShareDialog from "@/components/dialogs/ShareDialog";
 import EventDialog from "@/components/dialogs/EventDialog";
 import DeleteDialog from "@/components/dialogs/DeleteDialog";
 import EditPostDialog from "@/components/dialogs/EditPostDialog";
+import imageCompression from 'browser-image-compression';
+
+// Import API helpers
+import { createPost, fetchPosts, toggleLike, addCommentApi, updatePostApi, deletePostApi } from "@/lib/api-posts";
+
+// Loading Skeleton Component
+function PostCardSkeleton() {
+  const theme = useTheme();
+
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        mb: 3,
+        borderRadius: 4,
+        border: '1px solid',
+        borderColor: alpha(theme.palette.divider, 0.6),
+        overflow: 'hidden',
+        backgroundColor: theme.palette.background.paper,
+      }}
+    >
+      <Box sx={{ p: 3, pb: 1 }}>
+        <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+          <Box display="flex" alignItems="center" gap={1.5}>
+            <Skeleton variant="circular" width={44} height={44} />
+            <Box>
+              <Skeleton width={120} height={20} sx={{ mb: 0.5 }} />
+              <Skeleton width={80} height={14} />
+            </Box>
+          </Box>
+          <Skeleton variant="circular" width={32} height={32} />
+        </Box>
+
+        <Skeleton width="90%" height={16} sx={{ mb: 1 }} />
+        <Skeleton width="75%" height={16} sx={{ mb: 2 }} />
+
+        <Stack direction="row" spacing={1} mb={2}>
+          <Skeleton width={60} height={24} sx={{ borderRadius: 2 }} />
+          <Skeleton width={80} height={24} sx={{ borderRadius: 2 }} />
+        </Stack>
+
+        <Skeleton
+          variant="rectangular"
+          width="100%"
+          height={300}
+          sx={{ borderRadius: 4, mb: 2 }}
+        />
+
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1.5 }}>
+          <Skeleton width={100} height={16} />
+          <Skeleton width={80} height={16} />
+        </Box>
+
+        <Stack direction="row" spacing={1} justifyContent="space-around" sx={{ mt: 2 }}>
+          <Skeleton width="30%" height={40} sx={{ borderRadius: 2 }} />
+          <Skeleton width="30%" height={40} sx={{ borderRadius: 2 }} />
+          <Skeleton width="30%" height={40} sx={{ borderRadius: 2 }} />
+        </Stack>
+      </Box>
+    </Paper>
+  );
+}
+
+// Helper function to map Redux Post to PostCardData
+function mapPostToCardData(post: any): PostCardData {
+  return {
+    id: post.id,
+    userId: post.userId,
+    user: post.user || "Unknown User",
+    username: post.username,
+    avatar: post.avatar,
+    content: post.content,
+    image: post.image,
+    images: post.images,
+    tags: post.tags || [],
+    date: post.date || post.createdAt || new Date().toISOString(),
+    likes: post.likes || 0,
+    likedBy: post.likedBy || [],
+    comments: post.comments || [],
+    eventDate: post.eventDate,
+    createdAt: post.createdAt,
+    visibility: post.visibility || 'FAMILY',
+  };
+}
 
 export default function Feed() {
   const theme = useTheme();
   const dispatch = useDispatch();
+
+  const currentUser = useSelector((s: RootState) => s.user.currentUser);
   const posts = useSelector((s: RootState) => s.posts.items);
+
+  // Pagination & Loading states
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [hasMore, setHasMore] = React.useState(true);
+  const [isLoadingPosts, setIsLoadingPosts] = React.useState(true);
+  const [isLoadingMore, setIsLoadingMore] = React.useState(false);
+  const [isLoadingComments, setIsLoadingComments] = React.useState<Record<string, boolean>>({});
+  const [showScrollTop, setShowScrollTop] = React.useState(false);
+
+  // Refs
+  const observerTarget = React.useRef<HTMLDivElement>(null);
 
   // Composer state
   const [content, setContent] = React.useState("");
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
-  const [selectedImage, setSelectedImage] = React.useState<string | null>(null);
+  const [selectedImages, setSelectedImages] = React.useState<string[]>([]);
 
   // Event dialog
   const [openEventDialog, setOpenEventDialog] = React.useState(false);
@@ -46,81 +157,257 @@ export default function Feed() {
   const [editTargetId, setEditTargetId] = React.useState<string | null>(null);
   const [editContent, setEditContent] = React.useState("");
   const [editTags, setEditTags] = React.useState<string[]>([]);
-  const [editImage, setEditImage] = React.useState<string | null | undefined>(undefined);
-  const currentEditPost = posts.find((p) => p.id === editTargetId) || null;
+  const [editImages, setEditImages] = React.useState<string[]>([]);
 
-  const currentUserName = "John Doe";
+  const currentUserName = currentUser?.name || "User";
+  const currentUserId = currentUser?.id || "";
+  const currentAvatar = currentUser?.avatar || undefined;
+
+  // Load initial posts
+  React.useEffect(() => {
+    loadInitialPosts();
+  }, []);
+
+  // Intersection Observer for infinite scroll
+  React.useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore && !isLoadingPosts) {
+          loadMorePosts();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => {
+      if (observerTarget.current) {
+        observer.unobserve(observerTarget.current);
+      }
+    };
+  }, [hasMore, isLoadingMore, isLoadingPosts]);
+
+  // Show scroll to top button
+  React.useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 500);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const loadInitialPosts = async () => {
+    try {
+      setIsLoadingPosts(true);
+      const data = await fetchPosts(1, 5);
+      dispatch(setPosts(data.posts));
+      setHasMore(data.pagination.hasMore);
+      setCurrentPage(1);
+    } catch (error) {
+      console.error("Error loading posts:", error);
+    } finally {
+      setIsLoadingPosts(false);
+    }
+  };
+
+  const loadMorePosts = async () => {
+    if (isLoadingMore || !hasMore) return;
+
+    try {
+      setIsLoadingMore(true);
+      const nextPage = currentPage + 1;
+      const data = await fetchPosts(nextPage, 5);
+
+      dispatch(appendPosts(data.posts));
+      setHasMore(data.pagination.hasMore);
+      setCurrentPage(nextPage);
+    } catch (error) {
+      console.error("Error loading more posts:", error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   /* Handlers */
 
-  const handlePost = () => {
-    if (!content.trim() && !selectedImage) return;
-    dispatch(
-      addPost({
-        user: currentUserName,
-        avatar: "/avatar.png",
+  const handlePost = async () => {
+    if (!content.trim() && selectedImages.length === 0) return;
+
+    try {
+      const imageUrls: string[] = [];
+
+      if (selectedImages.length > 0) {
+        for (let i = 0; i < selectedImages.length; i++) {
+          const selectedImage = selectedImages[i];
+          const blob = await fetch(selectedImage).then(r => r.blob());
+
+          let fileToUpload = blob;
+          if (blob.size > 8 * 1024 * 1024) {
+            const file = new File([blob], "upload.jpg", { type: blob.type });
+            const options = {
+              maxSizeMB: 8,
+              maxWidthOrHeight: 1920,
+              useWebWorker: true,
+              fileType: blob.type as any,
+            };
+            const compressedBlob = await imageCompression(file, options);
+            fileToUpload = compressedBlob;
+          }
+
+          const formData = new FormData();
+          formData.append("file", fileToUpload);
+          formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!);
+
+          const response = await fetch(
+            `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+            { method: "POST", body: formData }
+          );
+
+          if (!response.ok) throw new Error(`Cloudinary upload failed`);
+          const data = await response.json();
+          imageUrls.push(data.secure_url);
+        }
+      }
+
+      const newPost = await createPost({
         content,
         tags: selectedTags,
-        image: selectedImage || undefined,
-      })
-    );
-    setContent("");
-    setSelectedTags([]);
-    setSelectedImage(null);
+        imageUrls,
+      });
+
+      dispatch(addPost(newPost));
+
+      setContent("");
+      setSelectedTags([]);
+      setSelectedImages([]);
+    } catch (error) {
+      console.error("❌ Error creating post:", error);
+      alert(`Failed to create post: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
-  const handleAddEventPost = () => {
+  const handleAddEventPost = async () => {
     if (!eventTitle || !eventDate) return;
-    dispatch(
-      addPost({
-        user: currentUserName,
-        avatar: "/avatar.png",
+
+    try {
+      const newPost = await createPost({
         content: `📅 Event: ${eventTitle}`,
         tags: ["Event"],
         eventDate,
-      } as any)
-    );
-    setOpenEventDialog(false);
-    setEventTitle("");
-    setEventDate("");
+      });
+
+      dispatch(addPost(newPost));
+      setOpenEventDialog(false);
+      setEventTitle("");
+      setEventDate("");
+    } catch (error) {
+      console.error("Error creating event post:", error);
+      alert("Failed to create event");
+    }
   };
 
   const startEditFor = (postId: string) => {
-    const p = posts.find((x) => x.id === postId);
-    if (!p) return;
+    const post = posts.find((x) => x.id === postId);
+    if (!post || post.userId !== currentUserId) return;
+
     setEditTargetId(postId);
-    setEditContent(p.content ?? "");
-    setEditTags([...p.tags]);
-    setEditImage(undefined);
+    setEditContent(post.content ?? "");
+    setEditTags([...post.tags]);
+    setEditImages(post.images ? post.images : (post.image ? [post.image] : []));
     setEditOpen(true);
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editTargetId) return;
-    dispatch(
-      updatePost({
-        postId: editTargetId,
+
+    try {
+      const imageUrls: string[] = [];
+      const newImages = editImages.filter(img => img.startsWith("data:"));
+      const existingImages = editImages.filter(img => !img.startsWith("data:"));
+
+      if (newImages.length > 0) {
+        for (let i = 0; i < newImages.length; i++) {
+          const imageDataUrl = newImages[i];
+          const blob = await fetch(imageDataUrl).then(r => r.blob());
+
+          let fileToUpload = blob;
+          if (blob.size > 8 * 1024 * 1024) {
+            const file = new File([blob], "upload.jpg", { type: blob.type });
+            const options = {
+              maxSizeMB: 8,
+              maxWidthOrHeight: 1920,
+              useWebWorker: true,
+              fileType: blob.type as any,
+            };
+            const compressedBlob = await imageCompression(file, options);
+            fileToUpload = compressedBlob;
+          }
+
+          const formData = new FormData();
+          formData.append("file", fileToUpload);
+          formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!);
+
+          const response = await fetch(
+            `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+            { method: "POST", body: formData }
+          );
+
+          if (!response.ok) throw new Error(`Cloudinary upload failed`);
+          const data = await response.json();
+          imageUrls.push(data.secure_url);
+        }
+      }
+
+      const finalImageUrls = [...existingImages, ...imageUrls];
+
+      await updatePostApi(editTargetId, {
         content: editContent.trim(),
         tags: editTags,
-        image: editImage,
-      })
-    );
-    setEditOpen(false);
-    setEditTargetId(null);
-    setEditContent("");
-    setEditTags([]);
-    setEditImage(undefined);
+        imageUrls: finalImageUrls,
+      });
+
+      await loadInitialPosts();
+
+      setEditOpen(false);
+      setEditTargetId(null);
+      setEditContent("");
+      setEditTags([]);
+      setEditImages([]);
+    } catch (error) {
+      console.error("Error updating post:", error);
+      alert("Failed to update post");
+    }
   };
 
   const askDeleteFor = (postId: string) => {
+    const post = posts.find((p) => p.id === postId);
+    if (!post || post.userId !== currentUserId) return;
+
     setDeleteTargetId(postId);
     setDeleteOpen(true);
   };
 
-  const confirmDelete = () => {
-    if (deleteTargetId) dispatch(deletePost({ postId: deleteTargetId }));
-    setDeleteOpen(false);
-    setDeleteTargetId(null);
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+
+    try {
+      await deletePostApi(deleteTargetId);
+      await loadInitialPosts();
+
+      setDeleteOpen(false);
+      setDeleteTargetId(null);
+    } catch (error) {
+      console.error("Error deleting post:", error);
+      alert("Failed to delete post");
+    }
   };
 
   const onShare = (postId: string) => {
@@ -128,35 +415,292 @@ export default function Feed() {
     setShareOpen(true);
   };
 
-  return (
-    <Container maxWidth="md" sx={{ py: 4, pt:0 }}>
-      {/* Welcome Header */}
-      {/* <Box sx={{ mb: 4, textAlign: 'center' }}>
-        <Typography 
-          variant="h4" 
-          gutterBottom 
-          sx={{ 
-            fontWeight: 700,
-            background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-            backgroundClip: 'text',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}
-        >
-          Family Feed
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Share moments and stay connected with your family
-        </Typography>
-      </Box> */}
+  const handleLike = async (postId: string) => {
+    // 🔥 Use currentUserId
+    dispatch(likePost({ postId, username: currentUserId }));
 
+    try {
+      await toggleLike(postId);
+    } catch (error) {
+      console.error("Error toggling like:", error);
+      // Revert by toggling again
+      dispatch(likePost({ postId, username: currentUserId }));
+    }
+  };
+
+  const handleCommentClick = (postId: string) => {
+    if (activeCommentPost === postId) {
+      setActiveCommentPost(null);
+    } else {
+      setActiveCommentPost(postId);
+      setIsLoadingComments(prev => ({ ...prev, [postId]: true }));
+
+      setTimeout(() => {
+        setIsLoadingComments(prev => ({ ...prev, [postId]: false }));
+      }, 500);
+    }
+  };
+
+  const handleComment = async (postId: string) => {
+    if (!commentText.trim()) return;
+
+    const tempComment: PostComment = {
+      id: `temp-${Date.now()}`,
+      user: currentUserName,
+      userId: currentUserId,
+      avatar: currentAvatar,
+      text: commentText.trim(),
+      likes: 0,
+      likedBy: [],
+      replies: [],
+      createdAt: new Date().toISOString(),
+    };
+
+    // Optimistic update
+    dispatch(setPosts(
+      posts.map(p =>
+        p.id === postId
+          ? { ...p, comments: [...p.comments, tempComment] }
+          : p
+      )
+    ));
+
+    const textToSubmit = commentText.trim();
+    setCommentText("");
+
+    try {
+      const result = await addCommentApi(postId, textToSubmit);
+
+      // Replace temp comment with real one
+      dispatch(setPosts(
+        posts.map(p =>
+          p.id === postId
+            ? {
+              ...p,
+              comments: p.comments.map(c =>
+                c.id === tempComment.id ? result : c
+              )
+            }
+            : p
+        )
+      ));
+    } catch (error) {
+      console.error("Error adding comment:", error);
+      dispatch(setPosts(
+        posts.map(p =>
+          p.id === postId
+            ? { ...p, comments: p.comments.filter(c => c.id !== tempComment.id) }
+            : p
+        )
+      ));
+      alert("Failed to add comment");
+      setCommentText(textToSubmit);
+    }
+  };
+
+  const handleLikeComment = async (commentId: string) => {
+    const post = posts.find(p =>
+      p.comments.some(c =>
+        c.id === commentId || c.replies?.some(r => r.id === commentId)
+      )
+    );
+    if (!post) return;
+
+    const originalPosts = [...posts];
+
+    // 🔥 Recursive helper to update comment at any nesting level
+    const updateCommentLikes = (comments: PostComment[]): PostComment[] => {
+      return comments.map(comment => {
+        // If this is the target comment, update it
+        if (comment.id === commentId) {
+          const isLiked = comment.likedBy?.includes(currentUserId) || false;
+          return {
+            ...comment,
+            likes: isLiked ? (comment.likes || 0) - 1 : (comment.likes || 0) + 1,
+            likedBy: isLiked
+              ? (comment.likedBy || []).filter(id => id !== currentUserId)
+              : [...(comment.likedBy || []), currentUserId]
+          };
+        }
+
+        // If this comment has replies, recursively check them
+        if (comment.replies && comment.replies.length > 0) {
+          return {
+            ...comment,
+            replies: updateCommentLikes(comment.replies)
+          };
+        }
+
+        return comment;
+      });
+    };
+
+    // Optimistic update
+    dispatch(setPosts(
+      posts.map(p => {
+        if (p.id !== post.id) return p;
+        return {
+          ...p,
+          comments: updateCommentLikes(p.comments)
+        };
+      })
+    ));
+
+    try {
+      await fetch(`/api/comments/${commentId}/like`, { method: "POST" });
+    } catch (error) {
+      console.error("Error liking comment:", error);
+      dispatch(setPosts(originalPosts));
+    }
+  };
+
+  const handleEditComment = async (commentId: string, newText: string) => {
+    const post = posts.find(p =>
+      p.comments.some(c =>
+        c.id === commentId || c.replies?.some(r => r.id === commentId)
+      )
+    );
+    if (!post) return;
+
+    const originalPosts = [...posts];
+
+    // 🔥 Recursive helper
+    const updateCommentText = (comments: PostComment[]): PostComment[] => {
+      return comments.map(comment => {
+        if (comment.id === commentId) {
+          return { ...comment, text: newText };
+        }
+        if (comment.replies && comment.replies.length > 0) {
+          return {
+            ...comment,
+            replies: updateCommentText(comment.replies)
+          };
+        }
+        return comment;
+      });
+    };
+
+    // Optimistic update
+    dispatch(setPosts(
+      posts.map(p => {
+        if (p.id !== post.id) return p;
+        return {
+          ...p,
+          comments: updateCommentText(p.comments)
+        };
+      })
+    ));
+
+    try {
+      await fetch(`/api/comments/${commentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: newText }),
+      });
+    } catch (error) {
+      console.error("Error editing comment:", error);
+      dispatch(setPosts(originalPosts));
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    const post = posts.find(p =>
+      p.comments.some(c =>
+        c.id === commentId || c.replies?.some(r => r.id === commentId)
+      )
+    );
+    if (!post) return;
+
+    const originalPosts = [...posts];
+
+    // 🔥 Recursive helper to delete at any level
+    const deleteCommentRecursive = (comments: PostComment[]): PostComment[] => {
+      return comments
+        .filter(comment => comment.id !== commentId)
+        .map(comment => {
+          if (comment.replies && comment.replies.length > 0) {
+            return {
+              ...comment,
+              replies: deleteCommentRecursive(comment.replies)
+            };
+          }
+          return comment;
+        });
+    };
+
+    // Optimistic removal
+    dispatch(setPosts(
+      posts.map(p =>
+        p.id === post.id
+          ? { ...p, comments: deleteCommentRecursive(p.comments) }
+          : p
+      )
+    ));
+
+    try {
+      await fetch(`/api/comments/${commentId}`, { method: "DELETE" });
+    } catch (error) {
+      console.error("Error deleting comment:", error);
+      dispatch(setPosts(originalPosts));
+    }
+  };
+
+  const handleReplyComment = async (commentId: string, text: string) => {
+    const post = posts.find(p => p.comments.some(c => c.id === commentId));
+    if (!post) return;
+
+    const tempReply: PostComment = {
+      id: `temp-reply-${Date.now()}`,
+      user: currentUserName,
+      userId: currentUserId,
+      avatar: currentAvatar,
+      text: text,
+      likes: 0,
+      likedBy: [],
+      replies: [],
+      createdAt: new Date().toISOString(),
+    };
+
+    const originalPosts = [...posts];
+
+    // Optimistic update
+    dispatch(setPosts(
+      posts.map(p => {
+        if (p.id !== post.id) return p;
+        return {
+          ...p,
+          comments: p.comments.map(c =>
+            c.id === commentId
+              ? { ...c, replies: [...(c.replies || []), tempReply] }
+              : c
+          )
+        };
+      })
+    ));
+
+    try {
+      await fetch(`/api/posts/${post.id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, parentId: commentId }),
+      });
+      // Refresh to get real reply ID
+      await loadInitialPosts();
+    } catch (error) {
+      console.error("Error replying to comment:", error);
+      dispatch(setPosts(originalPosts));
+    }
+  };
+
+  return (
+    <Container maxWidth="md" sx={{ py: 4, pt: 0, position: 'relative' }}>
       {/* Post Composer */}
       <Box sx={{ mb: 3 }}>
         <PostComposer
           content={content}
           setContent={setContent}
-          selectedImage={selectedImage}
-          setSelectedImage={setSelectedImage}
+          selectedImages={selectedImages}
+          setSelectedImages={setSelectedImages}
           selectedTags={selectedTags}
           setSelectedTags={setSelectedTags}
           onOpenEvent={() => setOpenEventDialog(true)}
@@ -165,24 +709,25 @@ export default function Feed() {
       </Box>
 
       {/* Posts Feed */}
-      {posts.length === 0 ? (
+      {isLoadingPosts ? (
+        <Box>
+          <PostCardSkeleton />
+          <PostCardSkeleton />
+          <PostCardSkeleton />
+        </Box>
+      ) : posts.length === 0 ? (
         <Paper
           elevation={0}
           sx={{
             p: 6,
-            textAlign: 'center',
-            border: '2px dashed',
-            borderColor: 'divider',
+            textAlign: "center",
+            border: "2px dashed",
+            borderColor: "divider",
             borderRadius: 3,
             backgroundColor: alpha(theme.palette.background.default, 0.5),
           }}
         >
-          <Typography 
-            variant="h6" 
-            color="text.secondary" 
-            gutterBottom
-            sx={{ mb: 1 }}
-          >
+          <Typography variant="h6" color="text.secondary" gutterBottom sx={{ mb: 1 }}>
             No posts yet
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -190,36 +735,92 @@ export default function Feed() {
           </Typography>
         </Paper>
       ) : (
-        <Box>
-          {posts.map((post) => (
-            <React.Fragment key={post.id}>
-              <PostCard
-                post={post}
-                currentUserName={currentUserName}
-                onLike={(id) => dispatch(likePost({ postId: id, user: currentUserName }))}
-                onCommentClick={(id) => setActiveCommentPost(id)}
-                onEdit={startEditFor}
-                onDelete={askDeleteFor}
-                onShare={onShare}
-              />
+        <>
+          <Box>
+            {posts.map((post) => {
+              const postCardData = mapPostToCardData(post);
 
-              <CommentBox
-                openForPostId={activeCommentPost}
-                postId={post.id}
-                comments={post.comments}
-                value={commentText}
-                setValue={setCommentText}
-                onSubmit={() => {
-                  if (commentText.trim()) {
-                    dispatch(addComment({ postId: post.id, user: currentUserName, text: commentText.trim() }));
-                    setCommentText("");
-                    setActiveCommentPost(null);
-                  }
-                }}
-              />
-            </React.Fragment>
-          ))}
-        </Box>
+              return (
+                <React.Fragment key={post.id}>
+                  <PostCard
+                    post={postCardData}
+                    currentUserName={currentUserName}    
+                    currentUserId={currentUserId}
+                    onLike={handleLike}
+                    onCommentClick={handleCommentClick}
+                    onEdit={startEditFor}
+                    onDelete={askDeleteFor}
+                    onShare={onShare}
+                    canEdit={post.userId === currentUserId}
+                    commentsOpen={activeCommentPost === post.id}
+                    commentSection={
+                      <CommentBox
+                        openForPostId={activeCommentPost}
+                        postId={post.id}
+                        comments={post.comments}
+                        value={commentText}
+                        setValue={setCommentText}
+                        onSubmit={() => handleComment(post.id)}
+                        currentUserId={currentUserId}
+                        currentUserAvatar={currentAvatar}
+                        onLikeComment={handleLikeComment}
+                        onEditComment={handleEditComment}
+                        onDeleteComment={handleDeleteComment}
+                        onReplyComment={handleReplyComment}
+                        isLoading={isLoadingComments[post.id] || false}
+                      />
+                    }
+                  />
+                </React.Fragment>
+              );
+            })}
+          </Box>
+
+          {/* Infinite Scroll Trigger */}
+          <Box ref={observerTarget} sx={{ py: 2, textAlign: 'center' }}>
+            {isLoadingMore && (
+              <Stack spacing={2} alignItems="center">
+                <CircularProgress size={32} />
+                <Typography variant="body2" color="text.secondary">
+                  Loading more posts...
+                </Typography>
+              </Stack>
+            )}
+            {!hasMore && posts.length > 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                🎉 You've reached the end!
+              </Typography>
+            )}
+          </Box>
+        </>
+      )}
+
+      {/* Scroll to Top Button */}
+      {showScrollTop && (
+        <Button
+          onClick={scrollToTop}
+          sx={{
+            position: 'fixed',
+            bottom: 32,
+            right: 32,
+            minWidth: 56,
+            width: 56,
+            height: 56,
+            borderRadius: '50%',
+            bgcolor: 'primary.main',
+            color: 'white',
+            boxShadow: 4,
+            zIndex: 1000,
+            '&:hover': {
+              bgcolor: 'primary.dark',
+              transform: 'translateY(-4px)',
+              boxShadow: 6,
+            },
+            transition: 'all 0.3s',
+          }}
+        >
+          <KeyboardArrowUp />
+        </Button>
       )}
 
       {/* Dialogs */}
@@ -242,10 +843,10 @@ export default function Feed() {
         onSubmit={handleAddEventPost}
       />
 
-      <DeleteDialog 
-        open={deleteOpen} 
-        onCancel={() => setDeleteOpen(false)} 
-        onConfirm={confirmDelete} 
+      <DeleteDialog
+        open={deleteOpen}
+        onCancel={() => setDeleteOpen(false)}
+        onConfirm={confirmDelete}
       />
 
       <EditPostDialog
@@ -255,16 +856,15 @@ export default function Feed() {
           setEditTargetId(null);
           setEditContent("");
           setEditTags([]);
-          setEditImage(undefined);
+          setEditImages([]);
         }}
         onSave={saveEdit}
         content={editContent}
         setContent={setEditContent}
         tags={editTags}
         setTags={setEditTags}
-        image={editImage}
-        setImage={setEditImage}
-        currentImage={currentEditPost?.image}
+        images={editImages}
+        setImages={setEditImages}
       />
     </Container>
   );

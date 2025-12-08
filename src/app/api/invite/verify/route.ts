@@ -2,87 +2,68 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const code = searchParams.get("code");
-
-  if (!code) {
-    return NextResponse.json({ error: "Invite code required" }, { status: 400 });
-  }
-
+export async function GET(request: NextRequest) {
   try {
-    const invitation = await prisma.invitation.findUnique({
+    const { searchParams } = new URL(request.url);
+    const code = searchParams.get("code");
+
+    if (!code) {
+      return NextResponse.json({ error: "Invitation code is required" }, { status: 400 });
+    }
+
+    // Find invitation by invite code
+    const invite = await prisma.invitation.findUnique({
       where: { inviteCode: code },
       include: {
-        family: { select: { name: true, avatarUrl: true } },
-        treeNode: {
+        family: {
           select: {
-            firstName: true,
-            lastName: true,
-            birthDate: true,
-            gender: true,
-            photoUrl: true,
+            id: true,
+            name: true,
           },
         },
-        inviter: {
-          select: { name: true, avatarUrl: true },
+        treeNode: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
         },
       },
     });
 
-    if (!invitation) {
-      return NextResponse.json(
-        { error: "Invalid invite code", valid: false },
-        { status: 404 }
-      );
-    }
-
-    // Check if expired
-    if (new Date() > invitation.expiresAt) {
-      return NextResponse.json(
-        { error: "Invite code has expired", valid: false },
-        { status: 410 }
-      );
+    // Check if invitation exists
+    if (!invite) {
+      return NextResponse.json({ error: "Invalid invitation code" }, { status: 404 });
     }
 
     // Check if already accepted
-    if (invitation.status === "ACCEPTED") {
-      return NextResponse.json(
-        { error: "Invite already accepted", valid: false },
-        { status: 409 }
-      );
+    if (invite.status === "ACCEPTED") {
+      return NextResponse.json({ error: "This invitation has already been used" }, { status: 400 });
     }
 
-    // Check if email already registered
-    const existingUser = await prisma.user.findUnique({
-      where: { email: invitation.email },
-    });
-
-    if (existingUser) {
-      return NextResponse.json(
-        { error: "Email already registered. Please login instead.", valid: false },
-        { status: 409 }
-      );
+    // Check if expired
+    if (invite.status === "EXPIRED" || (invite.expiresAt && new Date(invite.expiresAt) < new Date())) {
+      return NextResponse.json({ error: "This invitation has expired" }, { status: 400 });
     }
 
+    // Check if cancelled
+    if (invite.status === "CANCELLED") {
+      return NextResponse.json({ error: "This invitation has been cancelled" }, { status: 400 });
+    }
+
+    // Return invitation details
     return NextResponse.json({
       valid: true,
-      invitation: {
-        id: invitation.id,
-        email: invitation.email,
-        familyName: invitation.family.name,
-        familyAvatar: invitation.family.avatarUrl,
-        invitedBy: invitation.inviter.name,
-        inviterAvatar: invitation.inviter.avatarUrl,
-        treeNode: invitation.treeNode,
-        expiresAt: invitation.expiresAt,
-      },
+      email: invite.email,
+      familyId: invite.familyId,
+      familyName: invite.family.name,
+      treeNodeId: invite.treeNodeId,
+      treeNodeName: invite.treeNode
+        ? `${invite.treeNode.firstName} ${invite.treeNode.lastName || ""}`.trim()
+        : null,
     });
   } catch (error) {
-    console.error("Error verifying invite:", error);
-    return NextResponse.json(
-      { error: "Failed to verify invite code", valid: false },
-      { status: 500 }
-    );
+    console.error("❌ Invitation verification error:", error);
+    return NextResponse.json({ error: "Failed to verify invitation code" }, { status: 500 });
   }
 }

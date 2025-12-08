@@ -1,161 +1,320 @@
-// app/(public)/login/page.tsx
-import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+// src/app/(auth)/login/page.tsx
+"use client";
+
+import React, { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react"
+import {
+  Box,
+  Paper,
+  Typography,
+  TextField,
+  Button,
+  Alert,
+  CircularProgress,
+  Avatar,
+  Stack,
+  Divider,
+  alpha,
+  useTheme,
+  InputAdornment,
+  IconButton,
+  Checkbox,
+  FormControlLabel,
+} from "@mui/material";
+import {
+  Email as EmailIcon,
+  Lock as LockIcon,
+  Visibility,
+  VisibilityOff,
+  Login as LoginIcon,
+  CheckCircle,
+} from "@mui/icons-material";
 import Link from "next/link";
-import { Style_Script } from "next/font/google";
-import { Typography } from "@mui/material";
 
-const styleScript = Style_Script({ subsets: ["latin"], weight: "400" });
+/* -----------------------
+   Login Form Component
+   ----------------------- */
+function LoginForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const theme = useTheme();
 
-const USERS = new Map<string, { password: string; username: string }>([
-  ["john@example.com", { password: "password123", username: "john" }],
-  ["alice@example.com", { password: "password123", username: "alice" }],
-]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
-export default async function LoginPage() {
-  const c = await cookies();
-  if (c.get("ff_auth")?.value === "1") {
-    redirect("/tree");
-  }
+  // Check if user just registered
+  const justRegistered = searchParams.get("registered") === "true";
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
+
+  // Clear registration success message after 5 seconds
+  useEffect(() => {
+    if (justRegistered) {
+      const timer = setTimeout(() => {
+        router.replace("/login");
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [justRegistered, router]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    // Validation
+    if (!formData.email || !formData.password) {
+      setError("Email and password are required");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Use NextAuth signIn
+      const result = await signIn("credentials", {
+        redirect: false,
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (result?.error) {
+        setError("Invalid email or password");
+      } else if (result?.ok) {
+        // Success - redirect to callback URL or dashboard
+        router.push(callbackUrl);
+        router.refresh();
+      }
+    } catch (err) {
+      console.error("❌ Login error:", err);
+      setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <main
-      style={{
-        maxWidth: 420,
-        margin: "120px auto 0",
-        padding: 24,
-        display: "grid",
-        gap: 16,
+    <Box
+      sx={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(
+          theme.palette.secondary.main,
+          0.1
+        )} 100%)`,
+        py: 4,
       }}
     >
-       <Typography
-          variant="h4"
-          align="center"
-          sx={{
-            mb: 1,
-            fontFamily: styleScript.style.fontFamily,
-            letterSpacing: 0.5,
-            fontWeight: 500,
-          }}
-        >
-          Welcome to First Family
-        </Typography>
-      <p style={{ textAlign: "center", color: "#888", marginTop: -6 }}>
-        Login to your private family space.
-      </p>
-
-      {/* Server Action form */}
-      <form action={login} style={{ display: "grid", gap: 12 }}>
-        <div style={{ display: "grid", gap: 8 }}>
-          <label style={{ fontSize: 12, color: "#888" }}>Email</label>
-          <input
-            name="email"
-            type="email"
-            placeholder="you@example.com"
-            required
-            autoComplete="email"
-            style={{
-              padding: 10,
-              borderRadius: 8,
-              border: "1px solid #ddd",
-              background: "transparent",
-            }}
-          />
-        </div>
-
-        <div style={{ display: "grid", gap: 8 }}>
-          <label style={{ fontSize: 12, color: "#888" }}>Password</label>
-          <input
-            name="password"
-            type="password"
-            placeholder="Enter your password"
-            required
-            autoComplete="current-password"
-            style={{
-              padding: 10,
-              borderRadius: 8,
-              border: "1px solid #ddd",
-              background: "transparent",
-            }}
-          />
-        </div>
-
-        <button
-          type="submit"
-          style={{
-            padding: "10px 12px",
-            borderRadius: 10,
-            background: "black",
-            color: "white",
-            border: 0,
-            cursor: "pointer",
-            fontWeight: 600,
-            marginTop: 8,
-          }}
-        >
-          Log in
-        </button>
-      </form>
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: 13,
-          color: "#666",
-          marginTop: 6,
+      <Paper
+        elevation={4}
+        sx={{
+          p: 4,
+          maxWidth: 450,
+          width: "100%",
+          borderRadius: 3,
         }}
       >
-        <Link href="/forgot" style={{ textDecoration: "underline" }}>
-          Forgot password?
-        </Link>
-        <Link href="/" style={{ textDecoration: "underline" }}>
-          Register with invite
-        </Link>
-      </div>
+        {/* Header */}
+        <Box sx={{ textAlign: "center", mb: 4 }}>
+          <Avatar
+            sx={{
+              width: 80,
+              height: 80,
+              mx: "auto",
+              mb: 2,
+              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            }}
+          >
+            <LoginIcon sx={{ fontSize: 40 }} />
+          </Avatar>
+          <Typography variant="h4" fontWeight={700} gutterBottom>
+            Welcome Back
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Sign in to access your family space
+          </Typography>
+        </Box>
 
-      <DemoNote />
-    </main>
+        {/* Registration Success Message */}
+        {justRegistered && (
+          <Alert severity="success" icon={<CheckCircle />} sx={{ mb: 3 }}>
+            <Typography variant="body2" fontWeight={600}>
+              Registration successful!
+            </Typography>
+            <Typography variant="caption">Please sign in with your new account.</Typography>
+          </Alert>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit}>
+          <Stack spacing={2.5}>
+            {/* Email */}
+            <TextField
+              fullWidth
+              type="email"
+              label="Email Address"
+              required
+              autoComplete="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              disabled={loading}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <EmailIcon sx={{ color: "action.active" }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+
+            {/* Password */}
+            <TextField
+              fullWidth
+              type={showPassword ? "text" : "password"}
+              label="Password"
+              required
+              autoComplete="current-password"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              disabled={loading}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <LockIcon sx={{ color: "action.active" }} />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowPassword(!showPassword)}
+                      edge="end"
+                      size="small"
+                    >
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+
+            {/* Remember Me & Forgot Password */}
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label={
+                  <Typography variant="body2" color="text.secondary">
+                    Remember me
+                  </Typography>
+                }
+              />
+              <Link
+                href="/forgot-password"
+                style={{
+                  color: theme.palette.primary.main,
+                  textDecoration: "none",
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                }}
+              >
+                Forgot password?
+              </Link>
+            </Box>
+
+            {/* Error Message */}
+            {error && (
+              <Alert severity="error" sx={{ borderRadius: 2 }}>
+                {error}
+              </Alert>
+            )}
+
+            {/* Submit Button */}
+            <Button
+              type="submit"
+              variant="contained"
+              size="large"
+              fullWidth
+              disabled={loading}
+              sx={{
+                mt: 2,
+                py: 1.5,
+                borderRadius: 2,
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                fontWeight: 600,
+                textTransform: "none",
+                fontSize: "1rem",
+              }}
+            >
+              {loading ? (
+                <>
+                  <CircularProgress size={20} color="inherit" sx={{ mr: 1 }} />
+                  Signing In...
+                </>
+              ) : (
+                "Sign In"
+              )}
+            </Button>
+          </Stack>
+        </form>
+
+        <Divider sx={{ my: 3 }}>
+          <Typography variant="caption" color="text.secondary">
+            OR
+          </Typography>
+        </Divider>
+
+        {/* Register Link */}
+        <Box sx={{ textAlign: "center" }}>
+          <Typography variant="body2" color="text.secondary">
+            Don't have an account?{" "}
+            <Typography
+              component="span"
+              variant="body2"
+              color="text.secondary"
+              sx={{ fontStyle: "italic" }}
+            >
+              Contact your family admin for an invitation
+            </Typography>
+          </Typography>
+        </Box>
+      </Paper>
+    </Box>
   );
 }
 
-export async function login(formData: FormData) {
-  "use server";
-
-  const email = String(formData.get("email") || "").toLowerCase().trim();
-  const password = String(formData.get("password") || "");
-
-  const account = USERS.get(email);
-  if (!account || account.password !== password) {
-    throw new Error("Invalid email or password");
-  }
-
-  const c = await cookies();
-  c.set("ff_auth", "1", { path: "/", httpOnly: false });
-  c.set("ff_user", email, { path: "/", httpOnly: false });
-  c.set("ff_username", account.username, { path: "/", httpOnly: false });
-
-  redirect("/tree");
-}
-
-function DemoNote() {
+/* -----------------------
+   Main Page with Suspense
+   ----------------------- */
+export default function LoginPage() {
   return (
-    <div
-      style={{
-        marginTop: 16,
-        padding: 12,
-        border: "1px dashed #ccc",
-        borderRadius: 10,
-        fontSize: 13,
-        color: "#666",
-      }}
+    <Suspense
+      fallback={
+        <Box
+          sx={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      }
     >
-      <strong>Demo credentials</strong>
-      <div>john@example.com / password123</div>
-      <div>alice@example.com / password123</div>
-      <div style={{ marginTop: 6, color: "#888" }}>
-        Swap this for Firebase Auth later.
-      </div>
-    </div>
+      <LoginForm />
+    </Suspense>
   );
 }
