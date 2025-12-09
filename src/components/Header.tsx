@@ -38,6 +38,8 @@ import {
   Container,
   Tooltip,
   useMediaQuery,
+  Switch,
+  Stack,
 } from "@mui/material";
 import {
   Notifications as NotificationsIcon,
@@ -56,7 +58,14 @@ import {
   Logout as LogoutIcon,
 } from "@mui/icons-material";
 import { TbBinaryTree } from "react-icons/tb";
-
+import {
+  FiUser,
+  FiHeart,
+  FiMoon,
+  FiHelpCircle,
+  FiLogOut,
+  FiSettings,
+} from "react-icons/fi";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
 import { toggleMode } from "@/store/themeSlice";
@@ -171,32 +180,31 @@ export default function Header({ children }: { children: React.ReactNode }) {
   // Mobile drawer state
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
-  // ⭐ Helper to get display name and username
+  // Helper to get display name and username
   const getDisplayInfo = () => {
     if (session?.user) {
-      // User from NextAuth session
       return {
         displayName: session.user.name || "User",
-        username: session.user.name?.toLowerCase().replace(/\s+/g, "") || "user",
-        avatar: session.user.image,
+        username:
+          session.user.name?.toLowerCase().replace(/\s+/g, "") || "user",
+        avatar: session.user.image as string | null | undefined,
       };
     } else if (currentUser && "username" in currentUser) {
-      // User from Redux (fallback)
       return {
         displayName: currentUser.username,
         username: currentUser.username,
-        avatar: null,
+        avatar: null as string | null,
       };
     }
-    // Default fallback
     return {
       displayName: "Profile",
       username: "profile",
-      avatar: null,
+      avatar: null as string | null,
     };
   };
 
   const { displayName, username, avatar } = getDisplayInfo();
+  const profileHref = `/${username}`;
 
   // Logout handler
   const handleLogout = async () => {
@@ -249,6 +257,31 @@ export default function Header({ children }: { children: React.ReactNode }) {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
+  // User popover state
+  const [userAnchorEl, setUserAnchorEl] = React.useState<null | HTMLElement>(
+    null
+  );
+  const userMenuOpen = Boolean(userAnchorEl);
+  const userMenuId = userMenuOpen ? "user-menu-popover" : undefined;
+
+  const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setUserAnchorEl(event.currentTarget);
+  };
+
+  const handleUserMenuClose = () => {
+    setUserAnchorEl(null);
+  };
+
+  const handleGoToProfile = () => {
+    handleUserMenuClose();
+    router.push(profileHref);
+  };
+
+  const handleUserLogoutClick = async () => {
+    handleUserMenuClose();
+    await handleLogout();
+  };
+
   // Drawer nav config
   const mainMenu: {
     text: string;
@@ -286,12 +319,6 @@ export default function Header({ children }: { children: React.ReactNode }) {
       href: "/recipes",
       match: (p) => p.startsWith("/recipes"),
     },
-    {
-      text: "Memories",
-      icon: <EventRepeat />,
-      href: "/memories",
-      match: (p) => p.startsWith("/memories"),
-    },
   ];
 
   const secondaryMenu: {
@@ -325,8 +352,6 @@ export default function Header({ children }: { children: React.ReactNode }) {
     },
   ];
 
-  const profileHref = `/${username}`;
-
   const contacts: Contact[] = [
     { name: "Alice", avatar: "/avatar4.png", online: true },
     { name: "Bob", avatar: "/avatar5.png", online: false },
@@ -338,7 +363,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
     { title: "Birthday Party", date: "Oct 20, 2025", color: "secondary" },
   ];
 
-  // Drawer Content Component (shared between mobile and desktop)
+  // Drawer Content Component
   const DrawerContent = () => (
     <>
       <DrawerHeader />
@@ -452,47 +477,6 @@ export default function Header({ children }: { children: React.ReactNode }) {
           );
         })}
       </List>
-
-      <Divider sx={{ mx: 2, my: 1 }} />
-
-      {/* Profile */}
-      <List sx={{ px: 1 }}>
-        <ListItem disablePadding>
-          <ListItemButton
-            component={Link}
-            href={profileHref}
-            onClick={() => isMobile && setMobileOpen(false)}
-            sx={{
-              minHeight: 48,
-              borderRadius: 2,
-              px: 2,
-              transition: "all 0.2s",
-              ...(pathname.startsWith(`/${username}`) && {
-                bgcolor: alpha(theme.palette.primary.main, 0.12),
-                color: theme.palette.primary.main,
-              }),
-              "&:hover": {
-                bgcolor: alpha(theme.palette.action.hover, 0.6),
-              },
-            }}
-          >
-            <ListItemIcon sx={{ minWidth: 0, mr: 2 }}>
-              {avatar ? (
-                <Avatar src={avatar} sx={{ width: 24, height: 24 }} />
-              ) : (
-                <AccountCircle />
-              )}
-            </ListItemIcon>
-            <ListItemText
-              primary={displayName}
-              primaryTypographyProps={{
-                fontSize: "0.9rem",
-                fontWeight: 500,
-              }}
-            />
-          </ListItemButton>
-        </ListItem>
-      </List>
     </>
   );
 
@@ -537,8 +521,9 @@ export default function Header({ children }: { children: React.ReactNode }) {
             />
           </Box>
 
-          {/* Notification Button */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          {/* Right side: Notifications + User menu */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            {/* Notification Button */}
             <Tooltip title="Notifications">
               <IconButton
                 size={isMobile ? "medium" : "large"}
@@ -560,9 +545,195 @@ export default function Header({ children }: { children: React.ReactNode }) {
                 </Badge>
               </IconButton>
             </Tooltip>
+
+            {/* User Icon / Avatar */}
+            <Tooltip title="Account">
+              <IconButton
+                aria-describedby={userMenuId}
+                onClick={handleUserMenuOpen}
+                sx={{
+                  transition: "all 0.2s",
+                  borderRadius: "50%",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  p: 0.25,
+                  "&:hover": { transform: "scale(1.05)", boxShadow: 2 },
+                }}
+                size={isMobile ? "medium" : "large"}
+              >
+                {avatar ? (
+                  <Avatar src={avatar} sx={{ width: 32, height: 32 }} />
+                ) : (
+                  <AccountCircle />
+                )}
+              </IconButton>
+            </Tooltip>
           </Box>
         </Toolbar>
       </AppBar>
+
+      {/* User Dropdown Popover */}
+      <Popover
+        id={userMenuId}
+        open={userMenuOpen}
+        anchorEl={userAnchorEl}
+        onClose={handleUserMenuClose}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+            boxShadow: 6,
+            overflow: "hidden",
+            width: 320,
+            mt: 1,
+          },
+        }}
+      >
+        <Box sx={{ p: 2.5, bgcolor: "background.paper" }}>
+          {/* Top user info */}
+          <Stack direction="row" spacing={2} alignItems="center" mb={1.5}>
+            <Avatar
+              alt={displayName}
+              src={avatar || undefined}
+              sx={{ width: 48, height: 48 }}
+            />
+            <Box sx={{ minWidth: 0, position: "relative" }}>
+              <Typography variant="subtitle1" fontWeight={600} noWrap>
+                {displayName}
+              </Typography>
+              <Box
+                component="button"
+                onClick={handleGoToProfile}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  border: "none",
+                  background: "transparent",
+                  cursor: "pointer",
+                }}
+              />
+            </Box>
+          </Stack>
+
+          <Divider sx={{ my: 1.5 }} />
+
+          {/* Main actions */}
+          <List
+            dense
+            disablePadding
+            sx={{
+              "& .MuiListItemButton-root": {
+                borderRadius: 2,
+                mb: 0.5,
+              },
+            }}
+          >
+            {/* My Account */}
+            <ListItemButton
+              component={Link}
+              href={profileHref}
+              onClick={handleUserMenuClose}
+            >
+              <ListItemIcon sx={{ minWidth: 32 }}>
+                <FiUser />
+              </ListItemIcon>
+              <ListItemText
+                primary="My Account"
+                primaryTypographyProps={{ fontSize: "0.9rem", fontWeight: 500 }}
+              />
+            </ListItemButton>
+
+            {/* Settings */}
+            <ListItemButton
+              component={Link}
+              href="/settings"
+              onClick={handleUserMenuClose}
+            >
+              <ListItemIcon sx={{ minWidth: 32 }}>
+                <FiSettings />
+              </ListItemIcon>
+              <ListItemText
+                primary="Settings"
+                primaryTypographyProps={{ fontSize: "0.9rem", fontWeight: 500 }}
+              />
+            </ListItemButton>
+          </List>
+
+          <Divider sx={{ my: 1.5 }} />
+
+          {/* Dark theme + Help + Logout */}
+          <List dense disablePadding>
+            {/* Dark theme toggle */}
+            <ListItemButton
+              disableRipple
+              sx={{
+                borderRadius: 2,
+                mb: 0.5,
+                justifyContent: "space-between",
+              }}
+            >
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "text.secondary",
+                  }}
+                >
+                  <FiMoon />
+                </Box>
+                <Typography variant="body2" fontWeight={500}>
+                  Dark theme
+                </Typography>
+              </Stack>
+              <Switch
+                size="small"
+                checked={mode === "dark"}
+                onChange={() => dispatch(toggleMode())}
+              />
+            </ListItemButton>
+
+            {/* Help */}
+            <ListItemButton
+              component={Link}
+              href="/help"
+              onClick={handleUserMenuClose}
+              sx={{ borderRadius: 2, mb: 0.5 }}
+            >
+              <ListItemIcon sx={{ minWidth: 32 }}>
+                <FiHelpCircle />
+              </ListItemIcon>
+              <ListItemText
+                primary="Help"
+                primaryTypographyProps={{ fontSize: "0.9rem", fontWeight: 500 }}
+              />
+            </ListItemButton>
+
+            {/* Logout */}
+            <ListItemButton
+              onClick={handleUserLogoutClick}
+              sx={{
+                borderRadius: 2,
+                mt: 0.5,
+                color: "error.main",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 32, color: "error.main" }}>
+                <FiLogOut />
+              </ListItemIcon>
+              <ListItemText
+                primary="Log out"
+                primaryTypographyProps={{
+                  fontSize: "0.9rem",
+                  fontWeight: 600,
+                }}
+              />
+            </ListItemButton>
+          </List>
+        </Box>
+      </Popover>
 
       {/* Notifications Popover */}
       <Popover
@@ -772,7 +943,10 @@ export default function Header({ children }: { children: React.ReactNode }) {
                   >
                     <Badge
                       overlap="circular"
-                      anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                      anchorOrigin={{
+                        vertical: "bottom",
+                        horizontal: "right",
+                      }}
                       badgeContent={
                         contact.online ? (
                           <CircleIcon
@@ -840,7 +1014,11 @@ export default function Header({ children }: { children: React.ReactNode }) {
                       },
                     }}
                   >
-                    <Typography variant="body2" fontWeight={600} gutterBottom>
+                    <Typography
+                      variant="body2"
+                      fontWeight={600}
+                      gutterBottom
+                    >
                       {event.title}
                     </Typography>
                     <Chip

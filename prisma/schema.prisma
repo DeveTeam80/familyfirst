@@ -20,9 +20,10 @@ model User {
   name          String
   passwordHash  String    @map("password_hash")
   avatarUrl     String?   @map("avatar_url")
-
+  bio           String?   @db.Text // optional profile bio
+  location      String? // optional location
   // Soft delete
-  deletedAt DateTime? @map("deleted_at")
+  deletedAt     DateTime? @map("deleted_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -33,7 +34,7 @@ model User {
   posts             Post[]
   postComments      Comment[]
   commentLikes      CommentLike[]
-  reactions         Reaction[]       // ⭐ Add this line
+  reactions         Reaction[] // ⭐ Add this line
   recipes           Recipe[]
   recipeComments    RecipeComment[]
   calendarEvents    CalendarEvent[]
@@ -45,7 +46,6 @@ model User {
 
   @@map("users")
 }
-
 
 // ============================================
 // FAMILIES & MEMBERSHIPS
@@ -254,7 +254,6 @@ enum RelationshipType {
 // POSTS & FEED
 // ============================================
 
-
 model Post {
   id       String  @id @default(uuid())
   familyId String  @map("family_id")
@@ -262,9 +261,9 @@ model Post {
 
   content  String? @db.Text
   location String?
-  
+
   // Removed imageUrl field - using photos relation instead
-  tags      String[] @default([])
+  tags      String[]  @default([])
   eventDate DateTime? @map("event_date") @db.Date
 
   visibility Visibility @default(FAMILY)
@@ -286,7 +285,7 @@ enum Visibility {
   FAMILY // All family members
   PRIVATE // Only author
   CUSTOM // Custom list (future feature)
-  PUBLIC  
+  PUBLIC
 
   @@map("visibility")
 }
@@ -346,9 +345,9 @@ model Comment {
   userId String? @map("user_id")
 
   content String @db.Text
-  
+
   // Reply support
-  parentId String? @map("parent_id")
+  parentId String?   @map("parent_id")
   parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies  Comment[] @relation("CommentReplies")
 
@@ -356,9 +355,9 @@ model Comment {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  post      Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user      User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
-  likes     CommentLike[]
+  post  Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user  User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  likes CommentLike[]
 
   @@index([postId])
   @@index([parentId])
@@ -375,7 +374,7 @@ model CommentLike {
 
   // Relations
   comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)  // ⭐ Add this line
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade) // ⭐ Add this line
 
   @@unique([commentId, userId])
   @@map("comment_likes")
@@ -392,7 +391,7 @@ model Reaction {
 
   // Relations
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)  // ⭐ Add this line
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade) // ⭐ Add this line
 
   @@unique([postId, userId])
   @@map("reactions")

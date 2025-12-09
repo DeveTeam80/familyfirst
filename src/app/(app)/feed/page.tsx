@@ -117,7 +117,7 @@ export default function Feed() {
 
   const currentUser = useSelector((s: RootState) => s.user.currentUser);
   const posts = useSelector((s: RootState) => s.posts.items);
-
+console.log("posts", posts)
   // Pagination & Loading states
   const [currentPage, setCurrentPage] = React.useState(1);
   const [hasMore, setHasMore] = React.useState(true);

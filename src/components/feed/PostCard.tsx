@@ -82,7 +82,7 @@ type Props = {
   onShare: (postId: string) => void;
   onImageClick?: (index: number) => void;
   currentUserName: string;
-  currentUserId: string;  // 🔥 Changed from currentUsername
+  currentUserId: string; 
   canEdit?: boolean;
   commentsOpen?: boolean;
   commentSection?: React.ReactNode;
@@ -239,7 +239,7 @@ export default function PostCard({
   onShare,
   onImageClick,
   currentUserName,
-  currentUserId,  // 🔥 Changed from currentUsername
+  currentUserId,  
   canEdit = true,
   commentsOpen = false,
   commentSection,
@@ -252,7 +252,6 @@ export default function PostCard({
   const [bookmarked, setBookmarked] = React.useState(false);
   const [likeAnimating, setLikeAnimating] = React.useState(false);
 
-  // 🔥 Compare userId with likedBy array
   const isLiked = post.likedBy.includes(currentUserId);
   const isOwnPost = post.userId === currentUserId;
 
@@ -321,7 +320,6 @@ export default function PostCard({
       <Box sx={{ height: 3, background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`, opacity: isHovered ? 1 : 0, transition: 'opacity 0.3s' }} />
 
       <Box sx={{ p: isMobile ? 2 : 3, pb: 1 }}>
-        {/* Header */}
         <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
           <Box display="flex" alignItems="center" gap={1.5}>
             <Badge
@@ -348,9 +346,9 @@ export default function PostCard({
             </Box>
           </Box>
           <Stack direction="row" spacing={0.5}>
-            <IconButton onClick={() => setBookmarked(!bookmarked)} size="small" sx={{ color: bookmarked ? 'warning.main' : 'text.secondary' }}>
+            {/* <IconButton onClick={() => setBookmarked(!bookmarked)} size="small" sx={{ color: bookmarked ? 'warning.main' : 'text.secondary' }}>
               {bookmarked ? <Bookmark fontSize="small" /> : <BookmarkBorder fontSize="small" />}
-            </IconButton>
+            </IconButton> */}
             {canEdit && isOwnPost && <IconButton onClick={(e) => setMenuAnchor(e.currentTarget)} size="small" sx={{ color: 'text.secondary' }}><MoreVert fontSize="small" /></IconButton>}
           </Stack>
         </Box>

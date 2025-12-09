@@ -1,7 +1,5 @@
 // prisma/seed.ts
 import { PrismaClient } from "@prisma/client";
-// Make sure these imports actually exist in your project structure!
-// If not, use regular bcryptjs here.
 import { hashPassword, generateInviteCode } from "../src/lib/auth"; 
 import { familyTreeData } from "../src/data/familyTree";
 

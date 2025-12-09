@@ -3,16 +3,10 @@
 import { useParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store";
-import { likePost, addComment, deletePost, updatePost, setPosts } from "@/store/postSlice";
+import { setPosts } from "@/store/postSlice";
 import { updateProfile } from "@/store/userSlice";
 
-import {
-  Avatar,
-  Box,
-  Button,
-  Stack,
-  Typography,
-} from "@mui/material";
+import { Avatar, Box, Button, Stack, Typography } from "@mui/material";
 import * as React from "react";
 
 import PostCard from "@/components/feed/PostCard";
@@ -21,7 +15,13 @@ import ShareDialog from "@/components/dialogs/ShareDialog";
 import EditPostDialog from "@/components/dialogs/EditPostDialog";
 import DeleteDialog from "@/components/dialogs/DeleteDialog";
 import EditProfileDialog from "@/components/dialogs/EditProfileDialog";
-import { fetchPosts, toggleLike, addCommentApi, updatePostApi, deletePostApi } from "@/lib/api-posts";
+import {
+  fetchPosts,
+  toggleLike,
+  addCommentApi,
+  updatePostApi,
+  deletePostApi,
+} from "@/lib/api-posts";
 
 export default function UserProfilePage() {
   const params = useParams<{ username: string }>();
@@ -30,55 +30,67 @@ export default function UserProfilePage() {
 
   const currentUser = useSelector((s: RootState) => s.user.currentUser);
   const profiles = useSelector((s: RootState) => s.user.profiles);
-  const profile = profiles[username] || 
+
+  // 🔹 IMPORTANT: items = { posts: [...], pagination: {...} }
+  const postsState = useSelector((s: RootState) => s.posts.items);
+
+  // 🔹 Normalize to a plain posts array
+  const allPosts = React.useMemo(() => {
+    if (!postsState) return [];
+    if (Array.isArray(postsState)) return postsState as any[];
+    if (Array.isArray((postsState as any).posts)) {
+      return (postsState as any).posts as any[];
+    }
+    return [];
+  }, [postsState]);
+
+  const profile =
+    profiles[username] ||
     (currentUser?.username === username ? currentUser : null);
-  const allPosts = useSelector((s: RootState) => s.posts.items);
 
-  // Load posts on mount
-  React.useEffect(() => {
-    loadPosts();
-  }, []);
+  console.log("user dets", currentUser);
+  console.log("allPosts (normalized):", allPosts);
 
-  const loadPosts = async () => {
+  // ---- load posts -------------------------------------------------
+  const loadPosts = React.useCallback(async () => {
     try {
-      const postsData = await fetchPosts();
+      const postsData = await fetchPosts(); // returns { posts, pagination }
       dispatch(setPosts(postsData));
     } catch (error) {
       console.error("Error loading posts:", error);
     }
-  };
+  }, [dispatch]);
 
-  if (!profile) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Typography variant="h6">User not found</Typography>
-        <Typography variant="body2" color="text.secondary">
-          The profile @{username} doesn't exist.
-        </Typography>
-      </Box>
-    );
-  }
+  React.useEffect(() => {
+    loadPosts();
+  }, [loadPosts]);
 
   const isOwner = !!currentUser && currentUser.username === username;
-
   const currentUserName = currentUser?.name || "User";
-  const currentUsername = currentUser?.username || "user";
   const currentAvatar = currentUser?.avatar || undefined;
 
-  const userPosts = allPosts.filter(
-    (p: any) => p.username === username || p.user === profile.name
+  // posts for this profile (uses normalized array)
+  const userPosts = React.useMemo(
+    () =>
+      allPosts.filter((p: any) => {
+        if (p.username === username) return true;
+        if (profile?.name && p.user === profile.name) return true;
+        return false;
+      }),
+    [allPosts, username, profile?.name]
   );
 
   const [tab, setTab] = React.useState(0);
 
   // Comments
-  const [activeCommentPost, setActiveCommentPost] = React.useState<string | null>(null);
+  const [activeCommentPost, setActiveCommentPost] =
+    React.useState<string | null>(null);
   const [commentText, setCommentText] = React.useState("");
 
   // Share
   const [shareOpen, setShareOpen] = React.useState(false);
   const [sharePostId, setSharePostId] = React.useState<string | undefined>();
-  const sharePost = allPosts.find((p) => p.id === sharePostId);
+  const sharePost = allPosts.find((p: any) => p.id === sharePostId);
 
   // Edit Post
   const [editOpen, setEditOpen] = React.useState(false);
@@ -86,18 +98,30 @@ export default function UserProfilePage() {
   const [editContent, setEditContent] = React.useState("");
   const [editTags, setEditTags] = React.useState<string[]>([]);
   const [editImages, setEditImages] = React.useState<string[]>([]);
-  const currentEditPost = allPosts.find((p) => p.id === editTargetId) || null;
+  const currentEditPost =
+    allPosts.find((p: any) => p.id === editTargetId) || null;
 
   // Delete Post
   const [deleteOpen, setDeleteOpen] = React.useState(false);
-  const [deleteTargetId, setDeleteTargetId] = React.useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] =
+    React.useState<string | null>(null);
 
   // Edit Profile
   const [editProfileOpen, setEditProfileOpen] = React.useState(false);
-  const [name, setName] = React.useState(profile.name || "");
-  const [bio, setBio] = React.useState(profile.bio || "");
-  const [avatar, setAvatar] = React.useState<string | null | undefined>(undefined);
+  const [name, setName] = React.useState("");
+  const [bio, setBio] = React.useState("");
+  const [avatar, setAvatar] =
+    React.useState<string | null | undefined>(undefined);
 
+  // sync name/bio when profile changes
+  React.useEffect(() => {
+    if (profile) {
+      setName(profile.name || "");
+      setBio(profile.bio || "");
+    }
+  }, [profile]);
+
+  // ---- post interactions ------------------------------------------
   const onLike = async (postId: string) => {
     try {
       await toggleLike(postId);
@@ -111,11 +135,11 @@ export default function UserProfilePage() {
 
   const onSubmitComment = async (postId: string) => {
     if (!commentText.trim()) return;
-    
+
     try {
       await addCommentApi(postId, commentText.trim());
       await loadPosts();
-      
+
       setCommentText("");
       setActiveCommentPost(null);
     } catch (error) {
@@ -131,14 +155,13 @@ export default function UserProfilePage() {
 
   const startEditFor = (postId: string) => {
     if (!isOwner) return;
-    const p = allPosts.find((x) => x.id === postId);
+    const p: any = allPosts.find((x: any) => x.id === postId);
     if (!p) return;
-    
+
     setEditTargetId(postId);
     setEditContent(p.content ?? "");
     setEditTags([...p.tags]);
-    
-    // Load existing images - handle both images array and single image
+
     if (p.images && p.images.length > 0) {
       setEditImages(p.images);
     } else if (p.image) {
@@ -146,22 +169,22 @@ export default function UserProfilePage() {
     } else {
       setEditImages([]);
     }
-    
+
     setEditOpen(true);
   };
 
   const saveEdit = async () => {
     if (!editTargetId) return;
-    
+
     try {
       await updatePostApi(editTargetId, {
         content: editContent.trim(),
         tags: editTags,
         imageUrls: editImages,
       });
-      
+
       await loadPosts();
-      
+
       setEditOpen(false);
       setEditTargetId(null);
       setEditContent("");
@@ -181,11 +204,11 @@ export default function UserProfilePage() {
 
   const confirmDelete = async () => {
     if (!deleteTargetId) return;
-    
+
     try {
       await deletePostApi(deleteTargetId);
       await loadPosts();
-      
+
       setDeleteOpen(false);
       setDeleteTargetId(null);
     } catch (error) {
@@ -195,18 +218,74 @@ export default function UserProfilePage() {
   };
 
   const openEditProfile = () => {
+    if (!profile) return;
     setName(profile.name || "");
     setBio(profile.bio || "");
     setAvatar(undefined);
     setEditProfileOpen(true);
   };
 
-  const saveProfile = (changes: { name?: string; bio?: string; avatar?: string | null }) => {
-    dispatch(updateProfile({ username, changes }));
-    setEditProfileOpen(false);
+  // 🔹 UPDATED: send userId in payload using currentUser / profile
+  const saveProfile = async (changes: {
+    name?: string;
+    bio?: string;
+    avatar?: string | null;
+    location?: string;
+  }) => {
+    try {
+      const userId = currentUser?.id || (profile as any)?.id;
+
+      if (!userId) {
+        console.error("No userId found for profile update");
+        alert("You must be logged in to update your profile.");
+        return;
+      }
+
+      const res = await fetch("/api/auth/me", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          userId, // ⬅ required by backend
+          name: changes.name,
+          bio: changes.bio,
+          location: changes.location,
+          avatarUrl: changes.avatar ?? undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        console.error("Failed to update profile:", await res.text());
+        alert("Failed to update profile. Please try again.");
+        return;
+      }
+
+      const { user: updatedUser } = await res.json();
+
+      // Update Redux
+      dispatch(
+        updateProfile({
+          username, // route param
+          changes: {
+            id: updatedUser.id,
+            name: updatedUser.name,
+            bio: updatedUser.bio,
+            avatar: updatedUser.avatarUrl,
+            location: updatedUser.location,
+          },
+        })
+      );
+
+      setEditProfileOpen(false);
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      alert("Something went wrong while updating your profile.");
+    }
   };
 
-  // Comment handlers
+  // ---- comment handlers -------------------------------------------
   const handleLikeComment = async (commentId: string) => {
     try {
       await fetch(`/api/comments/${commentId}/like`, {
@@ -244,12 +323,12 @@ export default function UserProfilePage() {
 
   const handleReplyComment = async (commentId: string, text: string) => {
     try {
-      const post = allPosts.find(p => 
-        p.comments.some(c => c.id === commentId)
+      const post = allPosts.find((p: any) =>
+        p.comments.some((c: any) => c.id === commentId)
       );
-      
+
       if (!post) return;
-      
+
       await fetch(`/api/posts/${post.id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -260,6 +339,19 @@ export default function UserProfilePage() {
       console.error("Error replying to comment:", error);
     }
   };
+
+  // ---- render -----------------------------------------------------
+
+  if (!profile) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography variant="h6">User not found</Typography>
+        <Typography variant="body2" color="text.secondary">
+          The profile @{username} doesn&apos;t exist.
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ p: 3, maxWidth: 1100, mx: "auto" }}>
@@ -333,6 +425,7 @@ export default function UserProfilePage() {
             userPosts.map((post: any) => (
               <React.Fragment key={post.id}>
                 <PostCard
+                  currentUserId={currentUser?.id ?? ""}
                   post={post}
                   currentUserName={currentUserName}
                   onLike={onLike}
