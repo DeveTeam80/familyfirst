@@ -12,19 +12,20 @@ import {
   Stack,
   TextField,
   Typography,
+  CircularProgress,
 } from "@mui/material";
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  onSave: (changes: { name?: string; bio?: string; avatar?: string | null }) => void;
+  onSave: (changes: { name?: string; bio?: string; avatar?: string | null; location?: string }) => void;
   name: string;
   setName: (v: string) => void;
   bio: string;
   setBio: (v: string) => void;
-  avatar?: string | null;               
-  setAvatar: (v: string | null) => void;  
-  currentAvatar?: string | null;         
+  avatar?: string | null;
+  setAvatar: (v: string | null) => void;
+  currentAvatar?: string | null;
 };
 
 export default function EditProfileDialog({
@@ -40,6 +41,8 @@ export default function EditProfileDialog({
   currentAvatar,
 }: Props) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = React.useState(false);
+  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
 
   const triggerFile = () => {
     if (!inputRef.current) return;
@@ -50,18 +53,70 @@ export default function EditProfileDialog({
   const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
+    
+    // Store the file for upload
+    setSelectedFile(f);
+    
+    // Create blob URL for preview
     const url = URL.createObjectURL(f);
     setAvatar(url);
   };
 
-  const onRemoveAvatar = () => setAvatar(null);
+  const onRemoveAvatar = () => {
+    setAvatar(null);
+    setSelectedFile(null);
+  };
 
-  const handleSave = () => {
-    onSave({
-      name: name.trim(),
-      bio: bio.trim(),
-      avatar, 
-    });
+  const uploadToCloudinary = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "");
+    formData.append("folder", "avatars");
+
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to upload image");
+    }
+
+    const data = await response.json();
+    return data.secure_url;
+  };
+
+  const handleSave = async () => {
+    try {
+      setUploading(true);
+
+      let finalAvatarUrl = avatar;
+
+      // If there's a selected file (blob URL), upload it first
+      if (selectedFile && avatar?.startsWith('blob:')) {
+        console.log("🔄 Uploading avatar to Cloudinary...");
+        finalAvatarUrl = await uploadToCloudinary(selectedFile);
+        console.log("✅ Upload successful:", finalAvatarUrl);
+      }
+
+      // Call onSave with the Cloudinary URL (or null if removed)
+      onSave({
+        name: name.trim(),
+        bio: bio.trim(),
+        avatar: finalAvatarUrl,
+      });
+
+      // Clean up
+      setSelectedFile(null);
+    } catch (error) {
+      console.error("Error uploading avatar:", error);
+      alert("Failed to upload avatar. Please try again.");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const previewSrc = avatar === null ? undefined : (avatar ?? currentAvatar) || undefined;
@@ -79,8 +134,15 @@ export default function EditProfileDialog({
               sx={{ width: 84, height: 84 }}
             />
             <Stack direction="row" spacing={1}>
-              <Button variant="outlined" onClick={triggerFile}>Replace</Button>
-              <Button variant="text" color="error" onClick={onRemoveAvatar} disabled={!currentAvatar && avatar !== null}>
+              <Button variant="outlined" onClick={triggerFile} disabled={uploading}>
+                Replace
+              </Button>
+              <Button
+                variant="text"
+                color="error"
+                onClick={onRemoveAvatar}
+                disabled={(!currentAvatar && avatar !== null) || uploading}
+              >
                 Remove
               </Button>
               <input
@@ -93,11 +155,21 @@ export default function EditProfileDialog({
             </Stack>
           </Stack>
 
+          {uploading && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <CircularProgress size={20} />
+              <Typography variant="body2" color="text.secondary">
+                Uploading image...
+              </Typography>
+            </Box>
+          )}
+
           <TextField
             label="Name"
             fullWidth
             value={name}
             onChange={(e) => setName(e.target.value)}
+            disabled={uploading}
           />
 
           <TextField
@@ -107,13 +179,20 @@ export default function EditProfileDialog({
             minRows={3}
             value={bio}
             onChange={(e) => setBio(e.target.value)}
+            disabled={uploading}
           />
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={handleSave} disabled={!name.trim() && !bio.trim() && avatar === undefined}>
-          Save
+        <Button onClick={onClose} disabled={uploading}>
+          Cancel
+        </Button>
+        <Button
+          variant="contained"
+          onClick={handleSave}
+          disabled={(!name.trim() && !bio.trim() && avatar === undefined) || uploading}
+        >
+          {uploading ? "Saving..." : "Save"}
         </Button>
       </DialogActions>
     </Dialog>
