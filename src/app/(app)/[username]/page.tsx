@@ -1,3 +1,4 @@
+//src/app/(app)/[username]/page.tsx
 "use client";
 
 import { useParams } from "next/navigation";
@@ -226,64 +227,55 @@ export default function UserProfilePage() {
   };
 
   // 🔹 UPDATED: send userId in payload using currentUser / profile
-  const saveProfile = async (changes: {
-    name?: string;
-    bio?: string;
-    avatar?: string | null;
-    location?: string;
-  }) => {
-    try {
-      const userId = currentUser?.id || (profile as any)?.id;
+ const saveProfile = async (changes: {
+  name?: string;
+  bio?: string;
+  avatar?: string | null;
+  location?: string;
+}) => {
+  try {
+    const res = await fetch("/api/auth/me", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        name: changes.name,
+        bio: changes.bio,
+        location: changes.location,
+        avatarUrl: changes.avatar ?? undefined,
+      }),
+    });
 
-      if (!userId) {
-        console.error("No userId found for profile update");
-        alert("You must be logged in to update your profile.");
-        return;
-      }
-
-      const res = await fetch("/api/auth/me", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({
-          userId, // ⬅ required by backend
-          name: changes.name,
-          bio: changes.bio,
-          location: changes.location,
-          avatarUrl: changes.avatar ?? undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        console.error("Failed to update profile:", await res.text());
-        alert("Failed to update profile. Please try again.");
-        return;
-      }
-
-      const { user: updatedUser } = await res.json();
-
-      // Update Redux
-      dispatch(
-        updateProfile({
-          username, // route param
-          changes: {
-            id: updatedUser.id,
-            name: updatedUser.name,
-            bio: updatedUser.bio,
-            avatar: updatedUser.avatarUrl,
-            location: updatedUser.location,
-          },
-        })
-      );
-
-      setEditProfileOpen(false);
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      alert("Something went wrong while updating your profile.");
+    if (!res.ok) {
+      console.error("Failed to update profile:", await res.text());
+      alert("Failed to update profile. Please try again.");
+      return;
     }
-  };
+
+    const { user: updatedUser } = await res.json();
+
+    // Update Redux
+    dispatch(
+      updateProfile({
+        username,
+        changes: {
+          id: updatedUser.id,
+          name: updatedUser.name,
+          bio: updatedUser.bio,
+          avatar: updatedUser.avatarUrl,
+          location: updatedUser.location,
+        },
+      })
+    );
+
+    setEditProfileOpen(false);
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    alert("Something went wrong while updating your profile.");
+  }
+};
 
   // ---- comment handlers -------------------------------------------
   const handleLikeComment = async (commentId: string) => {

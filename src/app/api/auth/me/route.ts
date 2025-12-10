@@ -1,45 +1,29 @@
 // src/app/api/auth/me/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { verifyJwt } from "@/lib/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-
-// 🔹 Helper to get current userId from cookie/JWT
-async function getUserIdFromSession() {
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get("ff_session");
-
-  if (!sessionCookie) {
-    return null;
-  }
-
-  const payload = await verifyJwt(sessionCookie.value);
-  if (!payload || !payload.userId) {
-    return null;
-  }
-
-  return payload.userId as string;
-}
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await getUserIdFromSession();
+    // Get session using NextAuth
+    const session = await getServerSession(authOptions);
 
-    if (!userId) {
+    if (!session || !session.user?.id) {
       return NextResponse.json(
         { error: "Not authenticated" },
         { status: 401 }
       );
     }
 
+    // Get user with family membership
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: session.user.id },
       select: {
         id: true,
         email: true,
         name: true,
         avatarUrl: true,
-        // include these if you have them in your schema:
         bio: true,
         location: true,
         familyMemberships: {
@@ -64,7 +48,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const familyMembership = user.familyMemberships[0];
+    const family = user.familyMemberships[0];
 
     return NextResponse.json({
       user: {
@@ -75,11 +59,11 @@ export async function GET(req: NextRequest) {
         bio: user.bio ?? null,
         location: user.location ?? null,
       },
-      family: familyMembership
+      family: family
         ? {
-            id: familyMembership.family.id,
-            name: familyMembership.family.name,
-            role: familyMembership.role,
+            id: family.family.id,
+            name: family.family.name,
+            role: family.role,
           }
         : null,
     });
@@ -94,19 +78,26 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const userId = await getUserIdFromSession();
+    // Get session using NextAuth
+    const session = await getServerSession(authOptions);
 
-    if (!userId) {
+    console.log("🔍 PATCH: Session:", session ? "Found" : "Not found");
+
+    if (!session || !session.user?.id) {
       return NextResponse.json(
         { error: "Not authenticated" },
         { status: 401 }
       );
     }
 
+    const userId = session.user.id;
+
     const body = await req.json().catch(() => ({}));
     const { name, bio, avatarUrl, location, avatar } = body;
 
-    // Build update data, only including provided fields
+    console.log("🔍 PATCH: Update data:", { name, bio, avatarUrl, location, avatar });
+
+    // Build update data
     const data: any = {};
 
     if (typeof name === "string") {
@@ -131,6 +122,8 @@ export async function PATCH(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    console.log("🔍 PATCH: Updating user", userId, "with data:", data);
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
@@ -177,7 +170,7 @@ export async function PATCH(req: NextRequest) {
         : null,
     });
   } catch (error) {
-    console.error("Error updating auth state:", error);
+    console.error("Error updating profile:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

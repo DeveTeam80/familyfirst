@@ -131,11 +131,12 @@ function RegisterForm() {
 
       const data = await res.json();
 
+      // src/app/(auth)/register/page.tsx - in handleSubmit
       if (!res.ok) {
         setError(data.error || "Registration failed");
       } else {
-        // Success - redirect to login
-        router.push("/login?registered=true");
+        // ✅ Pass email in URL so login page can pre-fill it
+        router.push(`/login?email=${encodeURIComponent(formData.email)}&registered=true`);
       }
     } catch (err) {
       console.error("❌ Registration error:", err);

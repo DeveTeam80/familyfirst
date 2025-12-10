@@ -47,10 +47,11 @@ function LoginForm() {
 
   // Check if user just registered
   const justRegistered = searchParams.get("registered") === "true";
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  const callbackUrl = searchParams.get("callbackUrl") || "/feed";
+  const emailFromUrl = searchParams.get("email") || "";
 
   const [formData, setFormData] = useState({
-    email: "",
+    email: emailFromUrl,
     password: "",
   });
 
