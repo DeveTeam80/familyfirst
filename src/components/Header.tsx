@@ -177,31 +177,36 @@ export default function Header({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
-  // Mobile drawer state
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
-  // Helper to get display name and username
-  const getDisplayInfo = () => {
-    if (session?.user) {
-      return {
-        displayName: session.user.name || "User",
-        username:
-          session.user.name?.toLowerCase().replace(/\s+/g, "") || "user",
-        avatar: session.user.image as string | null | undefined,
-      };
-    } else if (currentUser && "username" in currentUser) {
-      return {
-        displayName: currentUser.username,
-        username: currentUser.username,
-        avatar: null as string | null,
-      };
-    }
+const getDisplayInfo = () => {
+  if (currentUser && "username" in currentUser) {
     return {
-      displayName: "Profile",
-      username: "profile",
-      avatar: null as string | null,
+      displayName: currentUser.name || currentUser.username || "User",
+      username: currentUser.username || currentUser.name?.toLowerCase().replace(/\s+/g, "") || "user",
+      avatar: currentUser.avatar ?? null,
     };
+  }
+
+  if (session?.user) {
+    return {
+      displayName: session.user.name || "User",
+      username:
+        (session.user as any).username ||
+        session.user.name?.toLowerCase().replace(/\s+/g, "") ||
+        session.user.email?.split("@")[0] ||
+        "user",
+      avatar: session.user.image as string | null | undefined,
+    };
+  }
+
+  return {
+    displayName: "Profile",
+    username: "profile",
+    avatar: null as string | null,
   };
+};
+
 
   const { displayName, username, avatar } = getDisplayInfo();
   const profileHref = `/${username}`;

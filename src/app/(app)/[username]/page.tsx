@@ -1,13 +1,13 @@
-//src/app/(app)/[username]/page.tsx
+// src/app/(app)/[username]/page.tsx
 "use client";
 
 import { useParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store";
 import { setPosts } from "@/store/postSlice";
-import { updateProfile } from "@/store/userSlice";
+import { updateProfile, setCurrentUser } from "@/store/userSlice";
 
-import { Avatar, Box, Button, Stack, Typography } from "@mui/material";
+import { Avatar, Box, Button, Stack, Typography, CircularProgress } from "@mui/material";
 import * as React from "react";
 
 import PostCard from "@/components/feed/PostCard";
@@ -24,6 +24,14 @@ import {
   deletePostApi,
 } from "@/lib/api-posts";
 
+/**
+ * UserProfilePage
+ *
+ * - Will use Redux `profiles[username]` or `currentUser` if available.
+ * - If not available, it fetches `/api/users/${username}` from the server (which must return user by username).
+ * - Handles loading / not found states.
+ */
+
 export default function UserProfilePage() {
   const params = useParams<{ username: string }>();
   const username = params.username;
@@ -32,10 +40,10 @@ export default function UserProfilePage() {
   const currentUser = useSelector((s: RootState) => s.user.currentUser);
   const profiles = useSelector((s: RootState) => s.user.profiles);
 
-  // 🔹 IMPORTANT: items = { posts: [...], pagination: {...} }
+  // Posts state in Redux (items may be normalized object or array)
   const postsState = useSelector((s: RootState) => s.posts.items);
 
-  // 🔹 Normalize to a plain posts array
+  // Normalize postsState into plain array
   const allPosts = React.useMemo(() => {
     if (!postsState) return [];
     if (Array.isArray(postsState)) return postsState as any[];
@@ -45,12 +53,89 @@ export default function UserProfilePage() {
     return [];
   }, [postsState]);
 
-  const profile =
-    profiles[username] ||
-    (currentUser?.username === username ? currentUser : null);
+  // Local profile state (fetched / derived)
+  const [profile, setProfile] = React.useState<any | null>(() => {
+    // If already present in Redux or is current user, set initial
+    if (currentUser?.username === username) return currentUser;
+    if (profiles && profiles[username]) return profiles[username];
+    return null;
+  });
+  const [loadingProfile, setLoadingProfile] = React.useState<boolean>(() => {
+    // If we have initial profile, not loading, else will fetch
+    return profile ? false : true;
+  });
 
-  console.log("user dets", currentUser);
-  console.log("allPosts (normalized):", allPosts);
+  React.useEffect(() => {
+    let mounted = true;
+
+    async function loadProfile() {
+      // If viewing own profile - use currentUser (ensure freshest)
+      if (currentUser?.username === username) {
+        if (mounted) {
+          setProfile(currentUser);
+          setLoadingProfile(false);
+        }
+        return;
+      }
+
+      // If profile present in Redux cache, use it
+      if (profiles && profiles[username]) {
+        if (mounted) {
+          setProfile(profiles[username]);
+          setLoadingProfile(false);
+        }
+        return;
+      }
+
+      // Otherwise fetch from server
+      try {
+        if (mounted) setLoadingProfile(true);
+        const res = await fetch(`/api/users/${encodeURIComponent(username)}`);
+        if (res.ok) {
+          const data = await res.json();
+          // Expect { user: { id, username, name, email, avatar, bio, location } }
+          const user = data.user ?? null;
+          if (mounted) {
+            setProfile(user);
+            setLoadingProfile(false);
+            // Optionally populate Redux profiles map so other pages can reuse:
+            if (user) {
+              dispatch(
+                updateProfile({
+                  username: user.username,
+                  changes: {
+                    id: user.id,
+                    name: user.name,
+                    bio: user.bio,
+                    avatar: user.avatar ?? user.avatarUrl ?? null,
+                    location: user.location,
+                    email: user.email,
+                  },
+                })
+              );
+            }
+          }
+        } else {
+          // not found or error
+          if (mounted) {
+            setProfile(null);
+            setLoadingProfile(false);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching profile:", err);
+        if (mounted) {
+          setProfile(null);
+          setLoadingProfile(false);
+        }
+      }
+    }
+
+    loadProfile();
+    return () => {
+      mounted = false;
+    };
+  }, [username, currentUser, profiles, dispatch]);
 
   // ---- load posts -------------------------------------------------
   const loadPosts = React.useCallback(async () => {
@@ -66,6 +151,7 @@ export default function UserProfilePage() {
     loadPosts();
   }, [loadPosts]);
 
+  // Ownership and current user data
   const isOwner = !!currentUser && currentUser.username === username;
   const currentUserName = currentUser?.name || "User";
   const currentAvatar = currentUser?.avatar || undefined;
@@ -74,7 +160,9 @@ export default function UserProfilePage() {
   const userPosts = React.useMemo(
     () =>
       allPosts.filter((p: any) => {
-        if (p.username === username) return true;
+        // try multiple heuristics: p.username or p.user
+        if (!p) return false;
+        if (typeof p.username === "string" && p.username === username) return true;
         if (profile?.name && p.user === profile.name) return true;
         return false;
       }),
@@ -84,8 +172,7 @@ export default function UserProfilePage() {
   const [tab, setTab] = React.useState(0);
 
   // Comments
-  const [activeCommentPost, setActiveCommentPost] =
-    React.useState<string | null>(null);
+  const [activeCommentPost, setActiveCommentPost] = React.useState<string | null>(null);
   const [commentText, setCommentText] = React.useState("");
 
   // Share
@@ -99,20 +186,17 @@ export default function UserProfilePage() {
   const [editContent, setEditContent] = React.useState("");
   const [editTags, setEditTags] = React.useState<string[]>([]);
   const [editImages, setEditImages] = React.useState<string[]>([]);
-  const currentEditPost =
-    allPosts.find((p: any) => p.id === editTargetId) || null;
+  const currentEditPost = allPosts.find((p: any) => p.id === editTargetId) || null;
 
   // Delete Post
   const [deleteOpen, setDeleteOpen] = React.useState(false);
-  const [deleteTargetId, setDeleteTargetId] =
-    React.useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = React.useState<string | null>(null);
 
-  // Edit Profile
+  // Edit Profile dialog state
   const [editProfileOpen, setEditProfileOpen] = React.useState(false);
   const [name, setName] = React.useState("");
   const [bio, setBio] = React.useState("");
-  const [avatar, setAvatar] =
-    React.useState<string | null | undefined>(undefined);
+  const [avatar, setAvatar] = React.useState<string | null | undefined>(undefined);
 
   // sync name/bio when profile changes
   React.useEffect(() => {
@@ -226,56 +310,81 @@ export default function UserProfilePage() {
     setEditProfileOpen(true);
   };
 
-  // 🔹 UPDATED: send userId in payload using currentUser / profile
- const saveProfile = async (changes: {
-  name?: string;
-  bio?: string;
-  avatar?: string | null;
-  location?: string;
-}) => {
-  try {
-    const res = await fetch("/api/auth/me", {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify({
-        name: changes.name,
-        bio: changes.bio,
-        location: changes.location,
-        avatarUrl: changes.avatar ?? undefined,
-      }),
-    });
-
-    if (!res.ok) {
-      console.error("Failed to update profile:", await res.text());
-      alert("Failed to update profile. Please try again.");
-      return;
-    }
-
-    const { user: updatedUser } = await res.json();
-
-    // Update Redux
-    dispatch(
-      updateProfile({
-        username,
-        changes: {
-          id: updatedUser.id,
-          name: updatedUser.name,
-          bio: updatedUser.bio,
-          avatar: updatedUser.avatarUrl,
-          location: updatedUser.location,
+  // 🔹 Save profile (patch user in backend + update Redux)
+  const saveProfile = async (changes: {
+    name?: string;
+    bio?: string;
+    avatar?: string | null;
+    location?: string;
+  }) => {
+    try {
+      const res = await fetch("/api/auth/me", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
         },
-      })
-    );
+        credentials: "include",
+        body: JSON.stringify({
+          name: changes.name,
+          bio: changes.bio,
+          location: changes.location,
+          avatarUrl: changes.avatar ?? undefined,
+        }),
+      });
 
-    setEditProfileOpen(false);
-  } catch (error) {
-    console.error("Error updating profile:", error);
-    alert("Something went wrong while updating your profile.");
-  }
-};
+      if (!res.ok) {
+        console.error("Failed to update profile:", await res.text());
+        alert("Failed to update profile. Please try again.");
+        return;
+      }
+
+      const { user: updatedUser } = await res.json();
+
+      // derive canonical username (fallback if backend doesn't return username)
+      const backendUsername = (updatedUser as any).username;
+      const derivedUsername =
+        backendUsername ||
+        (updatedUser.name && updatedUser.name.toLowerCase().replace(/\s+/g, "")) ||
+        (updatedUser.email && (updatedUser.email as string).split("@")[0]) ||
+        "user";
+
+      // 1) Immediately update Redux currentUser so UI (header, profile, comments) reflects change
+      dispatch(
+        setCurrentUser({
+          id: updatedUser.id,
+          username: derivedUsername,
+          name: updatedUser.name,
+          email: updatedUser.email,
+          avatar: updatedUser.avatarUrl ?? null,
+          bio: updatedUser.bio ?? "",
+          location: updatedUser.location ?? "",
+        })
+      );
+
+      // 2) Keep profiles map consistent
+      dispatch(
+        updateProfile({
+          username: derivedUsername,
+          changes: {
+            id: updatedUser.id,
+            name: updatedUser.name,
+            bio: updatedUser.bio,
+            avatar: updatedUser.avatarUrl,
+            location: updatedUser.location,
+            email: updatedUser.email,
+          },
+        })
+      );
+
+      // 3) Re-fetch posts so all post/comment avatars are refreshed immediately
+      await loadPosts();
+
+      setEditProfileOpen(false);
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      alert("Something went wrong while updating your profile.");
+    }
+  };
 
   // ---- comment handlers -------------------------------------------
   const handleLikeComment = async (commentId: string) => {
@@ -315,10 +424,7 @@ export default function UserProfilePage() {
 
   const handleReplyComment = async (commentId: string, text: string) => {
     try {
-      const post = allPosts.find((p: any) =>
-        p.comments.some((c: any) => c.id === commentId)
-      );
-
+      const post = allPosts.find((p: any) => p.comments.some((c: any) => c.id === commentId));
       if (!post) return;
 
       await fetch(`/api/posts/${post.id}/comments`, {
@@ -333,6 +439,14 @@ export default function UserProfilePage() {
   };
 
   // ---- render -----------------------------------------------------
+
+  if (loadingProfile) {
+    return (
+      <Box sx={{ p: 6, display: "flex", justifyContent: "center" }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   if (!profile) {
     return (
@@ -357,11 +471,7 @@ export default function UserProfilePage() {
         }}
       >
         <Box sx={{ display: "grid", placeItems: "center" }}>
-          <Avatar
-            src={profile.avatar || undefined}
-            alt={profile.name}
-            sx={{ width: 140, height: 140 }}
-          />
+          <Avatar src={profile.avatar || undefined} alt={profile.name} sx={{ width: 140, height: 140 }} />
         </Box>
 
         <Box>
@@ -451,14 +561,7 @@ export default function UserProfilePage() {
       )}
 
       {/* Dialogs */}
-      <ShareDialog
-        open={shareOpen}
-        onClose={() => setShareOpen(false)}
-        user={sharePost?.user}
-        content={sharePost?.content}
-        tags={sharePost?.tags}
-        postId={sharePost?.id}
-      />
+      <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} user={sharePost?.user} content={sharePost?.content} tags={sharePost?.tags} postId={sharePost?.id} />
 
       <EditPostDialog
         open={editOpen}
@@ -478,11 +581,7 @@ export default function UserProfilePage() {
         setImages={setEditImages}
       />
 
-      <DeleteDialog
-        open={deleteOpen}
-        onCancel={() => setDeleteOpen(false)}
-        onConfirm={confirmDelete}
-      />
+      <DeleteDialog open={deleteOpen} onCancel={() => setDeleteOpen(false)} onConfirm={confirmDelete} />
 
       <EditProfileDialog
         open={editProfileOpen}

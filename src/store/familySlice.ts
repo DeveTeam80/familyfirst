@@ -1,149 +1,127 @@
-import { createSlice, PayloadAction, nanoid } from "@reduxjs/toolkit";
+// src/store/familySlice.ts
+import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
+import type { RootState } from "@/store";
 
-export type Role = "admin" | "member";
+/** client-side role type (you can extend) */
+export type ClientRole = "OWNER" | "ADMIN" | "MEMBER" | "UNKNOWN";
 
-export interface FamilyMember {
-  username: string;      // must exist in user.profiles
-  role: Role;
-  email?: string;        // optional cache
-}
-
-export interface Invite {
-  id: string;
-  email: string;
-  invitedBy: string;     // username
-  role: Role;            // role to grant on accept
-  status: "pending" | "sent" | "accepted" | "revoked" | "failed";
-  createdAt: number;
+export interface FamilyMemberClient {
+  userId: string;
+  username?: string | null;
+  name?: string | null;
+  email?: string | null;
+  avatarUrl?: string | null;
+  role: ClientRole;
+  status?: string;
+  joinedAt?: string | Date | null;
 }
 
 export interface FamilyState {
-  activeFamilyId: string;
-  membersByFamily: Record<string, FamilyMember[]>;
-  invitesByFamily: Record<string, Invite[]>;
+  activeFamilyId: string | null;
+  membersByFamily: Record<string, FamilyMemberClient[]>;
+  loadingByFamily: Record<string, boolean>;
+  errorByFamily: Record<string, string | null>;
 }
 
 const initialState: FamilyState = {
-  activeFamilyId: "family-1",
-  membersByFamily: {
-    "family-1": [
-      { username: "john", role: "admin", email: "john@example.com" },
-      { username: "alice", role: "member", email: "alice@example.com" },
-    ],
-  },
-  invitesByFamily: {
-    "family-1": [],
-  },
+  activeFamilyId: null,
+  membersByFamily: {},
+  loadingByFamily: {},
+  errorByFamily: {},
 };
+
+/**
+ * Async thunk to fetch members for a given familyId
+ */
+export const fetchMembers = createAsyncThunk<
+  { familyId: string; members: FamilyMemberClient[] },
+  string,
+  { state: RootState }
+>("family/fetchMembers", async (familyId, thunkAPI) => {
+  try {
+    const res = await fetch(`/api/family/${encodeURIComponent(familyId)}/members`, {
+      method: "GET",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      throw new Error(json?.error || `Failed to load members (${res.status})`);
+    }
+
+    const json = await res.json();
+    const members = (json.members || []).map((m: any) => ({
+      userId: m.userId,
+      username: m.user?.username ?? (m.user?.email?.split("@")[0] ?? null),
+      name: m.user?.name ?? null,
+      email: m.user?.email ?? null,
+      avatarUrl: m.user?.avatarUrl ?? null,
+      role: m.role ?? "MEMBER",
+      status: m.status ?? null,
+      joinedAt: m.joinedAt ?? null,
+    }));
+
+    return { familyId, members };
+  } catch (err: any) {
+    return thunkAPI.rejectWithValue({ message: err?.message || String(err) });
+  }
+});
 
 const familySlice = createSlice({
   name: "family",
   initialState,
   reducers: {
-    setActiveFamily(state, action: PayloadAction<string>) {
+    setActiveFamily(state, action: PayloadAction<string | null>) {
       state.activeFamilyId = action.payload;
     },
-
-    // ---- Invites ----
-    inviteMemberRequested(
-      state,
-      action: PayloadAction<{ email: string; role?: Role; invitedBy: string }>
-    ) {
-      const famId = state.activeFamilyId;
-      const inv: Invite = {
-        id: nanoid(),
-        email: action.payload.email.toLowerCase().trim(),
-        invitedBy: action.payload.invitedBy,
-        role: action.payload.role ?? "member",
-        status: "pending",
-        createdAt: Date.now(),
-      };
-      state.invitesByFamily[famId] ??= [];
-      state.invitesByFamily[famId].push(inv);
+    // local-only promotions (optimistic update) — use server to actually persist
+    setMembersForFamily(state, action: PayloadAction<{ familyId: string; members: FamilyMemberClient[] }>) {
+      state.membersByFamily[action.payload.familyId] = action.payload.members;
     },
-    inviteMemberMarkedSent(
-      state,
-      action: PayloadAction<{ inviteId: string; status?: Invite["status"] }>
-    ) {
-      const famId = state.activeFamilyId;
-      const list = state.invitesByFamily[famId] ?? [];
-      const inv = list.find((i) => i.id === action.payload.inviteId);
-      if (inv) inv.status = action.payload.status ?? "sent";
+    clearFamilyMembers(state, action: PayloadAction<{ familyId: string }>) {
+      state.membersByFamily[action.payload.familyId] = [];
     },
-    revokeInvite(state, action: PayloadAction<{ inviteId: string }>) {
-      const famId = state.activeFamilyId;
-      state.invitesByFamily[famId] = (state.invitesByFamily[famId] ?? []).filter(
-        (i) => i.id !== action.payload.inviteId
-      );
-    },
-    acceptInvite(
-      state,
-      action: PayloadAction<{ inviteId: string; username: string; email?: string }>
-    ) {
-      const famId = state.activeFamilyId;
-      const list = state.invitesByFamily[famId] ?? [];
-      const inv = list.find((i) => i.id === action.payload.inviteId);
-      if (!inv) return;
-      inv.status = "accepted";
-      state.membersByFamily[famId] ??= [];
-      state.membersByFamily[famId].push({
-        username: action.payload.username,
-        role: inv.role,
-        email: action.payload.email ?? inv.email,
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchMembers.pending, (state, action) => {
+        const fam = action.meta.arg;
+        state.loadingByFamily[fam] = true;
+        state.errorByFamily[fam] = null;
+      })
+      .addCase(fetchMembers.fulfilled, (state, action) => {
+        const { familyId, members } = action.payload;
+        state.loadingByFamily[familyId] = false;
+        state.errorByFamily[familyId] = null;
+        state.membersByFamily[familyId] = members;
+      })
+      .addCase(fetchMembers.rejected, (state, action) => {
+        const fam = action.meta.arg;
+        state.loadingByFamily[fam] = false;
+        state.errorByFamily[fam] = (action.payload as any)?.message ?? action.error.message ?? "Failed to load";
       });
-    },
-
-    // ---- Members ----
-    removeMember(state, action: PayloadAction<{ username: string }>) {
-      const famId = state.activeFamilyId;
-      state.membersByFamily[famId] = (state.membersByFamily[famId] ?? []).filter(
-        (m) => m.username !== action.payload.username
-      );
-    },
-    promoteToAdmin(state, action: PayloadAction<{ username: string }>) {
-      const famId = state.activeFamilyId;
-      const m = (state.membersByFamily[famId] ?? []).find(
-        (x) => x.username === action.payload.username
-      );
-      if (m) m.role = "admin";
-    },
-    demoteToMember(state, action: PayloadAction<{ username: string }>) {
-      const famId = state.activeFamilyId;
-      const m = (state.membersByFamily[famId] ?? []).find(
-        (x) => x.username === action.payload.username
-      );
-      if (m) m.role = "member";
-    },
   },
 });
 
-export const {
-  setActiveFamily,
-  inviteMemberRequested,
-  inviteMemberMarkedSent,
-  revokeInvite,
-  acceptInvite,
-  removeMember,
-  promoteToAdmin,
-  demoteToMember,
-} = familySlice.actions;
-
+export const { setActiveFamily, setMembersForFamily, clearFamilyMembers } = familySlice.actions;
 export default familySlice.reducer;
 
 /* ------------ Selectors ------------ */
-export const selectActiveFamilyId = (s: { family: FamilyState }) =>
-  s.family.activeFamilyId;
-
-export const selectMembers = (s: { family: FamilyState }) =>
-  s.family.membersByFamily[s.family.activeFamilyId] ?? [];
-
-export const selectInvites = (s: { family: FamilyState }) =>
-  s.family.invitesByFamily[s.family.activeFamilyId] ?? [];
-
-export const selectIsAdmin = (
-  s: { family: FamilyState; user: { currentUser: { username: string } | null } }
-) => {
-  const me = s.user.currentUser?.username;
-  const members = s.family.membersByFamily[s.family.activeFamilyId] ?? [];
-  return !!members.find((m) => m.username === me && m.role === "admin");
+export const selectActiveFamilyId = (s: RootState) => s.family.activeFamilyId;
+export const selectMembersForActiveFamily = (s: RootState) =>
+  s.family.activeFamilyId ? s.family.membersByFamily[s.family.activeFamilyId] ?? [] : [];
+export const selectIsAdminForActiveFamily = (s: RootState) => {
+  const meId = s.user.currentUser?.id;
+  const famId = s.family.activeFamilyId;
+  if (!meId || !famId) return false;
+  const members = s.family.membersByFamily[famId] ?? [];
+  return members.some((m) => m.userId === meId && (m.role === "ADMIN" || m.role === "OWNER"));
+};
+export const selectIsOwnerForActiveFamily = (s: RootState) => {
+  const meId = s.user.currentUser?.id;
+  const famId = s.family.activeFamilyId;
+  if (!meId || !famId) return false;
+  const members = s.family.membersByFamily[famId] ?? [];
+  return members.some((m) => m.userId === meId && m.role === "OWNER");
 };

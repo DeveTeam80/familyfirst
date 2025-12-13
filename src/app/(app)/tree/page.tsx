@@ -41,8 +41,10 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs, { Dayjs } from "dayjs";
+import { useRouter } from "next/navigation";
 import { familyTreeData } from "@/data/familyTree";
 import { CloudinaryUpload } from "@/components/CloudinaryUpload";
+import { FamilyRole } from "@prisma/client";
 
 /* -----------------------
    Type Definitions
@@ -93,7 +95,7 @@ function FamilyTreeChart({
     chartDataRef.current = treeData;
     onNodeSelectRef.current = onNodeSelect;
     if (f3ChartInstance.current) {
-       f3ChartInstance.current.updateTree({ data: treeData });
+      f3ChartInstance.current.updateTree({ data: treeData });
     }
   }, [treeData, onNodeSelect]);
 
@@ -121,21 +123,23 @@ function FamilyTreeChart({
         .setOnHoverPathToMain();
 
       // ⭐ Use regular function for proper 'this' binding, but wrap logic in arrow function
-      f3Card.setOnCardUpdate(function(this: HTMLElement, d: any) {
+      f3Card.setOnCardUpdate(function (this: HTMLElement, d: any) {
         // Skip if it's a new relative placeholder
         if (d.data._new_rel_data) return;
 
         // 'this' refers to the card wrapper element
-        const cardInner = this.querySelector('.card-inner') as HTMLElement;
+        const cardInner = this.querySelector(".card-inner") as HTMLElement;
         if (!cardInner) return;
 
         // Check if button already exists to avoid duplicates
-        if (cardInner.querySelector('.custom-info-btn')) return;
+        if (cardInner.querySelector(".custom-info-btn")) return;
 
         // Create info button wrapper
-        const btnWrapper = document.createElement('div');
-        btnWrapper.className = 'custom-info-btn';
-        btnWrapper.setAttribute('style', `
+        const btnWrapper = document.createElement("div");
+        btnWrapper.className = "custom-info-btn";
+        btnWrapper.setAttribute(
+          "style",
+          `
           cursor: pointer;
           width: 28px;
           height: 28px;
@@ -143,7 +147,8 @@ function FamilyTreeChart({
           top: 8px;
           right: 8px;
           z-index: 10;
-        `);
+        `
+        );
 
         // Create the actual button
         btnWrapper.innerHTML = `
@@ -151,7 +156,11 @@ function FamilyTreeChart({
             width: 100%;
             height: 100%;
             border-radius: 50%;
-            background: ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)'};
+            background: ${
+              theme.palette.mode === "dark"
+                ? "rgba(255, 255, 255, 0.15)"
+                : "rgba(0, 0, 0, 0.1)"
+            };
             display: flex;
             align-items: center;
             justify-content: center;
@@ -159,7 +168,9 @@ function FamilyTreeChart({
             backdrop-filter: blur(4px);
             -webkit-backdrop-filter: blur(4px);
           ">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="color: ${theme.palette.mode === 'dark' ? '#fff' : '#333'};">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="color: ${
+              theme.palette.mode === "dark" ? "#fff" : "#333"
+            };">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
             </svg>
           </div>
@@ -167,33 +178,36 @@ function FamilyTreeChart({
 
         // Hover effects
         const innerBtn = btnWrapper.firstElementChild as HTMLElement;
-        btnWrapper.addEventListener('mouseenter', () => {
+        btnWrapper.addEventListener("mouseenter", () => {
           if (innerBtn) {
-            innerBtn.style.background = 'rgba(102, 126, 234, 0.9)';
-            innerBtn.style.transform = 'scale(1.1)';
-            const svg = innerBtn.querySelector('svg');
-            if (svg) (svg as SVGElement).style.color = '#fff';
+            innerBtn.style.background = "rgba(102, 126, 234, 0.9)";
+            innerBtn.style.transform = "scale(1.1)";
+            const svg = innerBtn.querySelector("svg");
+            if (svg) (svg as SVGElement).style.color = "#fff";
           }
         });
 
-        btnWrapper.addEventListener('mouseleave', () => {
+        btnWrapper.addEventListener("mouseleave", () => {
           if (innerBtn) {
-            innerBtn.style.background = theme.palette.mode === 'dark' 
-              ? 'rgba(255, 255, 255, 0.15)' 
-              : 'rgba(0, 0, 0, 0.1)';
-            innerBtn.style.transform = 'scale(1)';
-            const svg = innerBtn.querySelector('svg');
-            if (svg) (svg as SVGElement).style.color = theme.palette.mode === 'dark' ? '#fff' : '#333';
+            innerBtn.style.background =
+              theme.palette.mode === "dark"
+                ? "rgba(255, 255, 255, 0.15)"
+                : "rgba(0, 0, 0, 0.1)";
+            innerBtn.style.transform = "scale(1)";
+            const svg = innerBtn.querySelector("svg");
+            if (svg)
+              (svg as SVGElement).style.color =
+                theme.palette.mode === "dark" ? "#fff" : "#333";
           }
         });
 
         // Click handler
-        btnWrapper.addEventListener('click', (e: MouseEvent) => {
+        btnWrapper.addEventListener("click", (e: MouseEvent) => {
           e.stopPropagation(); // Don't trigger card expansion
 
           // Find node data from our stored reference
-          const nodeData = chartDataRef.current.find(n => n.id === d.data.id);
-          
+          const nodeData = chartDataRef.current.find((n) => n.id === d.data.id);
+
           if (nodeData && onNodeSelectRef.current) {
             console.log("🎯 Info button clicked:", nodeData);
             onNodeSelectRef.current(nodeData);
@@ -259,7 +273,9 @@ function FloatingQuickActions({
 
   if (!node) return null;
 
-  const displayName = `${node.data["first name"] || ""} ${node.data["last name"] || ""}`.trim();
+  const displayName = `${node.data["first name"] || ""} ${
+    node.data["last name"] || ""
+  }`.trim();
 
   return (
     <Slide direction="up" in={!!node} mountOnEnter unmountOnExit>
@@ -275,9 +291,10 @@ function FloatingQuickActions({
           display: "flex",
           alignItems: "center",
           gap: 2,
-          background: theme.palette.mode === 'dark' 
-            ? alpha("#1e1e24", 0.8) 
-            : alpha("#ffffff", 0.8),
+          background:
+            theme.palette.mode === "dark"
+              ? alpha("#1e1e24", 0.8)
+              : alpha("#ffffff", 0.8),
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
           border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
@@ -294,7 +311,7 @@ function FloatingQuickActions({
             width: 44,
             height: 44,
             bgcolor: node.data.gender === "M" ? "#3b82f6" : "#ec4899",
-            border: `2px solid ${theme.palette.background.paper}`
+            border: `2px solid ${theme.palette.background.paper}`,
           }}
         >
           {node.data["first name"]?.[0]}
@@ -305,7 +322,8 @@ function FloatingQuickActions({
             {displayName}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {node.data.birthday || (node.data.gender === "M" ? "Male" : "Female")}
+            {node.data.birthday ||
+              (node.data.gender === "M" ? "Male" : "Female")}
           </Typography>
         </Box>
 
@@ -319,7 +337,7 @@ function FloatingQuickActions({
             textTransform: "none",
             fontWeight: 600,
             background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-            boxShadow: "0 4px 10px rgba(118, 75, 162, 0.3)"
+            boxShadow: "0 4px 10px rgba(118, 75, 162, 0.3)",
           }}
         >
           Profile
@@ -357,7 +375,10 @@ function InspectorPanel({
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [status, setStatus] = useState<{
+    type: "success" | "error";
+    msg: string;
+  } | null>(null);
 
   useEffect(() => {
     if (node?.data?.email) setEmail(node.data.email);
@@ -395,7 +416,10 @@ function InspectorPanel({
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setStatus({ type: "error", msg: data.error || "Failed to send invite" });
+        setStatus({
+          type: "error",
+          msg: data.error || "Failed to send invite",
+        });
       } else {
         setStatus({ type: "success", msg: "Invitation sent!" });
         setTimeout(() => setStatus(null), 3000);
@@ -410,7 +434,9 @@ function InspectorPanel({
 
   if (!node) return null;
 
-  const displayName = `${node.data["first name"] || ""} ${node.data["last name"] || ""}`.trim();
+  const displayName = `${node.data["first name"] || ""} ${
+    node.data["last name"] || ""
+  }`.trim();
   const isMale = node.data.gender === "M";
 
   return (
@@ -425,7 +451,8 @@ function InspectorPanel({
         width: isMobile ? "100%" : 340,
         maxHeight: isMobile ? "85vh" : "calc(100vh - 40px)",
         borderRadius: isMobile ? "24px 24px 0 0" : 4,
-        background: theme.palette.mode === "dark"
+        background:
+          theme.palette.mode === "dark"
             ? alpha("#121217", 0.95)
             : alpha("#ffffff", 0.95),
         backdropFilter: "blur(16px)",
@@ -445,8 +472,14 @@ function InspectorPanel({
         sx={{
           p: 2,
           background: isMale
-            ? `linear-gradient(135deg, ${alpha(theme.palette.info.main, 0.15)}, transparent)`
-            : `linear-gradient(135deg, ${alpha(theme.palette.error.main, 0.15)}, transparent)`,
+            ? `linear-gradient(135deg, ${alpha(
+                theme.palette.info.main,
+                0.15
+              )}, transparent)`
+            : `linear-gradient(135deg, ${alpha(
+                theme.palette.error.main,
+                0.15
+              )}, transparent)`,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "flex-start",
@@ -465,7 +498,16 @@ function InspectorPanel({
       </Box>
 
       {/* Profile */}
-      <Box sx={{ px: 3, pb: 2, display: "flex", flexDirection: "column", alignItems: "center", mt: -3 }}>
+      <Box
+        sx={{
+          px: 3,
+          pb: 2,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          mt: -3,
+        }}
+      >
         <Avatar
           src={node.data.avatar}
           sx={{
@@ -480,7 +522,11 @@ function InspectorPanel({
           {node.data["first name"]?.[0]}
         </Avatar>
 
-        <Typography variant="h5" fontWeight={700} sx={{ mt: 2, textAlign: "center" }}>
+        <Typography
+          variant="h5"
+          fontWeight={700}
+          sx={{ mt: 2, textAlign: "center" }}
+        >
           {displayName}
         </Typography>
 
@@ -509,65 +555,87 @@ function InspectorPanel({
         {isAdmin ? (
           <Stack spacing={2}>
             <Box>
-                <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', mb:1, display:'block'}}>
-                    Invitation
-                </Typography>
-                <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="member@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    InputProps={{
-                        startAdornment: (
-                        <InputAdornment position="start">
-                            <EmailIcon sx={{ fontSize: 18, color: "text.secondary" }} />
-                        </InputAdornment>
-                        ),
-                    }}
-                />
-                <Button
-                    variant="contained"
-                    fullWidth
-                    onClick={handleSendInvite}
-                    disabled={loading || !email}
-                    endIcon={loading ? <CircularProgress size={14} color="inherit" /> : <SendIcon fontSize="small" />}
-                    sx={{ 
-                      mt: 1, 
-                      borderRadius: 2,
-                      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                    }}
-                >
+              <Typography
+                variant="caption"
+                fontWeight={700}
+                color="text.secondary"
+                sx={{ textTransform: "uppercase", mb: 1, display: "block" }}
+              >
+                Invitation
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="member@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <EmailIcon
+                        sx={{ fontSize: 18, color: "text.secondary" }}
+                      />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={handleSendInvite}
+                disabled={loading || !email}
+                endIcon={
+                  loading ? (
+                    <CircularProgress size={14} color="inherit" />
+                  ) : (
+                    <SendIcon fontSize="small" />
+                  )
+                }
+                sx={{
+                  mt: 1,
+                  borderRadius: 2,
+                  background:
+                    "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                }}
+              >
                 {loading ? "Sending..." : "Send Invite"}
-                </Button>
-                {status && (
-                    <Fade in>
-                        <Alert severity={status.type} sx={{ mt: 1, borderRadius: 2 }}>{status.msg}</Alert>
-                    </Fade>
-                )}
+              </Button>
+              {status && (
+                <Fade in>
+                  <Alert severity={status.type} sx={{ mt: 1, borderRadius: 2 }}>
+                    {status.msg}
+                  </Alert>
+                </Fade>
+              )}
             </Box>
-            
+
             <Divider />
 
             <Box>
-                <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', mb:1, display:'block'}}>
-                    Management
-                </Typography>
-                <Button
-                    variant="outlined"
-                    fullWidth
-                    onClick={onEdit}
-                    startIcon={<EditIcon />}
-                    sx={{ borderRadius: 2 }}
-                >
+              <Typography
+                variant="caption"
+                fontWeight={700}
+                color="text.secondary"
+                sx={{ textTransform: "uppercase", mb: 1, display: "block" }}
+              >
+                Management
+              </Typography>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={onEdit}
+                startIcon={<EditIcon />}
+                sx={{ borderRadius: 2 }}
+              >
                 Edit Profile
-                </Button>
+              </Button>
             </Box>
           </Stack>
         ) : (
-             <Alert severity="info" variant="outlined" sx={{ borderRadius: 2 }}>
-                You are in View Only mode. Contact an admin to invite or edit members.
-            </Alert>
+          <Alert severity="info" variant="outlined" sx={{ borderRadius: 2 }}>
+            You are in View Only mode. Contact an admin to invite or edit
+            members.
+          </Alert>
         )}
       </Box>
     </Paper>
@@ -617,7 +685,9 @@ function EditMemberDialog({
         ...node.data,
         "first name": formData.firstName,
         "last name": formData.lastName,
-        birthday: formData.birthday ? formData.birthday.format("YYYY") : undefined,
+        birthday: formData.birthday
+          ? formData.birthday.format("YYYY")
+          : undefined,
         gender: formData.gender as "M" | "F" | undefined,
         avatar: formData.avatar,
       },
@@ -628,60 +698,81 @@ function EditMemberDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 3 } }}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="sm"
+      PaperProps={{ sx: { borderRadius: 3 } }}
+    >
       <DialogTitle sx={{ fontWeight: 700 }}>Edit Details</DialogTitle>
       <DialogContent>
         <LocalizationProvider dateAdapter={AdapterDayjs}>
           <Stack spacing={3} sx={{ mt: 1 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                <CloudinaryUpload
-                    currentImage={formData.avatar}
-                    onUploadSuccess={(url) => setFormData({ ...formData, avatar: url })}
-                    folder="familyfirst/avatars"
-                />
+            <Box sx={{ display: "flex", justifyContent: "center" }}>
+              <CloudinaryUpload
+                currentImage={formData.avatar}
+                onUploadSuccess={(url) =>
+                  setFormData({ ...formData, avatar: url })
+                }
+                folder="familyfirst/avatars"
+              />
             </Box>
             <Stack direction="row" spacing={2}>
-                <TextField
-                    fullWidth
-                    label="First Name"
-                    value={formData.firstName}
-                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                />
-                <TextField
-                    fullWidth
-                    label="Last Name"
-                    value={formData.lastName}
-                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                />
+              <TextField
+                fullWidth
+                label="First Name"
+                value={formData.firstName}
+                onChange={(e) =>
+                  setFormData({ ...formData, firstName: e.target.value })
+                }
+              />
+              <TextField
+                fullWidth
+                label="Last Name"
+                value={formData.lastName}
+                onChange={(e) =>
+                  setFormData({ ...formData, lastName: e.target.value })
+                }
+              />
             </Stack>
             <Stack direction="row" spacing={2}>
-                <DatePicker
-                    label="Birthday"
-                    value={formData.birthday}
-                    onChange={(newValue) => setFormData({ ...formData, birthday: newValue })}
-                    slotProps={{ textField: { fullWidth: true } }}
-                />
-                <TextField
-                    select
-                    fullWidth
-                    label="Gender"
-                    value={formData.gender}
-                    onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                >
-                    <MenuItem value="M">Male</MenuItem>
-                    <MenuItem value="F">Female</MenuItem>
-                </TextField>
+              <DatePicker
+                label="Birthday"
+                value={formData.birthday}
+                onChange={(newValue) =>
+                  setFormData({ ...formData, birthday: newValue })
+                }
+                slotProps={{ textField: { fullWidth: true } }}
+              />
+              <TextField
+                select
+                fullWidth
+                label="Gender"
+                value={formData.gender}
+                onChange={(e) =>
+                  setFormData({ ...formData, gender: e.target.value })
+                }
+              >
+                <MenuItem value="M">Male</MenuItem>
+                <MenuItem value="F">Female</MenuItem>
+              </TextField>
             </Stack>
           </Stack>
         </LocalizationProvider>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3 }}>
-        <Button onClick={onClose} sx={{ color: 'text.secondary' }}>Cancel</Button>
+        <Button onClick={onClose} sx={{ color: "text.secondary" }}>
+          Cancel
+        </Button>
         <Button
           variant="contained"
           onClick={handleSave}
           disabled={!formData.firstName}
-          sx={{ borderRadius: 2, background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" }}
+          sx={{
+            borderRadius: 2,
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          }}
         >
           Save Changes
         </Button>
@@ -697,33 +788,132 @@ export default function FamilyTreePage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
-  const [isAdmin, setIsAdmin] = useState(true);
-  const [treeData, setTreeData] = useState<FamilyTreeNode[]>(familyTreeData as FamilyTreeNode[]);
-  
-  const [quickActionNode, setQuickActionNode] = useState<FamilyTreeNode | null>(null);
-  const [inspectorNode, setInspectorNode] = useState<FamilyTreeNode | null>(null);
+  const router = useRouter();
+
+  const [treeData, setTreeData] = useState<FamilyTreeNode[]>(
+    familyTreeData as FamilyTreeNode[]
+  );
+
+  const [quickActionNode, setQuickActionNode] = useState<FamilyTreeNode | null>(
+    null
+  );
+  const [inspectorNode, setInspectorNode] = useState<FamilyTreeNode | null>(
+    null
+  );
   const [editOpen, setEditOpen] = useState(false);
 
-  const handleNodeSelect = useCallback((node: FamilyTreeNode) => {
-    const freshNode = treeData.find(n => n.id === node.id) || node;
-    setQuickActionNode(freshNode);
-  }, [treeData]);
+  // Optional: local "checking" state if you want to show spinner while resolving
+  const [checkingAccount, setCheckingAccount] = useState(false);
+  const [role, setRole] = useState<FamilyRole>("VIEWER");
+  const isAdmin = role === "OWNER" || role === "ADMIN";
 
-  const handleViewDetails = () => {
-    if (quickActionNode) {
-      setInspectorNode(quickActionNode);
+   useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/me", {
+          credentials: "include",
+        });
+        if (!res.ok) return;
+
+        const json = await res.json();
+        console.log("family role", json?.memberships[0].role)
+        const familyRole = json?.memberships[0].role as FamilyRole | undefined;
+ if (
+          familyRole === "OWNER" ||
+          familyRole === "ADMIN" ||
+          familyRole === "MEMBER" ||
+          familyRole === "VIEWER"
+        ) {
+          setRole(familyRole);
+        }
+      } catch {
+        setRole("VIEWER");
+      }
+    })();
+  }, []);
+
+  const handleNodeSelect = useCallback(
+    (node: FamilyTreeNode) => {
+      const freshNode = treeData.find((n) => n.id === node.id) || node;
+      setQuickActionNode(freshNode);
+    },
+    [treeData]
+  );
+
+
+  const handleViewDetails = async () => {
+    if (!quickActionNode) return;
+
+    const node = quickActionNode;
+    setCheckingAccount(true);
+
+    try {
+      const res = await fetch(
+        `/api/tree/node/${encodeURIComponent(node.id)}/account`
+      );
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        // If API returned non-ok (404 etc.), open inspector as fallback
+        console.warn("Account check non-ok:", data);
+        setInspectorNode(node);
+        setQuickActionNode(null);
+        return;
+      }
+
+      if (data.exists && data.user) {
+        // Prefer username if present (matches your route /[username]/page.tsx)
+        const username = data.user.username || data.user.name || data.user.id;
+
+        // If name is used as fallback, make a safe slug (lowercase, replace spaces).
+        const slug =
+          typeof username === "string"
+            ? encodeURIComponent(
+                username
+                  .toString()
+                  .trim()
+                  .toLowerCase()
+                  .replace(/\s+/g, "-")
+                  .replace(/[^a-z0-9\-._~]/g, "") // remove unsafe chars, keep URL-safe minimal set
+              )
+            : data.user.id;
+
+        // Navigate to the account page at /<slug>
+        router.push(`/${slug}`);
+        setQuickActionNode(null);
+        return;
+      }
+
+      // No account — open inspector so admin can invite
+      setInspectorNode(node);
+    } catch (err) {
+      console.error("Error while checking node account:", err);
+      // Fallback: open inspector to invite
+      setInspectorNode(node);
+    } finally {
+      setCheckingAccount(false);
+      // hide quick action pill
       setQuickActionNode(null);
     }
   };
 
   const handleSaveEdit = (updatedNode: FamilyTreeNode) => {
-    setTreeData(prev => prev.map(n => n.id === updatedNode.id ? updatedNode : n));
+    setTreeData((prev) =>
+      prev.map((n) => (n.id === updatedNode.id ? updatedNode : n))
+    );
     setInspectorNode(updatedNode);
   };
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Box sx={{ height: "calc(100vh - 64px)", width: "100%", position: "relative", overflow: "hidden" }}>
+      <Box
+        sx={{
+          height: "calc(100vh - 64px)",
+          width: "100%",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
         {/* Header */}
         <Paper
           elevation={0}
@@ -744,22 +934,21 @@ export default function FamilyTreePage() {
             borderColor: alpha(theme.palette.divider, 0.1),
           }}
         >
-            <Typography variant="subtitle2" fontWeight={800}>Family Tree</Typography>
-            <Divider orientation="vertical" flexItem sx={{ height: 16, my: 'auto' }} />
-            <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-              Click ⓘ on cards for details
-            </Typography>
-            <Divider orientation="vertical" flexItem sx={{ height: 16, my: 'auto' }} />
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="caption" color="text.secondary">Mode:</Typography>
-                <Chip
-                    label={isAdmin ? "Admin" : "Viewer"}
-                    size="small"
-                    color={isAdmin ? "primary" : "default"}
-                    onClick={() => setIsAdmin(!isAdmin)}
-                    sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer' }}
-                />
-            </Box>
+          <Typography variant="subtitle2" fontWeight={800}>
+            Family Tree
+          </Typography>
+          <Divider
+            orientation="vertical"
+            flexItem
+            sx={{ height: 16, my: "auto" }}
+          />
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ fontStyle: "italic" }}
+          >
+            Click ⓘ on cards for details
+          </Typography>
         </Paper>
 
         {/* Chart */}

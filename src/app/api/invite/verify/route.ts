@@ -8,7 +8,10 @@ export async function GET(request: NextRequest) {
     const code = searchParams.get("code");
 
     if (!code) {
-      return NextResponse.json({ error: "Invitation code is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invitation code is required" },
+        { status: 400 }
+      );
     }
 
     // Find invitation by invite code
@@ -33,37 +36,62 @@ export async function GET(request: NextRequest) {
 
     // Check if invitation exists
     if (!invite) {
-      return NextResponse.json({ error: "Invalid invitation code" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Invalid invitation code" },
+        { status: 404 }
+      );
     }
 
     // Check if already accepted
     if (invite.status === "ACCEPTED") {
-      return NextResponse.json({ error: "This invitation has already been used" }, { status: 400 });
+      return NextResponse.json(
+        { error: "This invitation has already been used" },
+        { status: 400 }
+      );
     }
 
     // Check if expired
-    if (invite.status === "EXPIRED" || (invite.expiresAt && new Date(invite.expiresAt) < new Date())) {
-      return NextResponse.json({ error: "This invitation has expired" }, { status: 400 });
+    if (
+      invite.status === "EXPIRED" ||
+      (invite.expiresAt && new Date(invite.expiresAt) < new Date())
+    ) {
+      return NextResponse.json(
+        { error: "This invitation has expired" },
+        { status: 400 }
+      );
     }
 
     // Check if cancelled
     if (invite.status === "CANCELLED") {
-      return NextResponse.json({ error: "This invitation has been cancelled" }, { status: 400 });
+      return NextResponse.json(
+        { error: "This invitation has been cancelled" },
+        { status: 400 }
+      );
     }
 
     // Return invitation details
+    // src/app/api/invite/verify/route.ts (modified response)
     return NextResponse.json({
       valid: true,
       email: invite.email,
       familyId: invite.familyId,
       familyName: invite.family.name,
       treeNodeId: invite.treeNodeId,
+      // explicit fields
+      treeNodeFirstName: invite.treeNode?.firstName ?? null,
+      treeNodeLastName: invite.treeNode?.lastName ?? null,
+      // legacy / friendly fallback
       treeNodeName: invite.treeNode
-        ? `${invite.treeNode.firstName} ${invite.treeNode.lastName || ""}`.trim()
+        ? `${invite.treeNode.firstName} ${
+            invite.treeNode.lastName || ""
+          }`.trim()
         : null,
     });
   } catch (error) {
     console.error("❌ Invitation verification error:", error);
-    return NextResponse.json({ error: "Failed to verify invitation code" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to verify invitation code" },
+      { status: 500 }
+    );
   }
 }

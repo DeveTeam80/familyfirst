@@ -2,7 +2,7 @@
 "use client";
 
 import { useDispatch, useSelector } from "react-redux";
-import { addPost, setPosts, appendPosts, likePost } from "@/store/postSlice";
+import { addPost, setPosts, appendPosts, likePost, Post as StorePost } from "@/store/postSlice";
 import { RootState } from "@/store";
 import * as React from "react";
 import {
@@ -15,7 +15,7 @@ import {
   Skeleton,
   Stack,
   CircularProgress,
-  Button
+  Button,
 } from "@mui/material";
 import { KeyboardArrowUp } from "@mui/icons-material";
 
@@ -26,12 +26,24 @@ import ShareDialog from "@/components/dialogs/ShareDialog";
 import EventDialog from "@/components/dialogs/EventDialog";
 import DeleteDialog from "@/components/dialogs/DeleteDialog";
 import EditPostDialog from "@/components/dialogs/EditPostDialog";
-import imageCompression from 'browser-image-compression';
+import imageCompression from "browser-image-compression";
 
 // Import API helpers
-import { createPost, fetchPosts, toggleLike, addCommentApi, updatePostApi, deletePostApi } from "@/lib/api-posts";
+import {
+  createPost,
+  fetchPosts,
+  toggleLike,
+  addCommentApi,
+  updatePostApi,
+  deletePostApi,
+} from "@/lib/api-posts";
 
-// Loading Skeleton Component
+/**
+ * Use the Post type exported from the Redux slice so TS types remain consistent.
+ */
+type Post = StorePost;
+
+/* ---------------- Loading skeleton ---------------- */
 function PostCardSkeleton() {
   const theme = useTheme();
 
@@ -41,9 +53,9 @@ function PostCardSkeleton() {
       sx={{
         mb: 3,
         borderRadius: 4,
-        border: '1px solid',
+        border: "1px solid",
         borderColor: alpha(theme.palette.divider, 0.6),
-        overflow: 'hidden',
+        overflow: "hidden",
         backgroundColor: theme.palette.background.paper,
       }}
     >
@@ -67,14 +79,9 @@ function PostCardSkeleton() {
           <Skeleton width={80} height={24} sx={{ borderRadius: 2 }} />
         </Stack>
 
-        <Skeleton
-          variant="rectangular"
-          width="100%"
-          height={300}
-          sx={{ borderRadius: 4, mb: 2 }}
-        />
+        <Skeleton variant="rectangular" width="100%" height={300} sx={{ borderRadius: 4, mb: 2 }} />
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1.5 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 1.5 }}>
           <Skeleton width={100} height={16} />
           <Skeleton width={80} height={16} />
         </Box>
@@ -89,8 +96,8 @@ function PostCardSkeleton() {
   );
 }
 
-// Helper function to map Redux Post to PostCardData
-function mapPostToCardData(post: any): PostCardData {
+/* ---------------- Mapping helper ---------------- */
+function mapPostToCardData(post: Post): PostCardData {
   return {
     id: post.id,
     userId: post.userId,
@@ -98,7 +105,7 @@ function mapPostToCardData(post: any): PostCardData {
     username: post.username,
     avatar: post.avatar,
     content: post.content,
-    image: post.image,
+    image: post.image ?? undefined,
     images: post.images,
     tags: post.tags || [],
     date: post.date || post.createdAt || new Date().toISOString(),
@@ -107,17 +114,27 @@ function mapPostToCardData(post: any): PostCardData {
     comments: post.comments || [],
     eventDate: post.eventDate,
     createdAt: post.createdAt,
-    visibility: post.visibility || 'FAMILY',
+    visibility: post.visibility || "FAMILY",
   };
 }
 
+/* ---------------- Feed Component ---------------- */
 export default function Feed() {
   const theme = useTheme();
   const dispatch = useDispatch();
 
   const currentUser = useSelector((s: RootState) => s.user.currentUser);
-  const posts = useSelector((s: RootState) => s.posts.items);
-console.log("posts", posts)
+  const postsFromStore = useSelector((s: RootState) => s.posts.items);
+  // console.log("raw posts from store:", postsFromStore);
+
+  // Normalize posts state to always be an array.
+  const postsArr = React.useMemo<Post[]>(() => {
+    if (!postsFromStore) return [];
+    if (Array.isArray(postsFromStore)) return postsFromStore as Post[];
+    if (Array.isArray((postsFromStore as any).posts)) return (postsFromStore as any).posts as Post[];
+    return [];
+  }, [postsFromStore]);
+
   // Pagination & Loading states
   const [currentPage, setCurrentPage] = React.useState(1);
   const [hasMore, setHasMore] = React.useState(true);
@@ -127,7 +144,7 @@ console.log("posts", posts)
   const [showScrollTop, setShowScrollTop] = React.useState(false);
 
   // Refs
-  const observerTarget = React.useRef<HTMLDivElement>(null);
+  const observerTarget = React.useRef<HTMLDivElement | null>(null);
 
   // Composer state
   const [content, setContent] = React.useState("");
@@ -146,7 +163,7 @@ console.log("posts", posts)
   // Share dialog
   const [shareOpen, setShareOpen] = React.useState(false);
   const [sharePostId, setSharePostId] = React.useState<string | undefined>();
-  const sharePost = posts.find((p) => p.id === sharePostId);
+  const sharePost = postsArr.find((p) => p.id === sharePostId);
 
   // Delete dialog
   const [deleteOpen, setDeleteOpen] = React.useState(false);
@@ -163,9 +180,44 @@ console.log("posts", posts)
   const currentUserId = currentUser?.id || "";
   const currentAvatar = currentUser?.avatar || undefined;
 
-  // Load initial posts
+  /* ---------------- Data loading + handlers ---------------- */
+
+  const loadInitialPosts = React.useCallback(async () => {
+    try {
+      setIsLoadingPosts(true);
+      const data = await fetchPosts(1, 5);
+      // data = { posts, pagination }
+      dispatch(setPosts(data.posts));
+      setHasMore(data.pagination?.hasMore ?? false);
+      setCurrentPage(1);
+    } catch (error) {
+      console.error("Error loading posts:", error);
+    } finally {
+      setIsLoadingPosts(false);
+    }
+  }, [dispatch]);
+
+  const loadMorePosts = React.useCallback(async () => {
+    if (isLoadingMore || !hasMore) return;
+
+    try {
+      setIsLoadingMore(true);
+      const nextPage = currentPage + 1;
+      const data = await fetchPosts(nextPage, 5);
+
+      dispatch(appendPosts(data.posts));
+      setHasMore(data.pagination?.hasMore ?? false);
+      setCurrentPage(nextPage);
+    } catch (error) {
+      console.error("Error loading more posts:", error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [dispatch, currentPage, hasMore, isLoadingMore]);
+
   React.useEffect(() => {
     loadInitialPosts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Intersection Observer for infinite scroll
@@ -179,16 +231,13 @@ console.log("posts", posts)
       { threshold: 0.1 }
     );
 
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current);
-    }
+    const el = observerTarget.current;
+    if (el) observer.observe(el);
 
     return () => {
-      if (observerTarget.current) {
-        observer.unobserve(observerTarget.current);
-      }
+      if (el) observer.unobserve(el);
     };
-  }, [hasMore, isLoadingMore, isLoadingPosts]);
+  }, [hasMore, isLoadingMore, isLoadingPosts, loadMorePosts]);
 
   // Show scroll to top button
   React.useEffect(() => {
@@ -196,44 +245,12 @@ console.log("posts", posts)
       setShowScrollTop(window.scrollY > 500);
     };
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const loadInitialPosts = async () => {
-    try {
-      setIsLoadingPosts(true);
-      const data = await fetchPosts(1, 5);
-      dispatch(setPosts(data.posts));
-      setHasMore(data.pagination.hasMore);
-      setCurrentPage(1);
-    } catch (error) {
-      console.error("Error loading posts:", error);
-    } finally {
-      setIsLoadingPosts(false);
-    }
-  };
-
-  const loadMorePosts = async () => {
-    if (isLoadingMore || !hasMore) return;
-
-    try {
-      setIsLoadingMore(true);
-      const nextPage = currentPage + 1;
-      const data = await fetchPosts(nextPage, 5);
-
-      dispatch(appendPosts(data.posts));
-      setHasMore(data.pagination.hasMore);
-      setCurrentPage(nextPage);
-    } catch (error) {
-      console.error("Error loading more posts:", error);
-    } finally {
-      setIsLoadingMore(false);
-    }
-  };
-
   const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   /* Handlers */
@@ -247,9 +264,9 @@ console.log("posts", posts)
       if (selectedImages.length > 0) {
         for (let i = 0; i < selectedImages.length; i++) {
           const selectedImage = selectedImages[i];
-          const blob = await fetch(selectedImage).then(r => r.blob());
+          const blob = await fetch(selectedImage).then((r) => r.blob());
 
-          let fileToUpload = blob;
+          let fileToUpload: Blob = blob;
           if (blob.size > 8 * 1024 * 1024) {
             const file = new File([blob], "upload.jpg", { type: blob.type });
             const options = {
@@ -290,7 +307,7 @@ console.log("posts", posts)
       setSelectedImages([]);
     } catch (error) {
       console.error("❌ Error creating post:", error);
-      alert(`Failed to create post: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      alert(`Failed to create post: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   };
 
@@ -315,13 +332,13 @@ console.log("posts", posts)
   };
 
   const startEditFor = (postId: string) => {
-    const post = posts.find((x) => x.id === postId);
+    const post = postsArr.find((x) => x.id === postId);
     if (!post || post.userId !== currentUserId) return;
 
     setEditTargetId(postId);
     setEditContent(post.content ?? "");
     setEditTags([...post.tags]);
-    setEditImages(post.images ? post.images : (post.image ? [post.image] : []));
+    setEditImages(post.images ? post.images : post.image ? [post.image] : []);
     setEditOpen(true);
   };
 
@@ -330,15 +347,15 @@ console.log("posts", posts)
 
     try {
       const imageUrls: string[] = [];
-      const newImages = editImages.filter(img => img.startsWith("data:"));
-      const existingImages = editImages.filter(img => !img.startsWith("data:"));
+      const newImages = editImages.filter((img) => img.startsWith("data:"));
+      const existingImages = editImages.filter((img) => !img.startsWith("data:"));
 
       if (newImages.length > 0) {
         for (let i = 0; i < newImages.length; i++) {
           const imageDataUrl = newImages[i];
-          const blob = await fetch(imageDataUrl).then(r => r.blob());
+          const blob = await fetch(imageDataUrl).then((r) => r.blob());
 
-          let fileToUpload = blob;
+          let fileToUpload: Blob = blob;
           if (blob.size > 8 * 1024 * 1024) {
             const file = new File([blob], "upload.jpg", { type: blob.type });
             const options = {
@@ -388,7 +405,7 @@ console.log("posts", posts)
   };
 
   const askDeleteFor = (postId: string) => {
-    const post = posts.find((p) => p.id === postId);
+    const post = postsArr.find((p) => p.id === postId);
     if (!post || post.userId !== currentUserId) return;
 
     setDeleteTargetId(postId);
@@ -416,14 +433,14 @@ console.log("posts", posts)
   };
 
   const handleLike = async (postId: string) => {
-    // 🔥 Use currentUserId
+    // Optimistic update using username = currentUserId
     dispatch(likePost({ postId, username: currentUserId }));
 
     try {
       await toggleLike(postId);
     } catch (error) {
       console.error("Error toggling like:", error);
-      // Revert by toggling again
+      // Revert optimistic
       dispatch(likePost({ postId, username: currentUserId }));
     }
   };
@@ -433,10 +450,10 @@ console.log("posts", posts)
       setActiveCommentPost(null);
     } else {
       setActiveCommentPost(postId);
-      setIsLoadingComments(prev => ({ ...prev, [postId]: true }));
+      setIsLoadingComments((prev) => ({ ...prev, [postId]: true }));
 
       setTimeout(() => {
-        setIsLoadingComments(prev => ({ ...prev, [postId]: false }));
+        setIsLoadingComments((prev) => ({ ...prev, [postId]: false }));
       }, 500);
     }
   };
@@ -444,7 +461,7 @@ console.log("posts", posts)
   const handleComment = async (postId: string) => {
     if (!commentText.trim()) return;
 
-    const tempComment: PostComment = {
+    const tempComment: any = {
       id: `temp-${Date.now()}`,
       user: currentUserName,
       userId: currentUserId,
@@ -457,13 +474,13 @@ console.log("posts", posts)
     };
 
     // Optimistic update
-    dispatch(setPosts(
-      posts.map(p =>
-        p.id === postId
-          ? { ...p, comments: [...p.comments, tempComment] }
-          : p
+    dispatch(
+      setPosts(
+        postsArr.map((p) =>
+          p.id === postId ? { ...p, comments: [...(p.comments || []), tempComment] } : p
+        )
       )
-    ));
+    );
 
     const textToSubmit = commentText.trim();
     setCommentText("");
@@ -472,79 +489,75 @@ console.log("posts", posts)
       const result = await addCommentApi(postId, textToSubmit);
 
       // Replace temp comment with real one
-      dispatch(setPosts(
-        posts.map(p =>
-          p.id === postId
-            ? {
-              ...p,
-              comments: p.comments.map(c =>
-                c.id === tempComment.id ? result : c
-              )
-            }
-            : p
+      dispatch(
+        setPosts(
+          postsArr.map((p) =>
+            p.id === postId
+              ? {
+                  ...p,
+                  comments: (p.comments || []).map((c) => (c.id === tempComment.id ? result : c)),
+                }
+              : p
+          )
         )
-      ));
+      );
     } catch (error) {
       console.error("Error adding comment:", error);
-      dispatch(setPosts(
-        posts.map(p =>
-          p.id === postId
-            ? { ...p, comments: p.comments.filter(c => c.id !== tempComment.id) }
-            : p
+      // revert
+      dispatch(
+        setPosts(
+          postsArr.map((p) =>
+            p.id === postId
+              ? { ...p, comments: (p.comments || []).filter((c) => c.id !== tempComment.id) }
+              : p
+          )
         )
-      ));
+      );
       alert("Failed to add comment");
       setCommentText(textToSubmit);
     }
   };
 
   const handleLikeComment = async (commentId: string) => {
-    const post = posts.find(p =>
-      p.comments.some(c =>
-        c.id === commentId || c.replies?.some(r => r.id === commentId)
-      )
+    const post = postsArr.find((p) =>
+      (p.comments || []).some((c) => c.id === commentId || (c.replies || []).some((r) => r.id === commentId))
     );
     if (!post) return;
 
-    const originalPosts = [...posts];
+    const originalPosts = [...postsArr];
 
-    // 🔥 Recursive helper to update comment at any nesting level
-    const updateCommentLikes = (comments: PostComment[]): PostComment[] => {
-      return comments.map(comment => {
-        // If this is the target comment, update it
+    // Recursive helper to update comment at any nesting level
+    const updateCommentLikes = (comments: PostComment[] = []): PostComment[] => {
+      return comments.map((comment) => {
         if (comment.id === commentId) {
-          const isLiked = comment.likedBy?.includes(currentUserId) || false;
+          const isLiked = (comment.likedBy || []).includes(currentUserId);
           return {
             ...comment,
             likes: isLiked ? (comment.likes || 0) - 1 : (comment.likes || 0) + 1,
-            likedBy: isLiked
-              ? (comment.likedBy || []).filter(id => id !== currentUserId)
-              : [...(comment.likedBy || []), currentUserId]
-          };
+            likedBy: isLiked ? (comment.likedBy || []).filter((id) => id !== currentUserId) : [...(comment.likedBy || []), currentUserId],
+          } as any;
         }
 
-        // If this comment has replies, recursively check them
         if (comment.replies && comment.replies.length > 0) {
-          return {
-            ...comment,
-            replies: updateCommentLikes(comment.replies)
-          };
+          return { ...comment, replies: updateCommentLikes(comment.replies) } as any;
         }
 
-        return comment;
-      });
+        return comment as any;
+      }) as any;
     };
 
     // Optimistic update
-    dispatch(setPosts(
-      posts.map(p => {
-        if (p.id !== post.id) return p;
-        return {
-          ...p,
-          comments: updateCommentLikes(p.comments)
-        };
-      })
-    ));
+    dispatch(
+      setPosts(
+        postsArr.map((p) => {
+          if (p.id !== post.id) return p;
+          return {
+            ...p,
+            comments: updateCommentLikes(p.comments || []),
+          } as Post;
+        })
+      )
+    );
 
     try {
       await fetch(`/api/comments/${commentId}/like`, { method: "POST" });
@@ -555,41 +568,35 @@ console.log("posts", posts)
   };
 
   const handleEditComment = async (commentId: string, newText: string) => {
-    const post = posts.find(p =>
-      p.comments.some(c =>
-        c.id === commentId || c.replies?.some(r => r.id === commentId)
-      )
+    const post = postsArr.find((p) =>
+      (p.comments || []).some((c) => c.id === commentId || (c.replies || []).some((r) => r.id === commentId))
     );
     if (!post) return;
 
-    const originalPosts = [...posts];
+    const originalPosts = [...postsArr];
 
-    // 🔥 Recursive helper
-    const updateCommentText = (comments: PostComment[]): PostComment[] => {
-      return comments.map(comment => {
+    // Recursive helper
+    const updateCommentText = (comments: PostComment[] = []): PostComment[] => {
+      return comments.map((comment) => {
         if (comment.id === commentId) {
-          return { ...comment, text: newText };
+          return { ...comment, text: newText } as any;
         }
         if (comment.replies && comment.replies.length > 0) {
-          return {
-            ...comment,
-            replies: updateCommentText(comment.replies)
-          };
+          return { ...comment, replies: updateCommentText(comment.replies) } as any;
         }
-        return comment;
-      });
+        return comment as any;
+      }) as any;
     };
 
     // Optimistic update
-    dispatch(setPosts(
-      posts.map(p => {
-        if (p.id !== post.id) return p;
-        return {
-          ...p,
-          comments: updateCommentText(p.comments)
-        };
-      })
-    ));
+    dispatch(
+      setPosts(
+        postsArr.map((p) => {
+          if (p.id !== post.id) return p;
+          return { ...p, comments: updateCommentText(p.comments || []) } as Post;
+        })
+      )
+    );
 
     try {
       await fetch(`/api/comments/${commentId}`, {
@@ -604,38 +611,30 @@ console.log("posts", posts)
   };
 
   const handleDeleteComment = async (commentId: string) => {
-    const post = posts.find(p =>
-      p.comments.some(c =>
-        c.id === commentId || c.replies?.some(r => r.id === commentId)
-      )
+    const post = postsArr.find((p) =>
+      (p.comments || []).some((c) => c.id === commentId || (c.replies || []).some((r) => r.id === commentId))
     );
     if (!post) return;
 
-    const originalPosts = [...posts];
+    const originalPosts = [...postsArr];
 
-    // 🔥 Recursive helper to delete at any level
-    const deleteCommentRecursive = (comments: PostComment[]): PostComment[] => {
+    const deleteCommentRecursive = (comments: PostComment[] = []): PostComment[] => {
       return comments
-        .filter(comment => comment.id !== commentId)
-        .map(comment => {
+        .filter((comment) => comment.id !== commentId)
+        .map((comment) => {
           if (comment.replies && comment.replies.length > 0) {
-            return {
-              ...comment,
-              replies: deleteCommentRecursive(comment.replies)
-            };
+            return { ...comment, replies: deleteCommentRecursive(comment.replies) } as any;
           }
-          return comment;
-        });
+          return comment as any;
+        }) as any;
     };
 
     // Optimistic removal
-    dispatch(setPosts(
-      posts.map(p =>
-        p.id === post.id
-          ? { ...p, comments: deleteCommentRecursive(p.comments) }
-          : p
+    dispatch(
+      setPosts(
+        postsArr.map((p) => (p.id === post.id ? { ...p, comments: deleteCommentRecursive(p.comments || []) } : p))
       )
-    ));
+    );
 
     try {
       await fetch(`/api/comments/${commentId}`, { method: "DELETE" });
@@ -646,10 +645,10 @@ console.log("posts", posts)
   };
 
   const handleReplyComment = async (commentId: string, text: string) => {
-    const post = posts.find(p => p.comments.some(c => c.id === commentId));
+    const post = postsArr.find((p) => (p.comments || []).some((c) => c.id === commentId));
     if (!post) return;
 
-    const tempReply: PostComment = {
+    const tempReply: any = {
       id: `temp-reply-${Date.now()}`,
       user: currentUserName,
       userId: currentUserId,
@@ -661,22 +660,20 @@ console.log("posts", posts)
       createdAt: new Date().toISOString(),
     };
 
-    const originalPosts = [...posts];
+    const originalPosts = [...postsArr];
 
     // Optimistic update
-    dispatch(setPosts(
-      posts.map(p => {
-        if (p.id !== post.id) return p;
-        return {
-          ...p,
-          comments: p.comments.map(c =>
-            c.id === commentId
-              ? { ...c, replies: [...(c.replies || []), tempReply] }
-              : c
-          )
-        };
-      })
-    ));
+    dispatch(
+      setPosts(
+        postsArr.map((p) => {
+          if (p.id !== post.id) return p;
+          return {
+            ...p,
+            comments: (p.comments || []).map((c) => (c.id === commentId ? { ...c, replies: [...(c.replies || []), tempReply] } : c)),
+          } as Post;
+        })
+      )
+    );
 
     try {
       await fetch(`/api/posts/${post.id}/comments`, {
@@ -692,8 +689,10 @@ console.log("posts", posts)
     }
   };
 
+  /* ---------------- Render ---------------- */
+
   return (
-    <Container maxWidth="md" sx={{ py: 4, pt: 0, position: 'relative' }}>
+    <Container maxWidth="md" sx={{ py: 4, pt: 0, position: "relative" }}>
       {/* Post Composer */}
       <Box sx={{ mb: 3 }}>
         <PostComposer
@@ -715,7 +714,7 @@ console.log("posts", posts)
           <PostCardSkeleton />
           <PostCardSkeleton />
         </Box>
-      ) : posts.length === 0 ? (
+      ) : postsArr.length === 0 ? (
         <Paper
           elevation={0}
           sx={{
@@ -737,14 +736,14 @@ console.log("posts", posts)
       ) : (
         <>
           <Box>
-            {posts.map((post) => {
+            {postsArr.map((post: Post) => {
               const postCardData = mapPostToCardData(post);
 
               return (
                 <React.Fragment key={post.id}>
                   <PostCard
                     post={postCardData}
-                    currentUserName={currentUserName}    
+                    currentUserName={currentUserName}
                     currentUserId={currentUserId}
                     onLike={handleLike}
                     onCommentClick={handleCommentClick}
@@ -777,7 +776,7 @@ console.log("posts", posts)
           </Box>
 
           {/* Infinite Scroll Trigger */}
-          <Box ref={observerTarget} sx={{ py: 2, textAlign: 'center' }}>
+          <Box ref={observerTarget} sx={{ py: 2, textAlign: "center" }}>
             {isLoadingMore && (
               <Stack spacing={2} alignItems="center">
                 <CircularProgress size={32} />
@@ -786,7 +785,7 @@ console.log("posts", posts)
                 </Typography>
               </Stack>
             )}
-            {!hasMore && posts.length > 0 && (
+            {!hasMore && postsArr.length > 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
                 🎉 You've reached the end!
               </Typography>
@@ -800,23 +799,23 @@ console.log("posts", posts)
         <Button
           onClick={scrollToTop}
           sx={{
-            position: 'fixed',
+            position: "fixed",
             bottom: 32,
             right: 32,
             minWidth: 56,
             width: 56,
             height: 56,
-            borderRadius: '50%',
-            bgcolor: 'primary.main',
-            color: 'white',
+            borderRadius: "50%",
+            bgcolor: "primary.main",
+            color: "white",
             boxShadow: 4,
             zIndex: 1000,
-            '&:hover': {
-              bgcolor: 'primary.dark',
-              transform: 'translateY(-4px)',
+            "&:hover": {
+              bgcolor: "primary.dark",
+              transform: "translateY(-4px)",
               boxShadow: 6,
             },
-            transition: 'all 0.3s',
+            transition: "all 0.3s",
           }}
         >
           <KeyboardArrowUp />
@@ -824,14 +823,7 @@ console.log("posts", posts)
       )}
 
       {/* Dialogs */}
-      <ShareDialog
-        open={shareOpen}
-        onClose={() => setShareOpen(false)}
-        user={sharePost?.user}
-        content={sharePost?.content}
-        tags={sharePost?.tags}
-        postId={sharePost?.id}
-      />
+      <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} user={sharePost?.user} content={sharePost?.content} tags={sharePost?.tags} postId={sharePost?.id} />
 
       <EventDialog
         open={openEventDialog}
@@ -843,11 +835,7 @@ console.log("posts", posts)
         onSubmit={handleAddEventPost}
       />
 
-      <DeleteDialog
-        open={deleteOpen}
-        onCancel={() => setDeleteOpen(false)}
-        onConfirm={confirmDelete}
-      />
+      <DeleteDialog open={deleteOpen} onCancel={() => setDeleteOpen(false)} onConfirm={confirmDelete} />
 
       <EditPostDialog
         open={editOpen}

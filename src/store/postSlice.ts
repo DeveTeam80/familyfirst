@@ -30,6 +30,7 @@ export interface Post {
   date: string;
   createdAt: string;
   updatedAt: string;
+  visibility: "FAMILY" | "PUBLIC" | "PRIVATE" | undefined;
 }
 
 interface PostState {
