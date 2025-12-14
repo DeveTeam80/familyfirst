@@ -3,10 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { notifyPostLike } from "@/lib/notifications"; // ⭐ Add import
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> } // ⭐ Changed to Promise
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
 
@@ -15,7 +16,20 @@ export async function POST(
   }
 
   try {
-    const { id } = await params; // ⭐ Await params
+    const { id } = await params;
+
+    // ⭐ Get post details first (needed for notification)
+    const post = await prisma.post.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        authorId: true,
+      },
+    });
+
+    if (!post) {
+      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    }
 
     // Check if already liked
     const existingReaction = await prisma.reaction.findUnique({
@@ -48,6 +62,17 @@ export async function POST(
           type: "LIKE",
         },
       });
+
+      // ⭐ Send notification to post author
+      if (post.authorId && post.authorId !== session.user.id) {
+        await notifyPostLike({
+          postId: id,
+          postAuthorId: post.authorId,
+          likerUserId: session.user.id,
+          likerName: session.user.name || "Someone",
+          likerAvatar: session.user.image || undefined,
+        });
+      }
 
       return NextResponse.json({ liked: true });
     }

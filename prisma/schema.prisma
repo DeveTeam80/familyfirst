@@ -14,6 +14,7 @@ datasource db {
 // USERS & AUTHENTICATION
 // ============================================
 
+// Update User model - add these fields
 model User {
   id            String    @id @default(uuid())
   email         String    @unique
@@ -22,9 +23,13 @@ model User {
   username      String?   @unique
   passwordHash  String    @map("password_hash")
   avatarUrl     String?   @map("avatar_url")
-  bio           String?   @db.Text // optional profile bio
-  location      String? // optional location
-  // Soft delete
+  bio           String?   @db.Text
+  location      String?
+  
+  // ⭐ NEW: Online status tracking
+  isOnline      Boolean   @default(false) @map("is_online")
+  lastSeenAt    DateTime? @map("last_seen_at")
+  
   deletedAt     DateTime? @map("deleted_at")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -33,11 +38,11 @@ model User {
   // Relations
   familyMemberships FamilyMember[]
   createdFamilies   Family[]         @relation("FamilyCreator")
-  ownedFamilies     Family[]         @relation("FamilyOwner") // <-- inverse for Family.owner
+  ownedFamilies     Family[]         @relation("FamilyOwner")
   posts             Post[]
   postComments      Comment[]
   commentLikes      CommentLike[]
-  reactions         Reaction[] // ⭐ Add this line
+  reactions         Reaction[]
   recipes           Recipe[]
   recipeComments    RecipeComment[]
   calendarEvents    CalendarEvent[]
@@ -46,9 +51,9 @@ model User {
   treeNode          FamilyTreeNode?  @relation("UserTreeNode")
   uploadedPhotos    Photo[]
   createdTreeNodes  FamilyTreeNode[] @relation("TreeNodeCreator")
-
-  emailChanges   EmailChange[] // relation for email changes
-  passwordResets PasswordReset[] // relation for password resets
+  emailChanges      EmailChange[]
+  passwordResets    PasswordReset[]
+  notifications     Notification[]   // ⭐ NEW: Add this relation
 
   @@map("users")
 }
@@ -535,6 +540,7 @@ enum RsvpStatus {
 // NOTIFICATIONS (Future feature)
 // ============================================
 
+// Update Notification model - add actor fields
 model Notification {
   id     String @id @default(uuid())
   userId String @map("user_id")
@@ -544,16 +550,26 @@ model Notification {
   message String           @db.Text
 
   // Link to related entity
-  relatedId   String? @map("related_id") // postId, eventId, etc.
-  relatedType String? @map("related_type") // "post", "event", etc.
+  relatedId   String? @map("related_id")
+  relatedType String? @map("related_type")
+  
+  // ⭐ NEW: Actor info (who triggered the notification)
+  actorId     String? @map("actor_id")
+  actorName   String? @map("actor_name")
+  actorAvatar String? @map("actor_avatar")
 
   isRead Boolean @default(false) @map("is_read")
 
   createdAt DateTime @default(now()) @map("created_at")
 
+  // ⭐ NEW: Add relation
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, isRead])
+  @@index([createdAt])
   @@map("notifications")
 }
+
 
 enum NotificationType {
   NEW_POST

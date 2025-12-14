@@ -71,6 +71,10 @@ import { RootState } from "@/store";
 import { toggleMode } from "@/store/themeSlice";
 import { Style_Script } from "next/font/google";
 import Image from "next/image";
+import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
 
 const styleScript = Style_Script({
   subsets: ["latin"],
@@ -96,13 +100,13 @@ type UpcomingEvent = {
   title: string;
   date: string;
   color:
-    | "primary"
-    | "secondary"
-    | "default"
-    | "error"
-    | "info"
-    | "success"
-    | "warning";
+  | "primary"
+  | "secondary"
+  | "default"
+  | "error"
+  | "info"
+  | "success"
+  | "warning";
 };
 
 const drawerWidth = 240;
@@ -164,6 +168,8 @@ const Drawer = styled(MuiDrawer)(({ theme }) => ({
   },
 }));
 
+dayjs.extend(relativeTime);
+
 /* ---------------- Header Component ---------------- */
 export default function Header({ children }: { children: React.ReactNode }) {
   const theme = useTheme();
@@ -179,33 +185,41 @@ export default function Header({ children }: { children: React.ReactNode }) {
 
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
-const getDisplayInfo = () => {
-  if (currentUser && "username" in currentUser) {
-    return {
-      displayName: currentUser.name || currentUser.username || "User",
-      username: currentUser.username || currentUser.name?.toLowerCase().replace(/\s+/g, "") || "user",
-      avatar: currentUser.avatar ?? null,
-    };
-  }
+  const getDisplayInfo = () => {
+    if (currentUser && "username" in currentUser) {
+      return {
+        displayName: currentUser.name || currentUser.username || "User",
+        username: currentUser.username || currentUser.name?.toLowerCase().replace(/\s+/g, "") || "user",
+        avatar: currentUser.avatar ?? null,
+      };
+    }
 
-  if (session?.user) {
-    return {
-      displayName: session.user.name || "User",
-      username:
-        (session.user as any).username ||
-        session.user.name?.toLowerCase().replace(/\s+/g, "") ||
-        session.user.email?.split("@")[0] ||
-        "user",
-      avatar: session.user.image as string | null | undefined,
-    };
-  }
+    if (session?.user) {
+      return {
+        displayName: session.user.name || "User",
+        username:
+          (session.user as any).username ||
+          session.user.name?.toLowerCase().replace(/\s+/g, "") ||
+          session.user.email?.split("@")[0] ||
+          "user",
+        avatar: session.user.image as string | null | undefined,
+      };
+    }
 
-  return {
-    displayName: "Profile",
-    username: "profile",
-    avatar: null as string | null,
+    return {
+      displayName: "Profile",
+      username: "profile",
+      avatar: null as string | null,
+    };
   };
-};
+  useOnlineStatus();
+  const {
+    notifications,
+    unreadCount,
+    onlineMembers,
+    connected,
+    markAsRead
+  } = useRealtimeUpdates();
 
 
   const { displayName, username, avatar } = getDisplayInfo();
@@ -217,32 +231,6 @@ const getDisplayInfo = () => {
     router.push("/login");
   };
 
-  // Notifications state
-  const [notifications, setNotifications] = React.useState<Notification[]>([
-    {
-      id: "1",
-      title: "New comment",
-      body: "Alice commented on your post",
-      read: false,
-      time: "5m ago",
-    },
-    {
-      id: "2",
-      title: "Event reminder",
-      body: "Family Reunion in 5 days",
-      read: false,
-      time: "2h ago",
-    },
-    {
-      id: "3",
-      title: "Like",
-      body: "Bob liked your photo",
-      read: true,
-      time: "1d ago",
-    },
-  ]);
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
 
   const [notifAnchorEl, setNotifAnchorEl] = React.useState<null | HTMLElement>(
     null
@@ -258,9 +246,6 @@ const getDisplayInfo = () => {
     setNotifAnchorEl(null);
   };
 
-  const markAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  };
 
   // User popover state
   const [userAnchorEl, setUserAnchorEl] = React.useState<null | HTMLElement>(
@@ -287,44 +272,47 @@ const getDisplayInfo = () => {
     await handleLogout();
   };
 
-  // Drawer nav config
+
   const mainMenu: {
     text: string;
     icon: React.ReactNode;
     href: string;
     match: (p: string) => boolean;
+    comingSoon?: boolean; // ⭐ Add this property
   }[] = [
-    {
-      text: "Activity",
-      icon: <Home />,
-      href: "/feed",
-      match: (p) => p.startsWith("/feed") || p === "/",
-    },
-    {
-      text: "Calendar",
-      icon: <EventIcon />,
-      href: "/calendar",
-      match: (p) => p.startsWith("/calendar"),
-    },
-    {
-      text: "Family Tree",
-      icon: <TbBinaryTree />,
-      href: "/tree",
-      match: (p) => p.startsWith("/tree"),
-    },
-    {
-      text: "Gallery",
-      icon: <PhotoCameraBack />,
-      href: "/gallery",
-      match: (p) => p.startsWith("/gallery"),
-    },
-    {
-      text: "Recipe Book",
-      icon: <MenuBook />,
-      href: "/recipes",
-      match: (p) => p.startsWith("/recipes"),
-    },
-  ];
+      {
+        text: "Activity",
+        icon: <Home />,
+        href: "/feed",
+        match: (p) => p.startsWith("/feed") || p === "/",
+      },
+      {
+        text: "Calendar",
+        icon: <EventIcon />,
+        href: "/calendar",
+        match: (p) => p.startsWith("/calendar"),
+        comingSoon: true, // ⭐ Add this
+      },
+      {
+        text: "Family Tree",
+        icon: <TbBinaryTree />,
+        href: "/tree",
+        match: (p) => p.startsWith("/tree"),
+      },
+      {
+        text: "Gallery",
+        icon: <PhotoCameraBack />,
+        href: "/gallery",
+        match: (p) => p.startsWith("/gallery"),
+      },
+      {
+        text: "Recipe Book",
+        icon: <MenuBook />,
+        href: "/recipes",
+        match: (p) => p.startsWith("/recipes"),
+        comingSoon: true, // ⭐ Add this
+      },
+    ];
 
   const secondaryMenu: {
     text: string;
@@ -333,29 +321,29 @@ const getDisplayInfo = () => {
     href?: string;
     match?: (p: string) => boolean;
   }[] = [
-    {
-      text: mode === "light" ? "Dark Mode" : "Light Mode",
-      icon: mode === "light" ? <DarkModeIcon /> : <LightModeIcon />,
-      onClick: () => dispatch(toggleMode()),
-    },
-    {
-      text: "Settings",
-      icon: <SettingsIcon />,
-      href: "/settings",
-      match: (p) => p.startsWith("/settings"),
-    },
-    {
-      text: "Help",
-      icon: <HelpOutlineIcon />,
-      href: "/help",
-      match: (p) => p.startsWith("/help"),
-    },
-    {
-      text: "Logout",
-      icon: <LogoutIcon />,
-      onClick: handleLogout,
-    },
-  ];
+      {
+        text: mode === "light" ? "Dark Mode" : "Light Mode",
+        icon: mode === "light" ? <DarkModeIcon /> : <LightModeIcon />,
+        onClick: () => dispatch(toggleMode()),
+      },
+      {
+        text: "Settings",
+        icon: <SettingsIcon />,
+        href: "/settings",
+        match: (p) => p.startsWith("/settings"),
+      },
+      {
+        text: "Help",
+        icon: <HelpOutlineIcon />,
+        href: "/help",
+        match: (p) => p.startsWith("/help"),
+      },
+      {
+        text: "Logout",
+        icon: <LogoutIcon />,
+        onClick: handleLogout,
+      },
+    ];
 
   const contacts: Contact[] = [
     { name: "Alice", avatar: "/avatar4.png", online: true },
@@ -369,6 +357,8 @@ const getDisplayInfo = () => {
   ];
 
   // Drawer Content Component
+  // Update the DrawerContent component (around line 340):
+
   const DrawerContent = () => (
     <>
       <DrawerHeader />
@@ -382,13 +372,26 @@ const getDisplayInfo = () => {
               <ListItemButton
                 component={Link}
                 href={item.href}
-                onClick={() => isMobile && setMobileOpen(false)}
+                onClick={(e) => {
+                  // ⭐ Prevent navigation if coming soon
+                  if (item.comingSoon) {
+                    e.preventDefault();
+                  }
+                  if (isMobile) {
+                    setMobileOpen(false);
+                  }
+                }}
                 sx={{
                   minHeight: 48,
                   borderRadius: 2,
                   px: 2,
                   transition: "all 0.2s",
-                  ...(active && {
+                  // ⭐ Disable style if coming soon
+                  ...(item.comingSoon && {
+                    opacity: 0.6,
+                    cursor: "not-allowed",
+                  }),
+                  ...(active && !item.comingSoon && {
                     bgcolor: alpha(theme.palette.primary.main, 0.12),
                     color: theme.palette.primary.main,
                     fontWeight: 600,
@@ -396,9 +399,15 @@ const getDisplayInfo = () => {
                       bgcolor: alpha(theme.palette.primary.main, 0.16),
                     },
                   }),
-                  ...(!active && {
+                  ...(!active && !item.comingSoon && {
                     "&:hover": {
                       bgcolor: alpha(theme.palette.action.hover, 0.6),
+                    },
+                  }),
+                  // ⭐ Different hover for coming soon items
+                  ...(item.comingSoon && {
+                    "&:hover": {
+                      bgcolor: alpha(theme.palette.action.hover, 0.3),
                     },
                   }),
                 }}
@@ -419,6 +428,21 @@ const getDisplayInfo = () => {
                     fontWeight: active ? 600 : 500,
                   }}
                 />
+                {/* ⭐ Add "Coming Soon" chip */}
+                {item.comingSoon && (
+                  <Chip
+                    label="Soon"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      fontWeight: 600,
+                      bgcolor: alpha(theme.palette.primary.main, 0.1),
+                      color: theme.palette.primary.main,
+                      border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+                    }}
+                  />
+                )}
               </ListItemButton>
             </ListItem>
           );
@@ -427,7 +451,7 @@ const getDisplayInfo = () => {
 
       <Divider sx={{ mx: 2, my: 1 }} />
 
-      {/* Secondary Menu */}
+      {/* Secondary Menu - unchanged */}
       <List sx={{ px: 1 }}>
         {secondaryMenu.map((item) => {
           const active = item.match?.(pathname) ?? false;
@@ -780,7 +804,7 @@ const getDisplayInfo = () => {
           </Typography>
           <Button
             size="small"
-            onClick={markAllAsRead}
+            onClick={() => markAsRead()}
             disabled={unreadCount === 0}
             sx={{ textTransform: "none", fontWeight: 600 }}
           >
@@ -799,13 +823,21 @@ const getDisplayInfo = () => {
               <ListItem
                 key={n.id}
                 disableGutters
+                onClick={() => {
+                  if (!n.isRead) markAsRead(n.id);
+                  // Navigate to related content if needed
+                  if (n.relatedType === "post" && n.relatedId) {
+                    router.push(`/post/${n.relatedId}`);
+                  }
+                  handleNotifClose();
+                }}
                 sx={{
                   px: 2,
                   py: 1.5,
-                  bgcolor: n.read
+                  bgcolor: n.isRead
                     ? "transparent"
                     : alpha(theme.palette.primary.main, 0.08),
-                  borderLeft: n.read
+                  borderLeft: n.isRead
                     ? "none"
                     : `3px solid ${theme.palette.primary.main}`,
                   transition: "all 0.2s",
@@ -817,6 +849,7 @@ const getDisplayInfo = () => {
               >
                 <ListItemAvatar>
                   <Avatar
+                    src={n.actorAvatar || undefined}
                     sx={{
                       width: 40,
                       height: 40,
@@ -824,14 +857,14 @@ const getDisplayInfo = () => {
                       fontWeight: 600,
                     }}
                   >
-                    {n.title[0]}
+                    {n.actorName?.[0] || n.title[0]}
                   </Avatar>
                 </ListItemAvatar>
                 <ListItemText
                   primary={
                     <Typography
                       variant="body2"
-                      sx={{ fontWeight: n.read ? 400 : 600 }}
+                      sx={{ fontWeight: n.isRead ? 400 : 600 }}
                     >
                       {n.title}
                     </Typography>
@@ -843,10 +876,11 @@ const getDisplayInfo = () => {
                         display="block"
                         sx={{ mb: 0.5 }}
                       >
-                        {n.body}
+                        {n.message}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {n.time}
+                        {/* ⭐ Use dayjs for relative time */}
+                        {dayjs(n.createdAt).fromNow()}
                       </Typography>
                     </>
                   }
@@ -930,52 +964,72 @@ const getDisplayInfo = () => {
                 Online Now
               </Typography>
               <Box display="flex" flexDirection="column" gap={1.5}>
-                {contacts.map((contact, i) => (
-                  <Box
-                    key={i}
-                    display="flex"
-                    alignItems="center"
-                    gap={1.5}
-                    sx={{
-                      p: 1,
-                      borderRadius: 2,
-                      transition: "all 0.2s",
-                      "&:hover": {
-                        bgcolor: alpha(theme.palette.action.hover, 0.5),
-                        cursor: "pointer",
-                      },
-                    }}
+                {onlineMembers.length === 0 ? (
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ textAlign: "center", py: 2 }}
                   >
-                    <Badge
-                      overlap="circular"
-                      anchorOrigin={{
-                        vertical: "bottom",
-                        horizontal: "right",
+                    No one is online right now
+                  </Typography>
+                ) : (
+                  onlineMembers.map((member) => (
+                    <Box
+                      key={member.id}
+                      display="flex"
+                      alignItems="center"
+                      gap={1.5}
+                      sx={{
+                        p: 1,
+                        borderRadius: 2,
+                        transition: "all 0.2s",
+                        "&:hover": {
+                          bgcolor: alpha(theme.palette.action.hover, 0.5),
+                          cursor: "pointer",
+                        },
                       }}
-                      badgeContent={
-                        contact.online ? (
-                          <CircleIcon
-                            sx={{
-                              width: 12,
-                              height: 12,
-                              color: "success.main",
-                              border: `2px solid ${theme.palette.background.paper}`,
-                              borderRadius: "50%",
-                            }}
-                          />
-                        ) : null
-                      }
                     >
-                      <Avatar
-                        src={contact.avatar}
-                        sx={{ width: 40, height: 40 }}
-                      />
-                    </Badge>
-                    <Typography variant="body2" fontWeight={500}>
-                      {contact.name}
-                    </Typography>
-                  </Box>
-                ))}
+                      <Badge
+                        overlap="circular"
+                        anchorOrigin={{
+                          vertical: "bottom",
+                          horizontal: "right",
+                        }}
+                        badgeContent={
+                          member.online ? (
+                            <CircleIcon
+                              sx={{
+                                width: 12,
+                                height: 12,
+                                color: "success.main",
+                                border: `2px solid ${theme.palette.background.paper}`,
+                                borderRadius: "50%",
+                              }}
+                            />
+                          ) : null
+                        }
+                      >
+                        <Avatar
+                          src={member.avatar || undefined}
+                          sx={{ width: 40, height: 40 }}
+                        >
+                          {member.name[0]}
+                        </Avatar>
+                      </Badge>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="body2" fontWeight={500} noWrap>
+                          {member.name}
+                        </Typography>
+                        {!member.online && member.lastSeen && (
+                          <Typography variant="caption" color="text.secondary">
+                            {/* ⭐ Use dayjs for last seen */}
+                            {dayjs(member.lastSeen).fromNow()}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  ))
+                )}
               </Box>
             </Paper>
 
@@ -997,57 +1051,33 @@ const getDisplayInfo = () => {
               >
                 Upcoming Events
               </Typography>
-              <Box display="flex" flexDirection="column" gap={1.5}>
-                {upcomingEvents.map((event, i) => (
-                  <Paper
-                    key={i}
-                    elevation={0}
-                    sx={{
-                      p: 1.5,
-                      borderRadius: 2,
-                      border: "1px solid",
-                      borderColor: "divider",
-                      transition: "all 0.2s",
-                      "&:hover": {
-                        borderColor: theme.palette.primary.main,
-                        transform: "translateY(-2px)",
-                        boxShadow: `0 4px 12px ${alpha(
-                          theme.palette.primary.main,
-                          0.15
-                        )}`,
-                        cursor: "pointer",
-                      },
-                    }}
-                  >
-                    <Typography
-                      variant="body2"
-                      fontWeight={600}
-                      gutterBottom
-                    >
-                      {event.title}
-                    </Typography>
-                    <Chip
-                      label={event.date}
-                      size="small"
-                      color={event.color}
-                      sx={{ fontSize: "0.7rem", fontWeight: 500 }}
-                    />
-                  </Paper>
-                ))}
-              </Box>
-              <Button
-                fullWidth
-                variant="outlined"
-                size="small"
+
+              <Box
                 sx={{
-                  mt: 2,
-                  borderRadius: 2,
-                  textTransform: "none",
-                  fontWeight: 600,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 1.5,
+                  py: 3,
                 }}
               >
-                View All Events
-              </Button>
+                <Chip
+                  label="Coming Soon"
+                  color="primary"
+                  variant="outlined"
+                  sx={{
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                  }}
+                />
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ textAlign: "center" }}
+                >
+                  Calendar events feature in development
+                </Typography>
+              </Box>
             </Paper>
           </Grid>
         </Grid>
