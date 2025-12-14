@@ -1,7 +1,9 @@
+// src/app/api/posts/[id]/comments/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { notifyNewComment } from "@/lib/notifications"; // ⭐ Add import
 
 export async function POST(
   request: NextRequest,
@@ -20,6 +22,19 @@ export async function POST(
 
     if (!text?.trim()) {
       return NextResponse.json({ error: "Comment text required" }, { status: 400 });
+    }
+
+    // ⭐ Get post details first (needed for notification)
+    const post = await prisma.post.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        authorId: true,
+      },
+    });
+
+    if (!post) {
+      return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
     const comment = await prisma.comment.create({
@@ -55,6 +70,18 @@ export async function POST(
         },
       },
     });
+
+    // ⭐ Send notification to post author (only if not commenting on own post)
+    if (post.authorId && post.authorId !== session.user.id) {
+      await notifyNewComment({
+        postId: id,
+        postAuthorId: post.authorId,
+        commenterId: session.user.id,
+        commenterName: session.user.name || "Someone",
+        commenterAvatar: session.user.image || undefined,
+        commentText: text.trim(),
+      });
+    }
 
     return NextResponse.json({
       id: comment.id,

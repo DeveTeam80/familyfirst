@@ -24,6 +24,7 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  Skeleton,
 } from "@mui/material";
 
 import GroupIcon from "@mui/icons-material/Group";
@@ -46,6 +47,69 @@ type MemberItem = {
   role: string; // OWNER | ADMIN | MEMBER
 };
 
+// ⭐ Skeleton Loading Components
+const EmailChangeSkeleton = () => (
+  <Paper sx={{ p: 2.5 }}>
+    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+      <Skeleton variant="circular" width={24} height={24} />
+      <Skeleton variant="text" width={150} height={32} />
+    </Stack>
+    <Stack direction="row" spacing={1}>
+      <Skeleton variant="rounded" width="100%" height={40} />
+      <Skeleton variant="rounded" width={100} height={40} />
+    </Stack>
+  </Paper>
+);
+
+const PasswordChangeSkeleton = () => (
+  <Paper sx={{ p: 2.5 }}>
+    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+      <Skeleton variant="circular" width={24} height={24} />
+      <Skeleton variant="text" width={180} height={32} />
+    </Stack>
+    <Stack spacing={1.25}>
+      <Skeleton variant="rounded" height={40} />
+      <Skeleton variant="rounded" height={40} />
+      <Skeleton variant="rounded" height={40} />
+      <Stack direction="row" justifyContent="flex-end">
+        <Skeleton variant="rounded" width={150} height={36} />
+      </Stack>
+    </Stack>
+  </Paper>
+);
+
+const MemberListSkeleton = () => (
+  <Paper sx={{ p: 2.5 }}>
+    <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+      <Skeleton variant="circular" width={24} height={24} />
+      <Skeleton variant="text" width={200} height={32} />
+      <Box flex={1} />
+      <Skeleton variant="rounded" width={80} height={32} />
+    </Stack>
+    <List dense>
+      {[1, 2, 3].map((i) => (
+        <ListItem
+          key={i}
+          secondaryAction={
+            <Stack direction="row" spacing={1}>
+              <Skeleton variant="circular" width={32} height={32} />
+              <Skeleton variant="circular" width={32} height={32} />
+            </Stack>
+          }
+        >
+          <ListItemAvatar>
+            <Skeleton variant="circular" width={40} height={40} />
+          </ListItemAvatar>
+          <ListItemText
+            primary={<Skeleton variant="text" width="60%" />}
+            secondary={<Skeleton variant="text" width="40%" />}
+          />
+        </ListItem>
+      ))}
+    </List>
+  </Paper>
+);
+
 export default function SettingsPage() {
   const router = useRouter();
   const currentUser = useSelector((s: RootState) => s.user.currentUser);
@@ -54,6 +118,9 @@ export default function SettingsPage() {
   const [members, setMembers] = React.useState<MemberItem[]>([]);
   const [loadingMembers, setLoadingMembers] = React.useState(false);
   const [membersError, setMembersError] = React.useState<string | null>(null);
+  
+  // ⭐ Add initial loading state
+  const [initialLoading, setInitialLoading] = React.useState(true);
 
   const [toast, setToast] = React.useState<{ severity: "success" | "error" | "info"; text: string } | null>(null);
   const [confirm, setConfirm] = React.useState<{
@@ -75,7 +142,10 @@ export default function SettingsPage() {
 
   // Load members
   React.useEffect(() => {
-    if (!activeFamilyId) return;
+    if (!activeFamilyId) {
+      setInitialLoading(false);
+      return;
+    }
     refreshMembers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFamilyId, currentUser?.id]);
@@ -105,6 +175,7 @@ export default function SettingsPage() {
       setMembersError(err?.message || "Failed to load family members");
     } finally {
       setLoadingMembers(false);
+      setInitialLoading(false); // ⭐ Stop initial loading
     }
   };
 
@@ -172,7 +243,7 @@ export default function SettingsPage() {
     if (confirm.action === "promote") promoteToAdmin(confirm.userId);
     if (confirm.action === "demote") demoteUser(confirm.userId);
     setConfirm(null);
-  };1
+  };
 
   // Invite user → redirect
   const inviteFromTree = () => {
@@ -189,7 +260,7 @@ export default function SettingsPage() {
 
     setEmailBusy(true);
     try {
-      const res = await fetch("/api/user/change-email", {
+      const res = await fetch("/api/users/change-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ newEmail }),
@@ -221,7 +292,7 @@ export default function SettingsPage() {
 
     setPasswordBusy(true);
     try {
-      const res = await fetch("/api/user/change-password", {
+      const res = await fetch("/api/users/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ current: currentPassword, next: nextPassword }),
@@ -241,6 +312,29 @@ export default function SettingsPage() {
     }
   };
 
+  // ⭐ Show skeleton loader on initial load
+  if (initialLoading) {
+    return (
+      <Box sx={{ p: 3, maxWidth: 1100, mx: "auto" }}>
+        <Skeleton variant="text" width={150} height={40} sx={{ mb: 2 }} />
+
+        <Grid container spacing={3}>
+          <Grid size={{ xs: 12, md: 12 }}>
+            <EmailChangeSkeleton />
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 12 }}>
+            <PasswordChangeSkeleton />
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 12 }}>
+            <MemberListSkeleton />
+          </Grid>
+        </Grid>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ p: 3, maxWidth: 1100, mx: "auto" }}>
       <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
@@ -248,9 +342,8 @@ export default function SettingsPage() {
       </Typography>
 
       <Grid container spacing={3}>
-
         {/* Change Email */}
-                      <Grid size={{ xs: 12, md: 12}}>
+        <Grid size={{ xs: 12, md: 12 }}>
           <Paper sx={{ p: 2.5 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
               <MailOutlineIcon fontSize="small" />
@@ -277,7 +370,7 @@ export default function SettingsPage() {
         </Grid>
 
         {/* Change Password */}
-                      <Grid size={{ xs: 12, md: 12}}>
+        <Grid size={{ xs: 12, md: 12 }}>
           <Paper sx={{ p: 2.5 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
               <LockResetIcon fontSize="small" />
@@ -322,23 +415,36 @@ export default function SettingsPage() {
         </Grid>
 
         {/* Member List */}
-                      <Grid size={{ xs: 12, md: 12}}>
+        <Grid size={{ xs: 12, md: 12 }}>
           {isOwner && (
             <Paper sx={{ p: 2.5 }}>
               <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
                 <GroupIcon />
                 <Typography variant="h6">Manage family members</Typography>
                 <Box flex={1} />
-                <Button size="small" onClick={refreshMembers}>
-                  Refresh
+                <Button 
+                  size="small" 
+                  onClick={refreshMembers}
+                  disabled={loadingMembers}
+                >
+                  {loadingMembers ? "Loading..." : "Refresh"}
                 </Button>
               </Stack>
 
-              {loadingMembers ? (
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <CircularProgress size={20} />
-                  <Typography>Loading…</Typography>
-                </Stack>
+              {loadingMembers && !initialLoading ? (
+                <List dense>
+                  {[1, 2, 3].map((i) => (
+                    <ListItem key={i}>
+                      <ListItemAvatar>
+                        <Skeleton variant="circular" width={40} height={40} />
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={<Skeleton variant="text" width="60%" />}
+                        secondary={<Skeleton variant="text" width="40%" />}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
               ) : membersError ? (
                 <Alert severity="error">{membersError}</Alert>
               ) : (
