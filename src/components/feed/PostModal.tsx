@@ -15,13 +15,13 @@ import {
 } from "@mui/material";
 import { Close as CloseIcon } from "@mui/icons-material";
 import { TransitionProps } from "@mui/material/transitions";
-import PostCard, { PostCardData, Comment as PostComment } from "./PostCard";
+import PostCard, { PostCardData } from "./PostCard"; // Removed unused 'Comment as PostComment'
 import CommentBox from "./CommentBox";
 
 // Slide up transition for mobile
 const SlideTransition = React.forwardRef(function Transition(
   props: TransitionProps & {
-    children: React.ReactElement<any, any>;
+    children: React.ReactElement; // Removed <any, any> to fix ESLint error
   },
   ref: React.Ref<unknown>
 ) {
