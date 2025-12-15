@@ -91,6 +91,8 @@ type Props = {
 /* -----------------------
    🎨 Premium Image Grid
    ----------------------- */
+// src/components/feed/PostCard.tsx
+
 const PremiumImageGrid = ({ 
   images, 
   onImageClick 
@@ -151,52 +153,103 @@ const PremiumImageGrid = ({
     boxShadow: `0 4px 20px ${alpha(theme.palette.common.black, 0.04)}`,
   };
 
+  // ⭐ Single image - use fill prop
   if (count === 1) {
     return (
       <Box sx={containerStyle}>
-        <Box sx={{ ...hoverEffectSx, maxHeight: '600px' }} onClick={() => handleImageClick(0)}>
-          <Image src={images[0]} alt="post-img-0" style={imgStyle} />
+        <Box 
+          sx={{ 
+            ...hoverEffectSx, 
+            maxHeight: '600px',
+            position: 'relative', // ⭐ Required for fill
+            minHeight: '400px' // ⭐ Give it a minimum height
+          }} 
+          onClick={() => handleImageClick(0)}
+        >
+          <Image 
+            src={images[0]} 
+            alt="post-img-0" 
+            fill // ⭐ Use fill instead of width/height
+            style={{
+              objectFit: "cover",
+              cursor: "pointer",
+            }}
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          />
         </Box>
       </Box>
     );
   }
 
+  // ⭐ Two images
   if (count === 2) {
     return (
       <Box sx={{ ...containerStyle, gridTemplateColumns: "1fr 1fr" }}>
         {images.map((img, i) => (
-          <Box key={i} sx={hoverEffectSx} onClick={() => handleImageClick(i)}>
-            <Image src={img} alt={`post-img-${i}`} style={imgStyle} />
+          <Box key={i} sx={{ ...hoverEffectSx, position: 'relative' }} onClick={() => handleImageClick(i)}>
+            <Image 
+              src={img} 
+              alt={`post-img-${i}`} 
+              fill
+              style={{ objectFit: "cover", cursor: "pointer" }}
+              sizes="(max-width: 768px) 50vw, 25vw"
+            />
           </Box>
         ))}
       </Box>
     );
   }
 
+  // ⭐ Three images
   if (count === 3) {
     return (
       <Box sx={{ ...containerStyle, gridTemplateColumns: "2fr 1fr", gridTemplateRows: "1fr 1fr" }}>
-        <Box sx={{ ...hoverEffectSx, gridRow: "1 / span 2" }} onClick={() => handleImageClick(0)}>
-          <Image src={images[0]} alt="post-img-0" style={imgStyle} />
+        <Box sx={{ ...hoverEffectSx, gridRow: "1 / span 2", position: 'relative' }} onClick={() => handleImageClick(0)}>
+          <Image 
+            src={images[0]} 
+            alt="post-img-0" 
+            fill
+            style={{ objectFit: "cover", cursor: "pointer" }}
+            sizes="(max-width: 768px) 66vw, 40vw"
+          />
         </Box>
-        <Box sx={hoverEffectSx} onClick={() => handleImageClick(1)}>
-          <Image src={images[1]} alt="post-img-1" style={imgStyle} />
+        <Box sx={{ ...hoverEffectSx, position: 'relative' }} onClick={() => handleImageClick(1)}>
+          <Image 
+            src={images[1]} 
+            alt="post-img-1" 
+            fill
+            style={{ objectFit: "cover", cursor: "pointer" }}
+            sizes="(max-width: 768px) 33vw, 20vw"
+          />
         </Box>
-        <Box sx={hoverEffectSx} onClick={() => handleImageClick(2)}>
-          <Image src={images[2]} alt="post-img-2" style={imgStyle} />
+        <Box sx={{ ...hoverEffectSx, position: 'relative' }} onClick={() => handleImageClick(2)}>
+          <Image 
+            src={images[2]} 
+            alt="post-img-2" 
+            fill
+            style={{ objectFit: "cover", cursor: "pointer" }}
+            sizes="(max-width: 768px) 33vw, 20vw"
+          />
         </Box>
       </Box>
     );
   }
 
+  // ⭐ Four or more images
   return (
     <Box sx={{ ...containerStyle, gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr" }}>
       {images.slice(0, 4).map((img, i) => {
         const isLast = i === 3;
         const remaining = count - 4;
         return (
-          <Box key={i} sx={hoverEffectSx} onClick={() => handleImageClick(i)}>
-            <Image src={img} alt={`post-img-${i}`} style={imgStyle} />
+          <Box key={i} sx={{ ...hoverEffectSx, position: 'relative' }} onClick={() => handleImageClick(i)}>
+            <Image 
+              src={img} 
+              alt={`post-img-${i}`} 
+              fill
+              style={{ objectFit: "cover", cursor: "pointer" }}
+              sizes="(max-width: 768px) 50vw, 25vw"
+            />
             {isLast && remaining > 0 && (
               <Box
                 sx={{
@@ -209,6 +262,7 @@ const PremiumImageGrid = ({
                   justifyContent: "center",
                   cursor: "pointer",
                   transition: 'all 0.3s',
+                  zIndex: 2, // ⭐ Above the image
                   '&:hover': {
                     bgcolor: alpha(theme.palette.common.black, 0.6),
                     backdropFilter: "blur(10px)",
@@ -226,7 +280,6 @@ const PremiumImageGrid = ({
     </Box>
   );
 };
-
 /* -----------------------
    💎 Main Component
    ----------------------- */

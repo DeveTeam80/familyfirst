@@ -1,13 +1,13 @@
 "use client";
 import * as React from "react";
-import { 
-  Box, 
-  Avatar, 
-  TextField, 
-  Stack, 
-  Chip, 
-  Button, 
-  Menu, 
+import {
+  Box,
+  Avatar,
+  TextField,
+  Stack,
+  Chip,
+  Button,
+  Menu,
   MenuItem,
   IconButton,
   Typography,
@@ -16,8 +16,8 @@ import {
   useTheme,
   useMediaQuery,
 } from "@mui/material";
-import { 
-  Event, 
+import {
+  Event,
   Tag,
   Close,
   PhotoLibrary,
@@ -62,7 +62,7 @@ export default function PostComposer({
     if (e.target.files) {
       const filesArray = Array.from(e.target.files);
       const newImages: string[] = [];
-      
+
       filesArray.forEach((file) => {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -100,8 +100,8 @@ export default function PostComposer({
     >
       {/* Main Input Area */}
       <Box display="flex" gap={isMobile ? 1 : 2} mb={2}>
-        <Avatar 
-          alt="User" 
+        <Avatar
+          alt="User"
           src="/avatar.png"
           sx={{
             width: isMobile ? 36 : 48,
@@ -156,10 +156,10 @@ export default function PostComposer({
       {/* Multiple Images Preview */}
       {selectedImages.length > 0 && (
         <Box sx={{ mb: 2 }}>
-          <Stack 
-            direction="row" 
-            spacing={1} 
-            flexWrap="wrap" 
+          <Stack
+            direction="row"
+            spacing={1}
+            flexWrap="wrap"
             useFlexGap
             sx={{
               maxHeight: isMobile ? 200 : 300,
@@ -184,11 +184,11 @@ export default function PostComposer({
                 <Image
                   src={imageUrl}
                   alt={`Preview ${index + 1}`}
+                  fill 
                   style={{
-                    width: "100%",
-                    height: "100%",
                     objectFit: "cover",
                   }}
+                  sizes="(max-width: 768px) 100vw, 200px"
                 />
                 <IconButton
                   onClick={() => handleRemoveImage(index)}
@@ -215,11 +215,11 @@ export default function PostComposer({
 
       {/* Selected Tags Display */}
       {selectedTags.length > 0 && (
-        <Stack 
-          direction="row" 
-          spacing={0.5} 
-          mb={2} 
-          flexWrap="wrap" 
+        <Stack
+          direction="row"
+          spacing={0.5}
+          mb={2}
+          flexWrap="wrap"
           useFlexGap
         >
           {selectedTags.map((tag) => (
@@ -251,9 +251,9 @@ export default function PostComposer({
       )}
 
       {/* Action Buttons */}
-      <Box 
-        display="flex" 
-        justifyContent="space-between" 
+      <Box
+        display="flex"
+        justifyContent="space-between"
         alignItems="center"
         gap={isMobile ? 1 : 2}
         flexWrap="wrap"
@@ -374,9 +374,9 @@ export default function PostComposer({
           )}
 
           {/* Tag Menu */}
-          <Menu 
-            anchorEl={anchorEl} 
-            open={Boolean(anchorEl)} 
+          <Menu
+            anchorEl={anchorEl}
+            open={Boolean(anchorEl)}
             onClose={() => setAnchorEl(null)}
             PaperProps={{
               elevation: 3,
@@ -404,14 +404,14 @@ export default function PostComposer({
                   fontSize: isMobile ? '0.875rem' : '0.95rem',
                 }}
               >
-                <Chip 
-                  label={tag} 
-                  size="small" 
-                  sx={{ 
+                <Chip
+                  label={tag}
+                  size="small"
+                  sx={{
                     mr: 1,
                     pointerEvents: 'none',
                     fontSize: isMobile ? '0.7rem' : '0.75rem',
-                  }} 
+                  }}
                 />
                 <Typography variant="body2">{tag}</Typography>
               </MenuItem>

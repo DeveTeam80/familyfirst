@@ -45,8 +45,8 @@ interface PublicComment {
   replies?: PublicComment[];
 }
 
-interface PublicPost extends PostCardData { 
-    isPublicView?: boolean;
+interface PublicPost extends PostCardData {
+  isPublicView?: boolean;
 
 }
 
@@ -547,7 +547,7 @@ export default function PublicPostPage({ params }: PageProps) {
           onShare={handleShare}
           onImageClick={handleOpenLightbox}
           currentUserName=""
-          currentUserId="" 
+          currentUserId=""
           canEdit={false}
         />
 
@@ -699,17 +699,28 @@ export default function PublicPostPage({ params }: PageProps) {
             )}
 
             {post.images && post.images[lightboxIndex] && (
-              <Image
-                src={post.images[lightboxIndex]}
-                alt={`Image ${lightboxIndex + 1}`}
-                style={{
-                  maxWidth: "95vw",
-                  maxHeight: "90vh",
-                  objectFit: "contain",
-                  borderRadius: 8,
-                  boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
+              <Box
+                sx={{
+                  position: 'relative',
+                  width: '95vw',
+                  height: '90vh',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
-              />
+              >
+                <Image
+                  src={post.images[lightboxIndex]}
+                  alt={`Image ${lightboxIndex + 1}`}
+                  fill
+                  style={{
+                    objectFit: "contain",
+                    borderRadius: 8,
+                    boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
+                  }}
+                  sizes="95vw"
+                />
+              </Box>
             )}
 
             {post.images && post.images.length > 1 && (
