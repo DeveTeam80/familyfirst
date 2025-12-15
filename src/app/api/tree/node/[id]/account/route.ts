@@ -5,15 +5,14 @@ import type { Prisma } from "@prisma/client";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // ⭐ Changed to Promise
 ) {
   try {
-    const nodeId = params?.id;
+    const { id: nodeId } = await params; // ⭐ Await params
     if (!nodeId) {
       return NextResponse.json({ error: "Missing node id" }, { status: 400 });
     }
 
-    // Tell TS exactly what shape we expect back from Prisma
     type NodeWithUser = Prisma.FamilyTreeNodeGetPayload<{
       include: {
         user: {
@@ -21,7 +20,7 @@ export async function GET(
             id: true;
             name: true;
             email: true;
-            username: true; // only if username exists on your model
+            username: true;
           };
         };
       };
@@ -35,7 +34,7 @@ export async function GET(
             id: true,
             name: true,
             email: true,
-            username: true, // OK if column exists; returns null if missing
+            username: true,
           },
         },
       },
@@ -46,7 +45,6 @@ export async function GET(
     }
 
     if (node.user) {
-      // return the username if present, else fallback to name / id
       return NextResponse.json({
         exists: true,
         user: {

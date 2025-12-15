@@ -16,6 +16,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { Close, PhotoLibrary } from "@mui/icons-material";
+import Image from "next/image";
 
 export default function EditPostDialog({
   open,
@@ -239,8 +240,8 @@ export default function EditPostDialog({
                       borderColor: 'divider',
                     }}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    
+                    <Image
                       src={imageUrl}
                       alt={`Preview ${index + 1}`}
                       style={{

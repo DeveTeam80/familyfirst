@@ -1,7 +1,7 @@
 // src/app/api/notifications/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/nextauth.config";
 import { prisma } from "@/lib/prisma";
 
 // GET - Fetch notifications

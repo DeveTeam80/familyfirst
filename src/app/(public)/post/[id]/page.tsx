@@ -30,6 +30,7 @@ import {
 } from "@mui/icons-material";
 import PostCard, { PostCardData } from "@/components/feed/PostCard";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 // --- Internal Types ---
 interface PublicComment {
@@ -44,7 +45,10 @@ interface PublicComment {
   replies?: PublicComment[];
 }
 
-interface PublicPost extends PostCardData {}
+interface PublicPost extends PostCardData { 
+    isPublicView?: boolean;
+
+}
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -67,8 +71,8 @@ const PublicCommentItem = ({
     theme.palette.mode === "dark"
       ? alpha(theme.palette.primary.main, isReply ? 0.05 : 0.1)
       : isReply
-      ? "#fafbfc"
-      : alpha(theme.palette.grey[200], 0.6);
+        ? "#fafbfc"
+        : alpha(theme.palette.grey[200], 0.6);
 
   const threadColor =
     theme.palette.mode === "dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)";
@@ -297,6 +301,7 @@ export default function PublicPostPage({ params }: PageProps) {
 
         const normalizedPost: PublicPost = {
           id: postData.id,
+          userId: postData.userId || postData.authorId || "",
           user: postData.user || "Unknown User",
           avatar: postData.avatar,
           content: postData.content || "",
@@ -309,8 +314,8 @@ export default function PublicPostPage({ params }: PageProps) {
           images: Array.isArray(postData.images)
             ? postData.images
             : postData.image
-            ? [postData.image]
-            : [],
+              ? [postData.image]
+              : [],
           image: postData.image || null,
           eventDate: postData.eventDate,
           visibility: postData.visibility,
@@ -488,13 +493,13 @@ export default function PublicPostPage({ params }: PageProps) {
             background:
               theme.palette.mode === "dark"
                 ? `linear-gradient(135deg, ${alpha(
-                    theme.palette.primary.dark,
-                    0.3
-                  )}, ${alpha(theme.palette.background.paper, 0.4)})`
+                  theme.palette.primary.dark,
+                  0.3
+                )}, ${alpha(theme.palette.background.paper, 0.4)})`
                 : `linear-gradient(135deg, ${alpha(
-                    theme.palette.primary.light,
-                    0.1
-                  )}, #ffffff)`,
+                  theme.palette.primary.light,
+                  0.1
+                )}, #ffffff)`,
             border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
             backdropFilter: "blur(10px)",
           }}
@@ -537,11 +542,12 @@ export default function PublicPostPage({ params }: PageProps) {
           post={post}
           onLike={handleLike}
           onCommentClick={handleCommentClick}
-          onEdit={() => {}}
-          onDelete={() => {}}
+          onEdit={() => { }}
+          onDelete={() => { }}
           onShare={handleShare}
           onImageClick={handleOpenLightbox}
           currentUserName=""
+          currentUserId="" 
           canEdit={false}
         />
 
@@ -693,7 +699,7 @@ export default function PublicPostPage({ params }: PageProps) {
             )}
 
             {post.images && post.images[lightboxIndex] && (
-              <img
+              <Image
                 src={post.images[lightboxIndex]}
                 alt={`Image ${lightboxIndex + 1}`}
                 style={{

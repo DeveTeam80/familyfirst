@@ -30,43 +30,57 @@ const initialState: FamilyState = {
   errorByFamily: {},
 };
 
+// Type for the API response member
+interface ApiMember {
+  userId: string;
+  role?: string;
+  status?: string;
+  joinedAt?: string;
+  user?: {
+    username?: string;
+    name?: string;
+    email?: string;
+    avatarUrl?: string;
+  };
+}
+
 /**
  * Async thunk to fetch members for a given familyId
  */
-export const fetchMembers = createAsyncThunk<
-  { familyId: string; members: FamilyMemberClient[] },
-  string,
-  { state: RootState }
->("family/fetchMembers", async (familyId, thunkAPI) => {
-  try {
-    const res = await fetch(`/api/family/${encodeURIComponent(familyId)}/members`, {
-      method: "GET",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-    });
+export const fetchMembers = createAsyncThunk(
+  "family/fetchMembers",
+  async (familyId: string, thunkAPI) => {
+    try {
+      const res = await fetch(`/api/family/${encodeURIComponent(familyId)}/members`, {
+        method: "GET",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
 
-    if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
-      throw new Error(json?.error || `Failed to load members (${res.status})`);
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json?.error || `Failed to load members (${res.status})`);
+      }
+
+      const json = await res.json();
+      const members: FamilyMemberClient[] = (json.members || []).map((m: ApiMember) => ({
+        userId: m.userId,
+        username: m.user?.username ?? (m.user?.email?.split("@")[0] ?? null),
+        name: m.user?.name ?? null,
+        email: m.user?.email ?? null,
+        avatarUrl: m.user?.avatarUrl ?? null,
+        role: (m.role ?? "MEMBER") as ClientRole,
+        status: m.status ?? undefined,
+        joinedAt: m.joinedAt ?? null,
+      }));
+
+      return { familyId, members };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      return thunkAPI.rejectWithValue({ message: errorMessage });
     }
-
-    const json = await res.json();
-    const members = (json.members || []).map((m: any) => ({
-      userId: m.userId,
-      username: m.user?.username ?? (m.user?.email?.split("@")[0] ?? null),
-      name: m.user?.name ?? null,
-      email: m.user?.email ?? null,
-      avatarUrl: m.user?.avatarUrl ?? null,
-      role: m.role ?? "MEMBER",
-      status: m.status ?? null,
-      joinedAt: m.joinedAt ?? null,
-    }));
-
-    return { familyId, members };
-  } catch (err: any) {
-    return thunkAPI.rejectWithValue({ message: err?.message || String(err) });
   }
-});
+);
 
 const familySlice = createSlice({
   name: "family",
@@ -99,7 +113,10 @@ const familySlice = createSlice({
       .addCase(fetchMembers.rejected, (state, action) => {
         const fam = action.meta.arg;
         state.loadingByFamily[fam] = false;
-        state.errorByFamily[fam] = (action.payload as any)?.message ?? action.error.message ?? "Failed to load";
+        state.errorByFamily[fam] = 
+          (action.payload as { message?: string })?.message ?? 
+          action.error.message ?? 
+          "Failed to load";
       });
   },
 });

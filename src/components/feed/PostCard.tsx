@@ -19,7 +19,7 @@ import {
   Collapse,
   Tooltip,
   Badge,
-  Zoom,
+  // Zoom,
   AvatarGroup,
 } from "@mui/material";
 import {
@@ -30,14 +30,14 @@ import {
   Share as ShareIcon,
   FavoriteBorder,
   Favorite,
-  BookmarkBorder,
-  Bookmark,
+  // BookmarkBorder,
+  // Bookmark,
   Public,
   VerifiedUser,
   Lock,
   Group,
 } from "@mui/icons-material";
-
+import Image from "next/image";
 /* -----------------------
    Type Definitions
    ----------------------- */
@@ -155,7 +155,7 @@ const PremiumImageGrid = ({
     return (
       <Box sx={containerStyle}>
         <Box sx={{ ...hoverEffectSx, maxHeight: '600px' }} onClick={() => handleImageClick(0)}>
-          <img src={images[0]} alt="post-img-0" style={imgStyle} />
+          <Image src={images[0]} alt="post-img-0" style={imgStyle} />
         </Box>
       </Box>
     );
@@ -166,7 +166,7 @@ const PremiumImageGrid = ({
       <Box sx={{ ...containerStyle, gridTemplateColumns: "1fr 1fr" }}>
         {images.map((img, i) => (
           <Box key={i} sx={hoverEffectSx} onClick={() => handleImageClick(i)}>
-            <img src={img} alt={`post-img-${i}`} style={imgStyle} />
+            <Image src={img} alt={`post-img-${i}`} style={imgStyle} />
           </Box>
         ))}
       </Box>
@@ -177,13 +177,13 @@ const PremiumImageGrid = ({
     return (
       <Box sx={{ ...containerStyle, gridTemplateColumns: "2fr 1fr", gridTemplateRows: "1fr 1fr" }}>
         <Box sx={{ ...hoverEffectSx, gridRow: "1 / span 2" }} onClick={() => handleImageClick(0)}>
-          <img src={images[0]} alt="post-img-0" style={imgStyle} />
+          <Image src={images[0]} alt="post-img-0" style={imgStyle} />
         </Box>
         <Box sx={hoverEffectSx} onClick={() => handleImageClick(1)}>
-          <img src={images[1]} alt="post-img-1" style={imgStyle} />
+          <Image src={images[1]} alt="post-img-1" style={imgStyle} />
         </Box>
         <Box sx={hoverEffectSx} onClick={() => handleImageClick(2)}>
-          <img src={images[2]} alt="post-img-2" style={imgStyle} />
+          <Image src={images[2]} alt="post-img-2" style={imgStyle} />
         </Box>
       </Box>
     );
@@ -196,7 +196,7 @@ const PremiumImageGrid = ({
         const remaining = count - 4;
         return (
           <Box key={i} sx={hoverEffectSx} onClick={() => handleImageClick(i)}>
-            <img src={img} alt={`post-img-${i}`} style={imgStyle} />
+            <Image src={img} alt={`post-img-${i}`} style={imgStyle} />
             {isLast && remaining > 0 && (
               <Box
                 sx={{
@@ -238,7 +238,7 @@ export default function PostCard({
   onDelete,
   onShare,
   onImageClick,
-  currentUserName,
+  // currentUserName,
   currentUserId,  
   canEdit = true,
   commentsOpen = false,
@@ -249,8 +249,8 @@ export default function PostCard({
 
   const [menuAnchor, setMenuAnchor] = React.useState<null | HTMLElement>(null);
   const [isHovered, setIsHovered] = React.useState(false);
-  const [bookmarked, setBookmarked] = React.useState(false);
-  const [likeAnimating, setLikeAnimating] = React.useState(false);
+  // const [bookmarked, setBookmarked] = React.useState(false);
+  const [,setLikeAnimating] = React.useState(false);
 
   const isLiked = post.likedBy.includes(currentUserId);
   const isOwnPost = post.userId === currentUserId;

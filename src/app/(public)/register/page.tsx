@@ -30,6 +30,12 @@ import {
 } from "@mui/icons-material";
 import Link from "next/link";
 
+interface InviteData {
+  email?: string;
+  familyName?: string;
+  inviterId?: string;
+}
+
 /* -----------------------
    Register Form Component
    ----------------------- */
@@ -44,7 +50,7 @@ function RegisterForm() {
   const [loading, setLoading] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(true);
   const [codeValid, setCodeValid] = useState(false);
-  const [inviteData, setInviteData] = useState<any>(null);
+const [inviteData, setInviteData] = useState<InviteData | null>(null);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -257,7 +263,7 @@ function RegisterForm() {
             Complete Registration
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            You've been invited to join <strong>{inviteData?.familyName || "the family"}</strong>
+            You&apos;ve been invited to join <strong>{inviteData?.familyName || "the family"}</strong>
           </Typography>
         </Box>
 

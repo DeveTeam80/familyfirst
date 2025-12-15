@@ -5,14 +5,14 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { familyId: string } }
+  { params }: { params: Promise<{ familyId: string }> } // ⭐ params is now a Promise
 ) {
   // Require authentication
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
   const { user } = auth;
-  const { familyId } = params;
+  const { familyId } = await params; // ⭐ Await params
 
   try {
     // Check if user is member of this family

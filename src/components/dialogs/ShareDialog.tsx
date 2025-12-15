@@ -62,7 +62,7 @@ export default function ShareDialog({
         const res = await fetch(`/api/posts/${postId}`);
         const data = await res.json();
         setIsPublic(data?.post?.visibility === "PUBLIC");
-      } catch (e) {
+      } catch (_e) {
         console.error("Failed to load post visibility");
       } finally {
         setFetching(false);

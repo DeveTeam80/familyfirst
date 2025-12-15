@@ -6,7 +6,7 @@ import { CldUploadWidget } from "next-cloudinary";
 import type { CloudinaryUploadWidgetResults } from "next-cloudinary";
 import { Box, Button, IconButton, CircularProgress, Stack, Avatar } from "@mui/material";
 import { ImageOutlined, Close as CloseIcon } from "@mui/icons-material";
-
+import Image from "next/image";
 interface CloudinaryUploadProps {
   // Single image mode (for avatars)
   currentImage?: string;
@@ -25,6 +25,11 @@ interface CloudinaryUploadProps {
   fullWidth?: boolean;
   width?: number;
   height?: number;
+}
+
+// Type guard for Cloudinary response
+interface CloudinaryInfo {
+  secure_url: string;
 }
 
 export function CloudinaryUpload({
@@ -56,7 +61,7 @@ export function CloudinaryUpload({
     }
   };
 
-  const hasSecureUrl = (info: any): info is { secure_url: string } => {
+  const hasSecureUrl = (info: unknown): info is CloudinaryInfo => {
     return typeof info === "object" && info !== null && "secure_url" in info;
   };
 
@@ -174,7 +179,7 @@ export function CloudinaryUpload({
                           borderColor: "divider",
                         }}
                       >
-                        <img
+                        <Image
                           src={imageUrl}
                           alt={`Upload ${index + 1}`}
                           style={{

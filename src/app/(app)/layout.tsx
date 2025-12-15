@@ -9,13 +9,18 @@ import Providers from "../providers";
 import { useAuthSync } from "@/hooks/useAuthSync";
 import { useDispatch, useSelector } from "react-redux";
 import { setActiveFamily, fetchMembers, selectActiveFamilyId } from "@/store/familySlice";
+import { AppDispatch } from "@/store";
+
+interface LayoutProps {
+  children: React.ReactNode;
+}
 
 /**
  * Top-level AppLayout that supplies Providers and runs client-side initialization.
  * - Providers wraps Redux/Theme/etc.
  * - AppLayoutContent waits for session and initializes family membership data.
  */
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default function AppLayout({ children }: LayoutProps) {
   return (
     <Providers>
       <AppLayoutContent>{children}</AppLayoutContent>
@@ -23,10 +28,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-function AppLayoutContent({ children }: { children: React.ReactNode }) {
+interface Membership {
+  familyId: string;
+  role: string;
+}
+
+interface AuthMeResponse {
+  memberships?: Membership[];
+  family?: {
+    id: string;
+    role: string;
+  };
+}
+
+function AppLayoutContent({ children }: LayoutProps) {
   const { session, status } = useAuthSync(); // syncs session to redux
   const router = useRouter();
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>(); // ⭐ Use typed dispatch
   const activeFamilyId = useSelector(selectActiveFamilyId);
 
   // Redirect to login if unauthenticated
@@ -59,7 +77,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        const json = await res.json();
+        const json: AuthMeResponse = await res.json();
         // Expect backend to return `family` or `memberships` shape.
         // We'll support both `family` (single) and `memberships` (array).
         const memberships = json?.memberships ?? (json?.family ? [{ familyId: json.family.id, role: json.family.role }] : []);
@@ -72,7 +90,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
         }
 
         // Prefer OWNER role if present
-        const owner = memberships.find((m: any) => (m.role || "").toUpperCase() === "OWNER");
+        const owner = memberships.find((m: Membership) => (m.role || "").toUpperCase() === "OWNER");
         const familyId = (owner?.familyId ?? memberships[0].familyId) as string;
 
         if (!familyId) {
@@ -82,7 +100,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
 
         console.log("[AppLayout] selecting familyId:", familyId, "dispatching setActiveFamily and fetchMembers");
         dispatch(setActiveFamily(familyId));
-        dispatch(fetchMembers(familyId));
+        dispatch(fetchMembers(familyId)); // ⭐ Now properly typed with AppDispatch
       } catch (err) {
         console.error("[AppLayout] failed to initialize family:", err);
       }

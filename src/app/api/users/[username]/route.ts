@@ -1,17 +1,19 @@
+// src/app/api/users/[username]/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(
   req: Request,
-  { params }: { params: { username: string } }
+  { params }: { params: Promise<{ username: string }> } // ⭐ Changed to Promise
 ) {
   try {
-    const username = params.username.toLowerCase();
+    const { username } = await params; // ⭐ Await params
+    const normalizedUsername = username.toLowerCase();
 
     const user = await prisma.user.findFirst({
       where: {
         username: {
-          equals: username,
+          equals: normalizedUsername,
           mode: "insensitive",
         },
       },

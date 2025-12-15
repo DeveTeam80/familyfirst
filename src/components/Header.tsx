@@ -50,7 +50,7 @@ import {
   Home,
   PhotoCameraBack,
   MenuBook,
-  EventRepeat,
+  // EventRepeat,
   LightMode as LightModeIcon,
   DarkMode as DarkModeIcon,
   Circle as CircleIcon,
@@ -60,7 +60,7 @@ import {
 import { TbBinaryTree } from "react-icons/tb";
 import {
   FiUser,
-  FiHeart,
+  // FiHeart,
   FiMoon,
   FiHelpCircle,
   FiLogOut,
@@ -95,6 +95,13 @@ type Contact = {
   avatar: string;
   online: boolean;
 };
+
+interface ExtendedUser {
+  username?: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+}
 
 type UpcomingEvent = {
   title: string;
@@ -184,6 +191,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  
 
   const getDisplayInfo = () => {
     if (currentUser && "username" in currentUser) {
@@ -198,7 +206,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
       return {
         displayName: session.user.name || "User",
         username:
-          (session.user as any).username ||
+          (session.user as ExtendedUser).username ||
           session.user.name?.toLowerCase().replace(/\s+/g, "") ||
           session.user.email?.split("@")[0] ||
           "user",
@@ -217,7 +225,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
     notifications,
     unreadCount,
     onlineMembers,
-    connected,
+    connected: _connected,
     markAsRead
   } = useRealtimeUpdates();
 
@@ -815,7 +823,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
           {notifications.length === 0 ? (
             <Box sx={{ p: 4, textAlign: "center" }}>
               <Typography variant="body2" color="text.secondary">
-                You're all caught up 🎉
+                You&apos;re all caught up 🎉
               </Typography>
             </Box>
           ) : (

@@ -10,7 +10,6 @@ import {
   Grid,
 } from "@mui/material";
 import { Style_Script } from "next/font/google";
-import Image from "next/image";
 
 const styleScript = Style_Script({
   subsets: ["latin"],

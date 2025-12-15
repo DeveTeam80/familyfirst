@@ -131,7 +131,9 @@ export default function Feed() {
   const postsArr = React.useMemo<Post[]>(() => {
     if (!postsFromStore) return [];
     if (Array.isArray(postsFromStore)) return postsFromStore as Post[];
-    if (Array.isArray((postsFromStore as any).posts)) return (postsFromStore as any).posts as Post[];
+    if (Array.isArray((postsFromStore as Record<string, unknown>).posts)) {
+  return (postsFromStore as { posts: Post[] }).posts;
+}
     return [];
   }, [postsFromStore]);
 
@@ -273,7 +275,7 @@ export default function Feed() {
               maxSizeMB: 8,
               maxWidthOrHeight: 1920,
               useWebWorker: true,
-              fileType: blob.type as any,
+fileType: blob.type as string,
             };
             const compressedBlob = await imageCompression(file, options);
             fileToUpload = compressedBlob;
@@ -362,7 +364,7 @@ export default function Feed() {
               maxSizeMB: 8,
               maxWidthOrHeight: 1920,
               useWebWorker: true,
-              fileType: blob.type as any,
+              fileType: blob.type as string,
             };
             const compressedBlob = await imageCompression(file, options);
             fileToUpload = compressedBlob;
@@ -461,7 +463,7 @@ export default function Feed() {
   const handleComment = async (postId: string) => {
     if (!commentText.trim()) return;
 
-    const tempComment: any = {
+    const tempComment: PostComment = {
       id: `temp-${Date.now()}`,
       user: currentUserName,
       userId: currentUserId,
@@ -527,7 +529,7 @@ export default function Feed() {
     const originalPosts = [...postsArr];
 
     // Recursive helper to update comment at any nesting level
-    const updateCommentLikes = (comments: PostComment[] = []): PostComment[] => {
+    const updateCommentLikes = (comments: PostComment[]): PostComment[] => {
       return comments.map((comment) => {
         if (comment.id === commentId) {
           const isLiked = (comment.likedBy || []).includes(currentUserId);
@@ -535,15 +537,15 @@ export default function Feed() {
             ...comment,
             likes: isLiked ? (comment.likes || 0) - 1 : (comment.likes || 0) + 1,
             likedBy: isLiked ? (comment.likedBy || []).filter((id) => id !== currentUserId) : [...(comment.likedBy || []), currentUserId],
-          } as any;
+          };
         }
 
         if (comment.replies && comment.replies.length > 0) {
-          return { ...comment, replies: updateCommentLikes(comment.replies) } as any;
+          return { ...comment, replies: updateCommentLikes(comment.replies) };
         }
 
-        return comment as any;
-      }) as any;
+        return comment;
+      });
     };
 
     // Optimistic update
@@ -554,7 +556,7 @@ export default function Feed() {
           return {
             ...p,
             comments: updateCommentLikes(p.comments || []),
-          } as Post;
+          };
         })
       )
     );
@@ -576,16 +578,16 @@ export default function Feed() {
     const originalPosts = [...postsArr];
 
     // Recursive helper
-    const updateCommentText = (comments: PostComment[] = []): PostComment[] => {
+    const updateCommentText = (comments: PostComment[]): PostComment[] => {
       return comments.map((comment) => {
         if (comment.id === commentId) {
-          return { ...comment, text: newText } as any;
+          return { ...comment, text: newText };
         }
         if (comment.replies && comment.replies.length > 0) {
-          return { ...comment, replies: updateCommentText(comment.replies) } as any;
+          return { ...comment, replies: updateCommentText(comment.replies) };
         }
-        return comment as any;
-      }) as any;
+        return comment;
+      });
     };
 
     // Optimistic update
@@ -593,7 +595,7 @@ export default function Feed() {
       setPosts(
         postsArr.map((p) => {
           if (p.id !== post.id) return p;
-          return { ...p, comments: updateCommentText(p.comments || []) } as Post;
+          return { ...p, comments: updateCommentText(p.comments || []) };
         })
       )
     );
@@ -618,15 +620,15 @@ export default function Feed() {
 
     const originalPosts = [...postsArr];
 
-    const deleteCommentRecursive = (comments: PostComment[] = []): PostComment[] => {
+    const deleteCommentRecursive = (comments: PostComment[]): PostComment[] => {
       return comments
         .filter((comment) => comment.id !== commentId)
         .map((comment) => {
           if (comment.replies && comment.replies.length > 0) {
-            return { ...comment, replies: deleteCommentRecursive(comment.replies) } as any;
+            return { ...comment, replies: deleteCommentRecursive(comment.replies) };
           }
-          return comment as any;
-        }) as any;
+          return comment;
+        });
     };
 
     // Optimistic removal
@@ -648,7 +650,7 @@ export default function Feed() {
     const post = postsArr.find((p) => (p.comments || []).some((c) => c.id === commentId));
     if (!post) return;
 
-    const tempReply: any = {
+    const tempReply: PostComment = {
       id: `temp-reply-${Date.now()}`,
       user: currentUserName,
       userId: currentUserId,
@@ -670,7 +672,7 @@ export default function Feed() {
           return {
             ...p,
             comments: (p.comments || []).map((c) => (c.id === commentId ? { ...c, replies: [...(c.replies || []), tempReply] } : c)),
-          } as Post;
+          };
         })
       )
     );
@@ -787,7 +789,7 @@ export default function Feed() {
             )}
             {!hasMore && postsArr.length > 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-                🎉 You've reached the end!
+              You&apos;ve reached the end!
               </Typography>
             )}
           </Box>

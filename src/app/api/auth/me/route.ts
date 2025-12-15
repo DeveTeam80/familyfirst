@@ -1,8 +1,33 @@
 // src/app/api/auth/me/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "../[...nextauth]/route";
+import { authOptions } from "@/lib/nextauth.config";
 import { prisma } from "@/lib/prisma";
+
+// Types for session user
+interface SessionUser {
+  id?: string;
+  email?: string;
+}
+
+// Type for family membership from database (GET)
+interface FamilyMembershipDataWithJoinedAt {
+  role: string;
+  joinedAt: Date;
+  family: {
+    id: string;
+    name: string;
+  };
+}
+
+// Type for family membership from database (PATCH - without joinedAt)
+interface FamilyMembershipData {
+  role: string;
+  family: {
+    id: string;
+    name: string;
+  };
+}
 
 /**
  * GET -> returns current user + family memberships (returns up to all memberships).
@@ -10,7 +35,7 @@ import { prisma } from "@/lib/prisma";
  *
  * Note: Ensure NextAuth session callback includes user.id if you want session.user.id to be available.
  */
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -19,18 +44,17 @@ export async function GET(req: NextRequest) {
     }
 
     // Prefer session.user.id (if you added it in callbacks). Otherwise fallback to email.
-    const sessionUserId = (session as any).user?.id as string | undefined;
-    const sessionEmail = (session as any).user?.email as string | undefined;
+    const sessionUser = session.user as SessionUser;
+    const sessionUserId = sessionUser?.id;
+    const sessionEmail = sessionUser?.email;
 
     if (!sessionUserId && !sessionEmail) {
       return NextResponse.json({ error: "Session missing identifying information" }, { status: 401 });
     }
 
     // find user by id (if present) or by email
-    const where: any = sessionUserId ? { id: sessionUserId } : { email: sessionEmail };
-
     const user = await prisma.user.findUnique({
-      where,
+      where: sessionUserId ? { id: sessionUserId } : { email: sessionEmail },
       select: {
         id: true,
         email: true,
@@ -57,7 +81,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const memberships = (user.familyMemberships || []).map((m: any) => ({
+    const memberships = (user.familyMemberships || []).map((m: FamilyMembershipDataWithJoinedAt) => ({
       familyId: m.family.id,
       familyName: m.family.name,
       role: m.role,
@@ -86,8 +110,9 @@ export async function PATCH(req: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-    const sessionUserId = (session as any).user?.id as string | undefined;
-    const sessionEmail = (session as any).user?.email as string | undefined;
+    const sessionUser = session.user as SessionUser;
+    const sessionUserId = sessionUser?.id;
+    const sessionEmail = sessionUser?.email;
 
     if (!sessionUserId && !sessionEmail) {
       return NextResponse.json({ error: "Session missing identifying information" }, { status: 401 });
@@ -97,7 +122,14 @@ export async function PATCH(req: NextRequest) {
     const { name, bio, avatarUrl, location, avatar } = body;
 
     // guard: at least one field must be present
-    const data: any = {};
+    interface UpdateData {
+      name?: string;
+      bio?: string;
+      location?: string;
+      avatarUrl?: string;
+    }
+
+    const data: UpdateData = {};
     if (typeof name === "string" && name.trim() !== "") data.name = name.trim();
     if (typeof bio === "string") data.bio = bio;
     if (typeof location === "string") data.location = location;
@@ -108,10 +140,8 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
     }
 
-    const where: any = sessionUserId ? { id: sessionUserId } : { email: sessionEmail };
-
     const updatedUser = await prisma.user.update({
-      where,
+      where: sessionUserId ? { id: sessionUserId } : { email: sessionEmail },
       data,
       select: {
         id: true,
@@ -129,7 +159,7 @@ export async function PATCH(req: NextRequest) {
       },
     });
 
-    const memberships = (updatedUser.familyMemberships || []).map((m: any) => ({
+    const memberships = (updatedUser.familyMemberships || []).map((m: FamilyMembershipData) => ({
       familyId: m.family.id,
       familyName: m.family.name,
       role: m.role,

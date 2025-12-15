@@ -52,6 +52,7 @@ function useMasonryCols() {
   }, []);
   return cols;
 }
+import Image from "next/image";
 
 type GalleryImage = {
   id: string | number;
@@ -64,6 +65,19 @@ type GalleryImage = {
   event?: string;
   occasion?: string;
 };
+
+interface PostType {
+  id: string;
+  images?: string[];
+  image?: string | null;
+  content?: string | null;
+  tags?: string[];
+  user?: string;
+  date?: string;
+  likes?: number;
+  event?: string;
+  occasion?: string;
+}
 
 const TAG_OPTIONS = [
   "Family",
@@ -83,13 +97,13 @@ export default function GalleryPage() {
   /** 1. Build baseImages from ALL images in posts (multi-image aware) */
   const baseImages: GalleryImage[] = React.useMemo(
     () =>
-      (posts || []).flatMap((p: any) => {
+      (posts || []).flatMap((p: PostType) => {
         const allImages: string[] =
           Array.isArray(p.images) && p.images.length > 0
             ? p.images
-            : p.image
-            ? [p.image]
-            : [];
+            : p.image && typeof p.image === 'string'
+              ? [p.image]
+              : [];
 
         if (!allImages.length) return [];
 
@@ -245,6 +259,7 @@ export default function GalleryPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, images.length]);
 
   /** 6. UI */
@@ -426,17 +441,17 @@ export default function GalleryPage() {
           {(filterName !== "all" ||
             filterEvent !== "all" ||
             filterTag !== "all") && (
-            <>
-              <Divider orientation="vertical" flexItem />
-              <Chip
-                size="small"
-                label="Clear"
-                onClick={clearFilters}
-                color="error"
-                variant="outlined"
-              />
-            </>
-          )}
+              <>
+                <Divider orientation="vertical" flexItem />
+                <Chip
+                  size="small"
+                  label="Clear"
+                  onClick={clearFilters}
+                  color="error"
+                  variant="outlined"
+                />
+              </>
+            )}
         </Box>
       </Menu>
 
@@ -539,13 +554,13 @@ export default function GalleryPage() {
           {(filterName !== "all" ||
             filterEvent !== "all" ||
             filterTag !== "all") && (
-            <ListItemButton onClick={clearFilters} sx={{ mt: 1 }}>
-              <ListItemText
-                primary="Clear filters"
-                primaryTypographyProps={{ color: "error.main" }}
-              />
-            </ListItemButton>
-          )}
+              <ListItemButton onClick={clearFilters} sx={{ mt: 1 }}>
+                <ListItemText
+                  primary="Clear filters"
+                  primaryTypographyProps={{ color: "error.main" }}
+                />
+              </ListItemButton>
+            )}
         </List>
       </Drawer>
 
@@ -593,7 +608,7 @@ export default function GalleryPage() {
                   },
                 }}
               >
-                <img
+                <Image
                   src={img.src}
                   alt={img.alt}
                   loading="lazy"
@@ -787,16 +802,19 @@ export default function GalleryPage() {
           {/* Image */}
           {images[index] && (
             <Fade in={imageLoaded} timeout={300}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src={images[index].src}
                 alt={images[index].alt}
                 onLoad={() => setImageLoaded(true)}
+                width={1200}
+                height={800}
                 style={{
                   maxWidth: isMobile ? "95vw" : "90vw",
                   maxHeight: isMobile ? "70vh" : "75vh",
                   objectFit: "contain",
                   borderRadius: 8,
+                  width: "auto",
+                  height: "auto",
                 }}
                 onClick={(e) => e.stopPropagation()}
               />

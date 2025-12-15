@@ -59,7 +59,7 @@ export function generateInviteCode(): string {
  * Payload should be a POJO (e.g. { userId: '...', email: '...' })
  * expiresIn accepts values like "7d", "24h", "1h", or numeric seconds string.
  */
-export async function createJwt(payload: Record<string, any>, expiresIn: string | number = "7d"): Promise<string> {
+export async function createJwt(payload: Record<string, string | number | boolean>, expiresIn: string | number = "7d"): Promise<string> {
   // SignJWT expects a plain object payload; include iat and exp via setExpirationTime
   const jwt = await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
@@ -75,7 +75,7 @@ export async function verifyJwt(token: string): Promise<JWTPayload | null> {
   try {
     const { payload } = await jwtVerify(token, jwtKey);
     return payload;
-  } catch (err) {
+  } catch {
     return null;
   }
 }
