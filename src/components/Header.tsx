@@ -50,7 +50,6 @@ import {
   Home,
   PhotoCameraBack,
   MenuBook,
-  // EventRepeat,
   LightMode as LightModeIcon,
   DarkMode as DarkModeIcon,
   Circle as CircleIcon,
@@ -60,7 +59,6 @@ import {
 import { TbBinaryTree } from "react-icons/tb";
 import {
   FiUser,
-  // FiHeart,
   FiMoon,
   FiHelpCircle,
   FiLogOut,
@@ -178,7 +176,12 @@ const Drawer = styled(MuiDrawer)(({ theme }) => ({
 dayjs.extend(relativeTime);
 
 /* ---------------- Header Component ---------------- */
-export default function Header({ children }: { children: React.ReactNode }) {
+interface HeaderProps {
+  children: React.ReactNode;
+  onNotificationClick?: (postId: string) => void;
+}
+
+export default function Header({ children, onNotificationClick }: HeaderProps) {
   const theme = useTheme();
   const dispatch = useDispatch();
   const router = useRouter();
@@ -191,7 +194,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const [mobileOpen, setMobileOpen] = React.useState(false);
-  
+
 
   const getDisplayInfo = () => {
     if (currentUser && "username" in currentUser) {
@@ -286,7 +289,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
     icon: React.ReactNode;
     href: string;
     match: (p: string) => boolean;
-    comingSoon?: boolean; // ⭐ Add this property
+    comingSoon?: boolean;
   }[] = [
       {
         text: "Activity",
@@ -299,7 +302,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
         icon: <EventIcon />,
         href: "/calendar",
         match: (p) => p.startsWith("/calendar"),
-        comingSoon: true, // ⭐ Add this
+        comingSoon: true,
       },
       {
         text: "Family Tree",
@@ -318,7 +321,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
         icon: <MenuBook />,
         href: "/recipes",
         match: (p) => p.startsWith("/recipes"),
-        comingSoon: true, // ⭐ Add this
+        comingSoon: true,
       },
     ];
 
@@ -365,8 +368,6 @@ export default function Header({ children }: { children: React.ReactNode }) {
   ];
 
   // Drawer Content Component
-  // Update the DrawerContent component (around line 340):
-
   const DrawerContent = () => (
     <>
       <DrawerHeader />
@@ -381,7 +382,6 @@ export default function Header({ children }: { children: React.ReactNode }) {
                 component={Link}
                 href={item.href}
                 onClick={(e) => {
-                  // ⭐ Prevent navigation if coming soon
                   if (item.comingSoon) {
                     e.preventDefault();
                   }
@@ -394,7 +394,6 @@ export default function Header({ children }: { children: React.ReactNode }) {
                   borderRadius: 2,
                   px: 2,
                   transition: "all 0.2s",
-                  // ⭐ Disable style if coming soon
                   ...(item.comingSoon && {
                     opacity: 0.6,
                     cursor: "not-allowed",
@@ -412,7 +411,6 @@ export default function Header({ children }: { children: React.ReactNode }) {
                       bgcolor: alpha(theme.palette.action.hover, 0.6),
                     },
                   }),
-                  // ⭐ Different hover for coming soon items
                   ...(item.comingSoon && {
                     "&:hover": {
                       bgcolor: alpha(theme.palette.action.hover, 0.3),
@@ -436,7 +434,6 @@ export default function Header({ children }: { children: React.ReactNode }) {
                     fontWeight: active ? 600 : 500,
                   }}
                 />
-                {/* ⭐ Add "Coming Soon" chip */}
                 {item.comingSoon && (
                   <Chip
                     label="Soon"
@@ -459,7 +456,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
 
       <Divider sx={{ mx: 2, my: 1 }} />
 
-      {/* Secondary Menu - unchanged */}
+      {/* Secondary Menu */}
       <List sx={{ px: 1 }}>
         {secondaryMenu.map((item) => {
           const active = item.match?.(pathname) ?? false;
@@ -523,7 +520,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
 
       {/* App Bar */}
       <AppBar elevation={0}>
-        <Toolbar>
+        <Toolbar sx={{ minHeight: { xs: 56, sm: 64 } }}>
           {/* Mobile Menu Button */}
           {isMobile && (
             <IconButton
@@ -559,11 +556,11 @@ export default function Header({ children }: { children: React.ReactNode }) {
           </Box>
 
           {/* Right side: Notifications + User menu */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.5, sm: 1.5 } }}>
             {/* Notification Button */}
             <Tooltip title="Notifications">
               <IconButton
-                size={isMobile ? "medium" : "large"}
+                size={isMobile ? "small" : "medium"}
                 aria-describedby={notifId}
                 onClick={handleNotifClick}
                 sx={{
@@ -622,7 +619,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
             borderRadius: 4,
             boxShadow: 6,
             overflow: "hidden",
-            width: 320,
+            width: { xs: 280, sm: 320 },
             mt: 1,
           },
         }}
@@ -784,8 +781,9 @@ export default function Header({ children }: { children: React.ReactNode }) {
           paper: {
             elevation: 8,
             sx: {
-              width: isMobile ? "90vw" : 380,
-              maxWidth: "90vw",
+              width: isMobile ? "calc(100vw - 32px)" : 420,
+              maxWidth: "calc(100vw - 32px)",
+              maxHeight: isMobile ? "70vh" : "60vh",
               borderRadius: 3,
               mt: 1.5,
               overflow: "hidden",
@@ -801,6 +799,10 @@ export default function Header({ children }: { children: React.ReactNode }) {
             alignItems: "center",
             justifyContent: "space-between",
             borderBottom: `1px solid ${theme.palette.divider}`,
+            position: "sticky",
+            top: 0,
+            bgcolor: "background.paper",
+            zIndex: 1,
           }}
         >
           <Typography
@@ -819,7 +821,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
             Mark all read
           </Button>
         </Box>
-        <List dense disablePadding sx={{ maxHeight: 400, overflow: "auto" }}>
+        <List dense disablePadding sx={{ maxHeight: isMobile ? "calc(70vh - 60px)" : "calc(60vh - 60px)", overflow: "auto" }}>
           {notifications.length === 0 ? (
             <Box sx={{ p: 4, textAlign: "center" }}>
               <Typography variant="body2" color="text.secondary">
@@ -831,13 +833,34 @@ export default function Header({ children }: { children: React.ReactNode }) {
               <ListItem
                 key={n.id}
                 disableGutters
-                onClick={() => {
-                  if (!n.isRead) markAsRead(n.id);
-                  // Navigate to related content if needed
-                  if (n.relatedType === "post" && n.relatedId) {
-                    router.push(`/post/${n.relatedId}`);
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+
+                  // Mark notification as read
+                  if (!n.isRead) {
+                    markAsRead(n.id);
                   }
+
+                  // Close the popover
                   handleNotifClose();
+
+                  // Handle post navigation
+                  if (n.relatedType === "post" && n.relatedId) {
+                    // If we're already on feed, use the callback to scroll/open modal
+                    if (pathname === "/feed" || pathname === "/") {
+                      onNotificationClick?.(n.relatedId);
+                    } else {
+                      // Navigate to feed first, then the callback will handle it
+                      router.push(`/feed?postId=${n.relatedId}`);
+                    }
+                  } else if (n.relatedType === "comment" && n.relatedId) {
+                    if (pathname === "/feed" || pathname === "/") {
+                      onNotificationClick?.(n.relatedId);
+                    } else {
+                      router.push(`/feed?postId=${n.relatedId}`);
+                    }
+                  }
                 }}
                 sx={{
                   px: 2,
@@ -887,7 +910,6 @@ export default function Header({ children }: { children: React.ReactNode }) {
                         {n.message}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {/* ⭐ Use dayjs for relative time */}
                         {dayjs(n.createdAt).fromNow()}
                       </Typography>
                     </>
@@ -935,7 +957,7 @@ export default function Header({ children }: { children: React.ReactNode }) {
               sx={{
                 flexGrow: 1,
                 py: isMobile ? 2 : 3,
-                marginTop: "64px",
+                marginTop: { xs: "56px", sm: "64px" },
                 minHeight: "calc(100vh - 64px)",
               }}
             >
@@ -1030,7 +1052,6 @@ export default function Header({ children }: { children: React.ReactNode }) {
                         </Typography>
                         {!member.online && member.lastSeen && (
                           <Typography variant="caption" color="text.secondary">
-                            {/* ⭐ Use dayjs for last seen */}
                             {dayjs(member.lastSeen).fromNow()}
                           </Typography>
                         )}

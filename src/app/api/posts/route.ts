@@ -130,11 +130,7 @@ export async function POST(request: NextRequest) {
                 })) || [],
                 createdAt: c.createdAt.toISOString(),
             })),
-            date: new Date(post.createdAt).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-            }),
+            date: post.createdAt.toISOString(),
             createdAt: post.createdAt.toISOString(),
             updatedAt: post.updatedAt.toISOString(),
         });
@@ -269,11 +265,7 @@ export async function GET(request: NextRequest) {
         })) || [],
         createdAt: c.createdAt.toISOString(),
       })),
-      date: new Date(post.createdAt).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      }),
+      date: post.createdAt.toISOString(),
       createdAt: post.createdAt.toISOString(),
       updatedAt: post.updatedAt.toISOString(),
     }));

@@ -1,3 +1,4 @@
+// src/components/feed/PostCard.tsx
 "use client";
 
 import * as React from "react";
@@ -19,7 +20,6 @@ import {
   Collapse,
   Tooltip,
   Badge,
-  // Zoom,
   AvatarGroup,
 } from "@mui/material";
 import {
@@ -30,14 +30,14 @@ import {
   Share as ShareIcon,
   FavoriteBorder,
   Favorite,
-  // BookmarkBorder,
-  // Bookmark,
   Public,
   VerifiedUser,
   Lock,
   Group,
 } from "@mui/icons-material";
 import Image from "next/image";
+import ImageCarousel from "./ImageCarousel";
+
 /* -----------------------
    Type Definitions
    ----------------------- */
@@ -56,8 +56,8 @@ export type Comment = {
 
 export type PostCardData = {
   id: string;
-  userId: string;         // 🔥 Author's userId
-  user: string;           // Display name
+  userId: string;
+  user: string;
   username?: string;
   avatar?: string;
   content?: string;
@@ -66,11 +66,11 @@ export type PostCardData = {
   tags: string[];
   date: string;
   likes: number;
-  likedBy: string[];      // 🔥 Array of userIds
+  likedBy: string[];
   comments: Comment[];
   eventDate?: string;
   createdAt?: string;
-  visibility?: 'PUBLIC' | 'FAMILY' | 'PRIVATE'; 
+  visibility?: 'PUBLIC' | 'FAMILY' | 'PRIVATE';
 };
 
 type Props = {
@@ -82,21 +82,19 @@ type Props = {
   onShare: (postId: string) => void;
   onImageClick?: (index: number) => void;
   currentUserName: string;
-  currentUserId: string; 
+  currentUserId: string;
   canEdit?: boolean;
   commentsOpen?: boolean;
   commentSection?: React.ReactNode;
 };
 
 /* -----------------------
-   🎨 Premium Image Grid
+   🎨 Premium Image Grid (Desktop)
    ----------------------- */
-// src/components/feed/PostCard.tsx
-
-const PremiumImageGrid = ({ 
-  images, 
-  onImageClick 
-}: { 
+const DesktopImageGrid = ({
+  images,
+  onImageClick
+}: {
   images: string[];
   onImageClick?: (index: number) => void;
 }) => {
@@ -109,15 +107,6 @@ const PremiumImageGrid = ({
     if (onImageClick) {
       onImageClick(index);
     }
-  };
-
-  const imgStyle: React.CSSProperties = {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    display: "block",
-    transition: "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
-    cursor: "pointer",
   };
 
   const hoverEffectSx = {
@@ -153,26 +142,27 @@ const PremiumImageGrid = ({
     boxShadow: `0 4px 20px ${alpha(theme.palette.common.black, 0.04)}`,
   };
 
-  // ⭐ Single image - use fill prop
+  // Single image
   if (count === 1) {
     return (
       <Box sx={containerStyle}>
-        <Box 
-          sx={{ 
-            ...hoverEffectSx, 
+        <Box
+          sx={{
+            ...hoverEffectSx,
             maxHeight: '600px',
-            position: 'relative', // ⭐ Required for fill
-            minHeight: '400px' // ⭐ Give it a minimum height
-          }} 
+            position: 'relative',
+            minHeight: '400px'
+          }}
           onClick={() => handleImageClick(0)}
         >
-          <Image 
-            src={images[0]} 
-            alt="post-img-0" 
-            fill // ⭐ Use fill instead of width/height
+          <Image
+            src={images[0]}
+            alt="post-img-0"
+            fill
             style={{
               objectFit: "cover",
               cursor: "pointer",
+              transition: "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
             }}
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
@@ -181,17 +171,21 @@ const PremiumImageGrid = ({
     );
   }
 
-  // ⭐ Two images
+  // Two images
   if (count === 2) {
     return (
       <Box sx={{ ...containerStyle, gridTemplateColumns: "1fr 1fr" }}>
         {images.map((img, i) => (
           <Box key={i} sx={{ ...hoverEffectSx, position: 'relative' }} onClick={() => handleImageClick(i)}>
-            <Image 
-              src={img} 
-              alt={`post-img-${i}`} 
+            <Image
+              src={img}
+              alt={`post-img-${i}`}
               fill
-              style={{ objectFit: "cover", cursor: "pointer" }}
+              style={{
+                objectFit: "cover",
+                cursor: "pointer",
+                transition: "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              }}
               sizes="(max-width: 768px) 50vw, 25vw"
             />
           </Box>
@@ -200,34 +194,46 @@ const PremiumImageGrid = ({
     );
   }
 
-  // ⭐ Three images
+  // Three images
   if (count === 3) {
     return (
       <Box sx={{ ...containerStyle, gridTemplateColumns: "2fr 1fr", gridTemplateRows: "1fr 1fr" }}>
         <Box sx={{ ...hoverEffectSx, gridRow: "1 / span 2", position: 'relative' }} onClick={() => handleImageClick(0)}>
-          <Image 
-            src={images[0]} 
-            alt="post-img-0" 
+          <Image
+            src={images[0]}
+            alt="post-img-0"
             fill
-            style={{ objectFit: "cover", cursor: "pointer" }}
+            style={{
+              objectFit: "cover",
+              cursor: "pointer",
+              transition: "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+            }}
             sizes="(max-width: 768px) 66vw, 40vw"
           />
         </Box>
         <Box sx={{ ...hoverEffectSx, position: 'relative' }} onClick={() => handleImageClick(1)}>
-          <Image 
-            src={images[1]} 
-            alt="post-img-1" 
+          <Image
+            src={images[1]}
+            alt="post-img-1"
             fill
-            style={{ objectFit: "cover", cursor: "pointer" }}
+            style={{
+              objectFit: "cover",
+              cursor: "pointer",
+              transition: "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+            }}
             sizes="(max-width: 768px) 33vw, 20vw"
           />
         </Box>
         <Box sx={{ ...hoverEffectSx, position: 'relative' }} onClick={() => handleImageClick(2)}>
-          <Image 
-            src={images[2]} 
-            alt="post-img-2" 
+          <Image
+            src={images[2]}
+            alt="post-img-2"
             fill
-            style={{ objectFit: "cover", cursor: "pointer" }}
+            style={{
+              objectFit: "cover",
+              cursor: "pointer",
+              transition: "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+            }}
             sizes="(max-width: 768px) 33vw, 20vw"
           />
         </Box>
@@ -235,7 +241,7 @@ const PremiumImageGrid = ({
     );
   }
 
-  // ⭐ Four or more images
+  // Four or more images
   return (
     <Box sx={{ ...containerStyle, gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr" }}>
       {images.slice(0, 4).map((img, i) => {
@@ -243,11 +249,15 @@ const PremiumImageGrid = ({
         const remaining = count - 4;
         return (
           <Box key={i} sx={{ ...hoverEffectSx, position: 'relative' }} onClick={() => handleImageClick(i)}>
-            <Image 
-              src={img} 
-              alt={`post-img-${i}`} 
+            <Image
+              src={img}
+              alt={`post-img-${i}`}
               fill
-              style={{ objectFit: "cover", cursor: "pointer" }}
+              style={{
+                objectFit: "cover",
+                cursor: "pointer",
+                transition: "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              }}
               sizes="(max-width: 768px) 50vw, 25vw"
             />
             {isLast && remaining > 0 && (
@@ -262,7 +272,7 @@ const PremiumImageGrid = ({
                   justifyContent: "center",
                   cursor: "pointer",
                   transition: 'all 0.3s',
-                  zIndex: 2, // ⭐ Above the image
+                  zIndex: 2,
                   '&:hover': {
                     bgcolor: alpha(theme.palette.common.black, 0.6),
                     backdropFilter: "blur(10px)",
@@ -280,6 +290,7 @@ const PremiumImageGrid = ({
     </Box>
   );
 };
+
 /* -----------------------
    💎 Main Component
    ----------------------- */
@@ -291,18 +302,16 @@ export default function PostCard({
   onDelete,
   onShare,
   onImageClick,
-  // currentUserName,
-  currentUserId,  
+  currentUserId,
   canEdit = true,
   commentsOpen = false,
   commentSection,
 }: Props) {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const [menuAnchor, setMenuAnchor] = React.useState<null | HTMLElement>(null);
   const [isHovered, setIsHovered] = React.useState(false);
-  // const [bookmarked, setBookmarked] = React.useState(false);
   const [,setLikeAnimating] = React.useState(false);
 
   const isLiked = post.likedBy.includes(currentUserId);
@@ -339,7 +348,7 @@ export default function PostCard({
     switch (mode) {
       case 'PUBLIC': return { icon: <Public sx={{ fontSize: 14 }} />, label: "Public", desc: "Visible to everyone" };
       case 'PRIVATE': return { icon: <Lock sx={{ fontSize: 14 }} />, label: "Private", desc: "Only visible to you" };
-      case 'FAMILY': 
+      case 'FAMILY':
       default: return { icon: <Group sx={{ fontSize: 14 }} />, label: "Family", desc: "Visible to family members" };
     }
   };
@@ -399,9 +408,6 @@ export default function PostCard({
             </Box>
           </Box>
           <Stack direction="row" spacing={0.5}>
-            {/* <IconButton onClick={() => setBookmarked(!bookmarked)} size="small" sx={{ color: bookmarked ? 'warning.main' : 'text.secondary' }}>
-              {bookmarked ? <Bookmark fontSize="small" /> : <BookmarkBorder fontSize="small" />}
-            </IconButton> */}
             {canEdit && isOwnPost && <IconButton onClick={(e) => setMenuAnchor(e.currentTarget)} size="small" sx={{ color: 'text.secondary' }}><MoreVert fontSize="small" /></IconButton>}
           </Stack>
         </Box>
@@ -423,8 +429,20 @@ export default function PostCard({
           </Stack>
         )}
 
-        {/* Images */}
-        <PremiumImageGrid images={postImages} onImageClick={onImageClick} />
+        {/* Images - Carousel on mobile, Grid on desktop */}
+        {postImages.length > 0 && (
+          <>
+            {isMobile ? (
+              <ImageCarousel
+                images={postImages}
+                onImageClick={onImageClick}
+                aspectRatio={1}
+              />
+            ) : (
+              <DesktopImageGrid images={postImages} onImageClick={onImageClick} />
+            )}
+          </>
+        )}
 
         {/* Event Date */}
         {post.eventDate && (
@@ -467,7 +485,7 @@ export default function PostCard({
               flex: 1,
               textTransform: 'none',
               fontWeight: 700,
-              fontSize: '0.9rem',
+              fontSize: isMobile ? '0.8rem' : '0.9rem',
               py: 1,
               borderRadius: 2,
               color: isLiked ? 'error.main' : 'text.secondary',
@@ -491,7 +509,7 @@ export default function PostCard({
               flex: 1,
               textTransform: 'none',
               fontWeight: 700,
-              fontSize: '0.9rem',
+              fontSize: isMobile ? '0.8rem' : '0.9rem',
               py: 1,
               borderRadius: 2,
               color: commentsOpen ? 'primary.main' : 'text.secondary',
@@ -515,7 +533,7 @@ export default function PostCard({
               flex: 1,
               textTransform: 'none',
               fontWeight: 700,
-              fontSize: '0.9rem',
+              fontSize: isMobile ? '0.8rem' : '0.9rem',
               py: 1,
               borderRadius: 2,
               color: 'text.secondary',
