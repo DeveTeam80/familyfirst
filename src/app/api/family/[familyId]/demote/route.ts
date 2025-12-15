@@ -2,20 +2,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/nextauth.config";
+
+// Type for session user
+interface SessionUser {
+  id?: string;
+}
 
 export async function POST(
   req: NextRequest,
-  context: { params: { familyId: string } }
+  context: { params: Promise<{ familyId: string }> } // ⭐ Changed to Promise
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user?.id) {
+    if (!session) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const requesterId = session.user.id;
-    const { familyId } = context.params;
+    const sessionUser = session.user as SessionUser;
+    const requesterId = sessionUser?.id;
+
+    if (!requesterId) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    const { familyId } = await context.params; // ⭐ Added await
 
     const body = await req.json().catch(() => null);
     const targetUserId = body?.userId;
@@ -78,7 +89,7 @@ export async function POST(
       success: true,
       message: "User demoted to MEMBER successfully",
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("DEMOTE ERROR:", err);
     return NextResponse.json(
       { error: "Internal server error" },

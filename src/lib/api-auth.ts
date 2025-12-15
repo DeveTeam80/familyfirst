@@ -1,13 +1,14 @@
 // src/lib/api-auth.ts
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/nextauth.config";
 import { NextRequest, NextResponse } from "next/server";
+import { Session } from "next-auth";
 
 export async function getAuthSession() {
   return await getServerSession(authOptions);
 }
 
-export async function requireAuth(request: NextRequest) {
+export async function requireAuth(_request: NextRequest) {
   const session = await getAuthSession();
 
   if (!session?.user) {
@@ -17,9 +18,15 @@ export async function requireAuth(request: NextRequest) {
   return { session, user: session.user };
 }
 
+// Type for auth context
+interface AuthContext {
+  session: Session;
+  user: Session["user"];
+}
+
 // Usage in API routes
 export async function withAuth(
-  handler: (req: NextRequest, context: { session: any; user: any }) => Promise<NextResponse>
+  handler: (req: NextRequest, context: AuthContext) => Promise<NextResponse>
 ) {
   return async (req: NextRequest) => {
     const auth = await requireAuth(req);

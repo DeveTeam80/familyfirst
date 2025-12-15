@@ -280,7 +280,7 @@ function LoginForm() {
         {/* Register Link */}
         <Box sx={{ textAlign: "center" }}>
           <Typography variant="body2" color="text.secondary">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Typography
               component="span"
               variant="body2"

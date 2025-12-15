@@ -2,6 +2,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
+
+// Type for invitation with includes
+interface InvitationWithRelations {
+  id: string;
+  inviteCode: string;
+  email: string | null;
+  status: string;
+  expiresAt: Date | null;
+  treeNodeId: string | null;
+  familyId: string;
+  treeNode: {
+    id: string;
+  } | null;
+  family: {
+    id: string;
+    name: string;
+  };
+}
 
 /**
  * Create a URL-safe username slug from a name or email local part.
@@ -24,7 +43,7 @@ function slugify(input: string) {
  * Generate a unique username using the provided transaction client.
  * Will append numeric suffixes until a unique username is found.
  */
-async function generateUniqueUsername(tx: any, base: string) {
+async function generateUniqueUsername(tx: Prisma.TransactionClient, base: string) {
   let candidate = base;
   let suffix = 0;
 
@@ -82,16 +101,18 @@ export async function POST(req: NextRequest) {
     }
 
     // If inviteCode provided, verify it
-    let invitation: any = null;
+    let invitation: InvitationWithRelations | null = null;
     if (inviteCode) {
-      invitation = await prisma.invitation.findUnique({
+      const foundInvitation = await prisma.invitation.findUnique({
         where: { inviteCode },
         include: { treeNode: true, family: true },
       });
 
-      if (!invitation) {
+      if (!foundInvitation) {
         return NextResponse.json({ error: "Invalid invite code" }, { status: 404 });
       }
+
+      invitation = foundInvitation as InvitationWithRelations;
 
       if (invitation.status !== "PENDING") {
         return NextResponse.json({ error: "Invite already used or expired" }, { status: 409 });
@@ -110,7 +131,7 @@ export async function POST(req: NextRequest) {
     const passwordHash = await bcrypt.hash(password, 10);
 
     // Create user and link to tree node in a transaction
-    const result = await prisma.$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx) => {
       // generate base for username from name or email local part
       const emailLocal = emailNormalized.split("@")[0] || "";
       const baseForSlug = slugify(name || emailLocal || `user${Math.random().toString(36).slice(2, 8)}`) || slugify(emailLocal);
@@ -136,10 +157,10 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      if (invitation && invitation.treeNode) {
+      if (invitation && invitation.treeNode && invitation.treeNodeId) {
         // 2. Link user to tree node
         await tx.familyTreeNode.update({
-          where: { id: invitation.treeNodeId! },
+          where: { id: invitation.treeNodeId },
           data: {
             userId: user.id,
             isAccountHolder: true,

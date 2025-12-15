@@ -8,6 +8,26 @@ import {
   clearCurrentUser,
 } from "@/store/userSlice";
 
+// Type for the API response
+interface ApiUserResponse {
+  user: {
+    id: string;
+    username?: string;
+    name?: string;
+    email?: string;
+    avatarUrl?: string;
+    bio?: string;
+    location?: string;
+  };
+}
+
+// Extended session user type
+interface ExtendedUser {
+  username?: string;
+  name?: string | null;
+  email?: string | null;
+}
+
 export function useAuthSync() {
   const { data: session, status } = useSession();
   const dispatch = useDispatch();
@@ -37,23 +57,24 @@ export function useAuthSync() {
             return;
           }
 
-          const { user } = await res.json();
-          // user: whatever your backend returns
+          const { user } = (await res.json()) as ApiUserResponse;
 
           // ✅ Compute a canonical username
-          const backendUsername = (user as any).username;
+          const backendUsername = user.username;
+          const sessionUser = session.user as ExtendedUser;
           const sessionUsername =
-            (session.user as any).username ||
-            session.user.name?.toLowerCase().replace(/\s+/g, "") ||
-            session.user.email?.split("@")[0];
+            sessionUser.username ||
+            sessionUser.name?.toLowerCase().replace(/\s+/g, "") ||
+            sessionUser.email?.split("@")[0];
 
           const username = backendUsername || sessionUsername || "user";
+          const name = user.name || sessionUser.name || username || "User";
 
           dispatch(
             setCurrentUser({
               id: user.id,
-              username, // ✅ always set
-              name: user.name,
+              username,
+              name,
               email: user.email,
               avatar: user.avatarUrl ?? null,
               bio: user.bio ?? "",

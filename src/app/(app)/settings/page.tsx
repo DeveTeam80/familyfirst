@@ -7,7 +7,6 @@ import {
   Paper,
   Typography,
   Grid,
-  CircularProgress,
   Stack,
   Alert,
   Snackbar,
@@ -28,7 +27,6 @@ import {
 } from "@mui/material";
 
 import GroupIcon from "@mui/icons-material/Group";
-import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
 import MailOutlineIcon from "@mui/icons-material/MailOutline";
@@ -110,6 +108,17 @@ const MemberListSkeleton = () => (
   </Paper>
 );
 
+interface ToastState {
+  severity: "success" | "error" | "info";
+  text: string;
+}
+
+interface ConfirmState {
+  action: "promote" | "demote";
+  userId: string;
+  username?: string;
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const currentUser = useSelector((s: RootState) => s.user.currentUser);
@@ -122,12 +131,8 @@ export default function SettingsPage() {
   // ⭐ Add initial loading state
   const [initialLoading, setInitialLoading] = React.useState(true);
 
-  const [toast, setToast] = React.useState<{ severity: "success" | "error" | "info"; text: string } | null>(null);
-  const [confirm, setConfirm] = React.useState<{
-    action: "promote" | "demote";
-    userId: string;
-    username?: string;
-  } | null>(null);
+  const [toast, setToast] = React.useState<ToastState | null>(null);
+  const [confirm, setConfirm] = React.useState<ConfirmState | null>(null);
 
   const [processingUserId, setProcessingUserId] = React.useState<string | null>(null);
 
@@ -161,7 +166,19 @@ export default function SettingsPage() {
       if (!res.ok) throw new Error("Failed to load members");
 
       const json = await res.json();
-      const mapped: MemberItem[] = (json.members || []).map((m: any) => ({
+      
+      interface APIMember {
+        userId: string;
+        role: string;
+        user?: {
+          username?: string;
+          email?: string;
+          name?: string | null;
+          avatarUrl?: string | null;
+        };
+      }
+
+      const mapped: MemberItem[] = (json.members || []).map((m: APIMember) => ({
         userId: m.userId,
         username: m.user?.username || m.user?.email?.split("@")[0] || "",
         name: m.user?.name || null,
@@ -171,8 +188,9 @@ export default function SettingsPage() {
       }));
 
       setMembers(mapped);
-    } catch (err: any) {
-      setMembersError(err?.message || "Failed to load family members");
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to load family members";
+      setMembersError(errorMessage);
     } finally {
       setLoadingMembers(false);
       setInitialLoading(false); // ⭐ Stop initial loading
@@ -207,8 +225,9 @@ export default function SettingsPage() {
 
       setToast({ severity: "success", text: json.message || "User promoted" });
       await refreshMembers();
-    } catch (err: any) {
-      setToast({ severity: "error", text: err?.message || "Could not promote" });
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Could not promote";
+      setToast({ severity: "error", text: errorMessage });
     } finally {
       setProcessingUserId(null);
     }
@@ -231,8 +250,9 @@ export default function SettingsPage() {
 
       setToast({ severity: "success", text: json.message || "User demoted" });
       await refreshMembers();
-    } catch (err: any) {
-      setToast({ severity: "error", text: err?.message || "Could not demote user" });
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Could not demote user";
+      setToast({ severity: "error", text: errorMessage });
     } finally {
       setProcessingUserId(null);
     }
@@ -271,8 +291,9 @@ export default function SettingsPage() {
 
       setToast({ severity: "success", text: json.message || "Verification sent" });
       setNewEmail("");
-    } catch (err: any) {
-      setToast({ severity: "error", text: err?.message || "Error" });
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Error";
+      setToast({ severity: "error", text: errorMessage });
     } finally {
       setEmailBusy(false);
     }
@@ -305,8 +326,9 @@ export default function SettingsPage() {
       setCurrentPassword("");
       setNextPassword("");
       setConfirmPassword("");
-    } catch (err: any) {
-      setToast({ severity: "error", text: err?.message || "Error" });
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Error";
+      setToast({ severity: "error", text: errorMessage });
     } finally {
       setPasswordBusy(false);
     }

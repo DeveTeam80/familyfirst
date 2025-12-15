@@ -1,18 +1,38 @@
 // src/app/api/posts/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/nextauth.config";
 import { prisma } from "@/lib/prisma";
-import { Visibility } from "@prisma/client";
+
+// Type for session user
+interface SessionUser {
+  id?: string;
+}
+
+// Type for update data
+interface PostUpdateData {
+  content?: string;
+  tags?: string[];
+  eventDate?: Date | null;
+  photos?: {
+    deleteMany: Record<string, never>;
+    create?: Array<{
+      url: string;
+      familyId: string;
+      cloudinaryId: string;
+    }>;
+  };
+}
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // ⭐ Changed to Promise
 ) {
   const session = await getServerSession(authOptions);
+  const sessionUser = session?.user as SessionUser | undefined;
 
   try {
-    const { id } = params;
+    const { id } = await params; // ⭐ Await params
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const post = await prisma.post.findUnique({
@@ -34,7 +54,7 @@ export async function GET(
         },
         comments: {
           where: {
-            parentId: null, // ⭐ Only get top-level comments
+            parentId: null,
           },
           include: {
             user: {
@@ -45,7 +65,7 @@ export async function GET(
               },
             },
             likes: true,
-            replies: { // ⭐ Include nested replies
+            replies: {
               include: {
                 user: {
                   select: {
@@ -72,22 +92,20 @@ export async function GET(
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
-    // ⭐ Check visibility and permissions
+    // Check visibility and permissions
     if (post.visibility === "PRIVATE") {
-      // Only author can see private posts
-      if (!session?.user?.id || post.authorId !== session.user.id) {
+      if (!sessionUser?.id || post.authorId !== sessionUser.id) {
         return NextResponse.json({ error: "Not available publicly" }, { status: 403 });
       }
     }
 
     if (post.visibility === "FAMILY") {
-      // Must be logged in and in same family
-      if (!session?.user?.id) {
+      if (!sessionUser?.id) {
         return NextResponse.json({ error: "Authentication required" }, { status: 401 });
       }
 
       const userFamilies = await prisma.familyMember.findMany({
-        where: { userId: session.user.id },
+        where: { userId: sessionUser.id },
         select: { familyId: true },
       });
 
@@ -98,7 +116,7 @@ export async function GET(
       }
     }
 
-    // ⭐ Format response with visibility
+    // Format response with visibility
     const response = {
       post: {
         id: post.id,
@@ -109,7 +127,7 @@ export async function GET(
         tags: post.tags ?? [],
         image: post.photos?.[0]?.url ?? null,
         images: post.photos?.map((p) => p.url) ?? [],
-        visibility: post.visibility, // ⭐ Include visibility
+        visibility: post.visibility,
         date: post.createdAt.toISOString(),
         createdAt: post.createdAt.toISOString(),
         updatedAt: post.updatedAt.toISOString(),
@@ -124,7 +142,7 @@ export async function GET(
           likes: c.likes?.length || 0,
           likedBy: c.likes?.map((l) => l.userId) || [],
           createdAt: c.createdAt.toISOString(),
-          replies: c.replies?.map((r) => ({ // ⭐ Include replies
+          replies: c.replies?.map((r) => ({
             id: r.id,
             user: r.user?.name ?? "Unknown",
             userId: r.user?.id,
@@ -148,16 +166,17 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // ⭐ Changed to Promise
 ) {
   const session = await getServerSession(authOptions);
+  const sessionUser = session?.user as SessionUser | undefined;
 
-  if (!session?.user) {
+  if (!sessionUser?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const { id } = params;
+    const { id } = await params; // ⭐ Await params
     const body = await request.json();
     const { content, tags, imageUrls, eventDate } = body;
 
@@ -169,11 +188,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
-    if (existingPost.authorId !== session.user.id) {
+    if (existingPost.authorId !== sessionUser.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const updateData: any = {};
+    const updateData: PostUpdateData = {};
 
     if (content !== undefined) updateData.content = content;
     if (tags !== undefined) updateData.tags = tags;
@@ -235,7 +254,7 @@ export async function PATCH(
       tags: post.tags,
       image: post.photos?.[0]?.url || null,
       images: post.photos?.map((p) => p.url) || [],
-      visibility: post.visibility, // ⭐ Include visibility
+      visibility: post.visibility,
       eventDate: post.eventDate?.toISOString(),
       likes: post.reactions.filter((r) => r.type === "LIKE").length,
       likedBy: post.reactions.filter((r) => r.type === "LIKE").map((r) => r.userId),
@@ -262,16 +281,17 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // ⭐ Changed to Promise
 ) {
   const session = await getServerSession(authOptions);
+  const sessionUser = session?.user as SessionUser | undefined;
 
-  if (!session?.user) {
+  if (!sessionUser?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const { id } = params;
+    const { id } = await params; // ⭐ Await params
 
     const existingPost = await prisma.post.findUnique({
       where: { id },
@@ -281,7 +301,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
-    if (existingPost.authorId !== session.user.id) {
+    if (existingPost.authorId !== sessionUser.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

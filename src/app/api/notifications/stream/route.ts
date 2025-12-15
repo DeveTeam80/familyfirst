@@ -1,7 +1,7 @@
 // src/app/api/notifications/stream/route.ts
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/nextauth.config";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = 'force-dynamic';
@@ -10,10 +10,17 @@ export const runtime = 'nodejs';
 const HEARTBEAT_INTERVAL = 30000; // 30 seconds
 const UPDATE_INTERVAL = 5000; // 5 seconds
 
-export async function GET(request: NextRequest) {
-  const session = await getServerSession(authOptions);
+// Type for session user
+interface SessionUser {
+  id?: string;
+}
 
-  if (!session?.user?.id) {
+export async function GET(_request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  const sessionUser = session?.user as SessionUser | undefined;
+  const userId = sessionUser?.id;
+
+  if (!userId) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -24,7 +31,7 @@ export async function GET(request: NextRequest) {
 
   const stream = new ReadableStream({
     async start(controller) {
-      const sendEvent = (data: any) => {
+      const sendEvent = (data: Record<string, unknown>) => {
         if (!isAlive) return;
         const message = `data: ${JSON.stringify(data)}\n\n`;
         try {
@@ -39,7 +46,7 @@ export async function GET(request: NextRequest) {
 
       // Mark user as online
       await prisma.user.update({
-        where: { id: session.user.id },
+        where: { id: userId },
         data: {
           isOnline: true,
           lastSeenAt: new Date(),
@@ -58,7 +65,7 @@ export async function GET(request: NextRequest) {
         try {
           const notifications = await prisma.notification.findMany({
             where: {
-              userId: session.user.id,
+              userId: userId,
               isRead: false,
             },
             orderBy: {
@@ -72,7 +79,7 @@ export async function GET(request: NextRequest) {
           const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
           
           const userFamilies = await prisma.familyMember.findMany({
-            where: { userId: session.user.id },
+            where: { userId: userId },
             select: { familyId: true },
           });
 
@@ -85,7 +92,7 @@ export async function GET(request: NextRequest) {
                   familyId: { in: familyIds },
                 },
               },
-              id: { not: session.user.id },
+              id: { not: userId },
               OR: [
                 { isOnline: true },
                 { lastSeenAt: { gte: fiveMinutesAgo } },
@@ -130,7 +137,7 @@ export async function GET(request: NextRequest) {
           });
 
           await prisma.user.update({
-            where: { id: session.user.id },
+            where: { id: userId },
             data: { lastSeenAt: new Date() },
           }).catch(console.error);
 
@@ -146,14 +153,14 @@ export async function GET(request: NextRequest) {
       clearInterval(heartbeatInterval);
 
       prisma.user.update({
-        where: { id: session.user.id },
+        where: { id: userId },
         data: { 
           isOnline: false,
           lastSeenAt: new Date(),
         },
       }).catch(console.error);
 
-      console.log(`SSE connection closed for user: ${session.user.id}`);
+      console.log(`SSE connection closed for user: ${userId}`);
     },
   });
 

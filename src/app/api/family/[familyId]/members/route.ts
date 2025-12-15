@@ -3,8 +3,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserIdFromRequest } from "@/lib/session";
 
-export async function GET(req: NextRequest, { params }: { params: { familyId: string } }) {
-  const { familyId } = params;
+// ⭐ Add proper interface for family member with user
+interface FamilyMemberWithUser {
+  userId: string;
+  familyId: string;
+  role: string;
+  status: string;
+  joinedAt: Date;
+  user: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    avatarUrl: string | null;
+    username: string | null;
+  } | null;
+}
+
+export async function GET(
+  req: NextRequest,
+  context: { params: Promise<{ familyId: string }> } // ⭐ Fixed for Next.js 15
+) {
+  const { familyId } = await context.params; // ⭐ Await params
 
   try {
     const requesterId = await getUserIdFromRequest(req);
@@ -38,7 +57,8 @@ export async function GET(req: NextRequest, { params }: { params: { familyId: st
     });
 
     // normalize to a safe shape for the client
-    const payload = members.map((m) => ({
+    // ⭐ Use typed members instead of any
+    const payload = (members as unknown as FamilyMemberWithUser[]).map((m) => ({
       userId: m.userId,
       familyId: m.familyId,
       role: m.role, // OWNER / ADMIN / MEMBER etc (server enum)
@@ -54,7 +74,7 @@ export async function GET(req: NextRequest, { params }: { params: { familyId: st
     }));
 
     return NextResponse.json({ ok: true, family: { id: family.id, name: family.name }, members: payload });
-  } catch (err: any) {
+  } catch (err) {
     console.error("[GET /api/family/:id/members] error:", err);
     return NextResponse.json({ error: "Failed to load members" }, { status: 500 });
   }

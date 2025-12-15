@@ -10,9 +10,13 @@ import { getUserIdFromRequest } from "@/lib/session";
  *
  * Only the family OWNER can promote members.
  */
-export async function POST(req: NextRequest, { params }: { params: { familyId: string } }) {
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ familyId: string }> } // ⭐ Changed to Promise
+) {
   try {
-    const familyId = params.familyId;
+    const { familyId } = await context.params; // ⭐ Added await
+    
     if (!familyId) {
       return NextResponse.json({ error: "Missing familyId in URL" }, { status: 400 });
     }

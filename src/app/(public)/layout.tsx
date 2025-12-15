@@ -7,7 +7,11 @@ import { useEffect } from "react";
 import { Box, CircularProgress } from "@mui/material";
 import Providers from "../providers";
 
-export default function PublicLayout({ children }: { children: React.ReactNode }) {
+interface LayoutProps {
+  children: React.ReactNode;
+}
+
+export default function PublicLayout({ children }: LayoutProps) {
   return (
     <Providers>
       <PublicLayoutContent>{children}</PublicLayoutContent>
@@ -15,7 +19,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
   );
 }
 
-function PublicLayoutContent({ children }: { children: React.ReactNode }) {
+function PublicLayoutContent({ children }: LayoutProps) {
   const { data: session, status } = useSession();
   const router = useRouter();
 

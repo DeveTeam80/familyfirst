@@ -30,7 +30,6 @@ import {
 import {
   Close as CloseIcon,
   Email as EmailIcon,
-  CheckCircle,
   Send as SendIcon,
   Person as PersonIcon,
   Cake as CakeIcon,
@@ -54,18 +53,26 @@ interface FamilyTreeNodeData {
   "last name"?: string;
   birthday?: string;
   avatar?: string;
-  gender?: "M" | "F";
+  gender: "M" | "F";
   email?: string;
+  [key: string]: unknown;
 }
 
 interface FamilyTreeNode {
   id: string;
   data: FamilyTreeNodeData;
   rels?: {
+    parents?: string[];
     spouses?: string[];
     children?: string[];
-    father?: string;
-    mother?: string;
+  };
+}
+
+interface F3CardData {
+  data: {
+    id: string;
+    _new_rel_data?: boolean;
+    [key: string]: unknown;
   };
 }
 
@@ -81,16 +88,17 @@ function FamilyTreeChart({
 }: {
   isAdmin: boolean;
   isMobile: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   theme: any;
   treeData: FamilyTreeNode[];
   onNodeSelect?: (node: FamilyTreeNode) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const f3ChartInstance = useRef<any>(null);
   const chartDataRef = useRef<FamilyTreeNode[]>([]);
   const onNodeSelectRef = useRef(onNodeSelect);
 
-  // Keep refs updated
   useEffect(() => {
     chartDataRef.current = treeData;
     onNodeSelectRef.current = onNodeSelect;
@@ -100,6 +108,7 @@ function FamilyTreeChart({
   }, [treeData, onNodeSelect]);
 
   const createChart = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (f3: any, data: FamilyTreeNode[]) => {
       if (!containerRef.current) return;
 
@@ -122,8 +131,8 @@ function FamilyTreeChart({
         .setStyle("imageCircle")
         .setOnHoverPathToMain();
 
-      // ⭐ Use regular function for proper 'this' binding, but wrap logic in arrow function
-      f3Card.setOnCardUpdate(function (this: HTMLElement, d: any) {
+      // ⭐ Use regular function for proper 'this' binding
+      f3Card.setOnCardUpdate(function (this: HTMLElement, d: F3CardData) {
         // Skip if it's a new relative placeholder
         if (d.data._new_rel_data) return;
 
@@ -156,11 +165,10 @@ function FamilyTreeChart({
             width: 100%;
             height: 100%;
             border-radius: 50%;
-            background: ${
-              theme.palette.mode === "dark"
-                ? "rgba(255, 255, 255, 0.15)"
-                : "rgba(0, 0, 0, 0.1)"
-            };
+            background: ${theme.palette.mode === "dark"
+            ? "rgba(255, 255, 255, 0.15)"
+            : "rgba(0, 0, 0, 0.1)"
+          };
             display: flex;
             align-items: center;
             justify-content: center;
@@ -168,9 +176,8 @@ function FamilyTreeChart({
             backdrop-filter: blur(4px);
             -webkit-backdrop-filter: blur(4px);
           ">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="color: ${
-              theme.palette.mode === "dark" ? "#fff" : "#333"
-            };">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="color: ${theme.palette.mode === "dark" ? "#fff" : "#333"
+          };">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
             </svg>
           </div>
@@ -224,7 +231,7 @@ function FamilyTreeChart({
     [isAdmin, isMobile, theme]
   );
 
-  const loadFamilyChart = useCallback(async () => {
+   const loadFamilyChart = useCallback(async () => {
     if (!containerRef.current) return;
     try {
       containerRef.current.innerHTML = "";
@@ -273,9 +280,8 @@ function FloatingQuickActions({
 
   if (!node) return null;
 
-  const displayName = `${node.data["first name"] || ""} ${
-    node.data["last name"] || ""
-  }`.trim();
+  const displayName = `${node.data["first name"] || ""} ${node.data["last name"] || ""
+    }`.trim();
 
   return (
     <Slide direction="up" in={!!node} mountOnEnter unmountOnExit>
@@ -434,9 +440,8 @@ function InspectorPanel({
 
   if (!node) return null;
 
-  const displayName = `${node.data["first name"] || ""} ${
-    node.data["last name"] || ""
-  }`.trim();
+  const displayName = `${node.data["first name"] || ""} ${node.data["last name"] || ""
+    }`.trim();
   const isMale = node.data.gender === "M";
 
   return (
@@ -473,13 +478,13 @@ function InspectorPanel({
           p: 2,
           background: isMale
             ? `linear-gradient(135deg, ${alpha(
-                theme.palette.info.main,
-                0.15
-              )}, transparent)`
+              theme.palette.info.main,
+              0.15
+            )}, transparent)`
             : `linear-gradient(135deg, ${alpha(
-                theme.palette.error.main,
-                0.15
-              )}, transparent)`,
+              theme.palette.error.main,
+              0.15
+            )}, transparent)`,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "flex-start",
@@ -660,7 +665,7 @@ function EditMemberDialog({
     firstName: "",
     lastName: "",
     birthday: null as Dayjs | null,
-    gender: "",
+    gender: "M" as "M" | "F", // ⭐ Default to "M" to ensure it's never undefined
     avatar: "",
   });
 
@@ -670,7 +675,7 @@ function EditMemberDialog({
         firstName: node.data["first name"] || "",
         lastName: node.data["last name"] || "",
         birthday: node.data.birthday ? dayjs(node.data.birthday) : null,
-        gender: node.data.gender || "",
+        gender: node.data.gender || "M", // ⭐ Default to "M"
         avatar: node.data.avatar || "",
       });
     }
@@ -688,7 +693,7 @@ function EditMemberDialog({
         birthday: formData.birthday
           ? formData.birthday.format("YYYY")
           : undefined,
-        gender: formData.gender as "M" | "F" | undefined,
+        gender: formData.gender, // ⭐ Always "M" or "F", never undefined
         avatar: formData.avatar,
       },
     };
@@ -751,7 +756,7 @@ function EditMemberDialog({
                 label="Gender"
                 value={formData.gender}
                 onChange={(e) =>
-                  setFormData({ ...formData, gender: e.target.value })
+                  setFormData({ ...formData, gender: e.target.value as "M" | "F" })
                 }
               >
                 <MenuItem value="M">Male</MenuItem>
@@ -802,12 +807,10 @@ export default function FamilyTreePage() {
   );
   const [editOpen, setEditOpen] = useState(false);
 
-  // Optional: local "checking" state if you want to show spinner while resolving
-  const [checkingAccount, setCheckingAccount] = useState(false);
   const [role, setRole] = useState<FamilyRole>("VIEWER");
   const isAdmin = role === "OWNER" || role === "ADMIN";
 
-   useEffect(() => {
+  useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/auth/me", {
@@ -818,7 +821,7 @@ export default function FamilyTreePage() {
         const json = await res.json();
         console.log("family role", json?.memberships[0].role)
         const familyRole = json?.memberships[0].role as FamilyRole | undefined;
- if (
+        if (
           familyRole === "OWNER" ||
           familyRole === "ADMIN" ||
           familyRole === "MEMBER" ||
@@ -845,7 +848,6 @@ export default function FamilyTreePage() {
     if (!quickActionNode) return;
 
     const node = quickActionNode;
-    setCheckingAccount(true);
 
     try {
       const res = await fetch(
@@ -869,13 +871,13 @@ export default function FamilyTreePage() {
         const slug =
           typeof username === "string"
             ? encodeURIComponent(
-                username
-                  .toString()
-                  .trim()
-                  .toLowerCase()
-                  .replace(/\s+/g, "-")
-                  .replace(/[^a-z0-9\-._~]/g, "") // remove unsafe chars, keep URL-safe minimal set
-              )
+              username
+                .toString()
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, "-")
+                .replace(/[^a-z0-9\-._~]/g, "") // remove unsafe chars, keep URL-safe minimal set
+            )
             : data.user.id;
 
         // Navigate to the account page at /<slug>
@@ -891,7 +893,6 @@ export default function FamilyTreePage() {
       // Fallback: open inspector to invite
       setInspectorNode(node);
     } finally {
-      setCheckingAccount(false);
       // hide quick action pill
       setQuickActionNode(null);
     }

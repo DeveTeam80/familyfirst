@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 }
 
 // GET method for manual testing (no auth required in development)
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "Use POST in production" }, { status: 405 });
   }

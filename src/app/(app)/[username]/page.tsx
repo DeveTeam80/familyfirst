@@ -4,8 +4,8 @@
 import { useParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store";
-import { setPosts } from "@/store/postSlice";
-import { updateProfile, setCurrentUser } from "@/store/userSlice";
+import { setPosts, Post as ReduxPost } from "@/store/postSlice"; // ⭐ Import Redux Post type
+import { updateProfile, setCurrentUser, UserProfile } from "@/store/userSlice";
 
 import { Avatar, Box, Button, Stack, Typography, CircularProgress } from "@mui/material";
 import * as React from "react";
@@ -23,6 +23,20 @@ import {
   updatePostApi,
   deletePostApi,
 } from "@/lib/api-posts";
+
+// Types for API responses
+interface ApiUser {
+  id: string;
+  username: string;
+  name: string;
+  email?: string;
+  avatar?: string | null;
+  avatarUrl?: string | null;
+  bio?: string;
+  location?: string;
+}
+
+// ⭐ Remove local Post and Comment types - use Redux types instead
 
 /**
  * UserProfilePage
@@ -43,18 +57,18 @@ export default function UserProfilePage() {
   // Posts state in Redux (items may be normalized object or array)
   const postsState = useSelector((s: RootState) => s.posts.items);
 
-  // Normalize postsState into plain array
+  // ⭐ Normalize postsState into plain array with proper typing
   const allPosts = React.useMemo(() => {
-    if (!postsState) return [];
-    if (Array.isArray(postsState)) return postsState as any[];
-    if (Array.isArray((postsState as any).posts)) {
-      return (postsState as any).posts as any[];
+    if (!postsState) return [] as ReduxPost[];
+    if (Array.isArray(postsState)) return postsState as ReduxPost[];
+    if (Array.isArray((postsState as { posts?: unknown }).posts)) {
+      return (postsState as { posts: ReduxPost[] }).posts;
     }
-    return [];
+    return [] as ReduxPost[];
   }, [postsState]);
 
   // Local profile state (fetched / derived)
-  const [profile, setProfile] = React.useState<any | null>(() => {
+  const [profile, setProfile] = React.useState<UserProfile | null>(() => {
     // If already present in Redux or is current user, set initial
     if (currentUser?.username === username) return currentUser;
     if (profiles && profiles[username]) return profiles[username];
@@ -94,26 +108,29 @@ export default function UserProfilePage() {
         if (res.ok) {
           const data = await res.json();
           // Expect { user: { id, username, name, email, avatar, bio, location } }
-          const user = data.user ?? null;
-          if (mounted) {
-            setProfile(user);
+          const user = data.user as ApiUser | null;
+          if (mounted && user) {
+            const userProfile: UserProfile = {
+              id: user.id,
+              username: user.username,
+              name: user.name,
+              email: user.email,
+              avatar: user.avatar ?? user.avatarUrl ?? null,
+              bio: user.bio,
+              location: user.location,
+            };
+            setProfile(userProfile);
             setLoadingProfile(false);
             // Optionally populate Redux profiles map so other pages can reuse:
-            if (user) {
-              dispatch(
-                updateProfile({
-                  username: user.username,
-                  changes: {
-                    id: user.id,
-                    name: user.name,
-                    bio: user.bio,
-                    avatar: user.avatar ?? user.avatarUrl ?? null,
-                    location: user.location,
-                    email: user.email,
-                  },
-                })
-              );
-            }
+            dispatch(
+              updateProfile({
+                username: user.username,
+                changes: userProfile,
+              })
+            );
+          } else if (mounted) {
+            setProfile(null);
+            setLoadingProfile(false);
           }
         } else {
           // not found or error
@@ -156,10 +173,10 @@ export default function UserProfilePage() {
   const currentUserName = currentUser?.name || "User";
   const currentAvatar = currentUser?.avatar || undefined;
 
-  // posts for this profile (uses normalized array)
+  // ⭐ posts for this profile (uses normalized array with proper type)
   const userPosts = React.useMemo(
     () =>
-      allPosts.filter((p: any) => {
+      allPosts.filter((p: ReduxPost) => {
         // try multiple heuristics: p.username or p.user
         if (!p) return false;
         if (typeof p.username === "string" && p.username === username) return true;
@@ -169,8 +186,6 @@ export default function UserProfilePage() {
     [allPosts, username, profile?.name]
   );
 
-  const [tab, setTab] = React.useState(0);
-
   // Comments
   const [activeCommentPost, setActiveCommentPost] = React.useState<string | null>(null);
   const [commentText, setCommentText] = React.useState("");
@@ -178,7 +193,7 @@ export default function UserProfilePage() {
   // Share
   const [shareOpen, setShareOpen] = React.useState(false);
   const [sharePostId, setSharePostId] = React.useState<string | undefined>();
-  const sharePost = allPosts.find((p: any) => p.id === sharePostId);
+  const sharePost = allPosts.find((p: ReduxPost) => p.id === sharePostId);
 
   // Edit Post
   const [editOpen, setEditOpen] = React.useState(false);
@@ -186,7 +201,6 @@ export default function UserProfilePage() {
   const [editContent, setEditContent] = React.useState("");
   const [editTags, setEditTags] = React.useState<string[]>([]);
   const [editImages, setEditImages] = React.useState<string[]>([]);
-  const currentEditPost = allPosts.find((p: any) => p.id === editTargetId) || null;
 
   // Delete Post
   const [deleteOpen, setDeleteOpen] = React.useState(false);
@@ -240,7 +254,7 @@ export default function UserProfilePage() {
 
   const startEditFor = (postId: string) => {
     if (!isOwner) return;
-    const p: any = allPosts.find((x: any) => x.id === postId);
+    const p = allPosts.find((x: ReduxPost) => x.id === postId);
     if (!p) return;
 
     setEditTargetId(postId);
@@ -338,14 +352,14 @@ export default function UserProfilePage() {
         return;
       }
 
-      const { user: updatedUser } = await res.json();
+      const { user: updatedUser } = await res.json() as { user: ApiUser };
 
       // derive canonical username (fallback if backend doesn't return username)
-      const backendUsername = (updatedUser as any).username;
+      const backendUsername = updatedUser.username;
       const derivedUsername =
         backendUsername ||
         (updatedUser.name && updatedUser.name.toLowerCase().replace(/\s+/g, "")) ||
-        (updatedUser.email && (updatedUser.email as string).split("@")[0]) ||
+        (updatedUser.email && updatedUser.email.split("@")[0]) ||
         "user";
 
       // 1) Immediately update Redux currentUser so UI (header, profile, comments) reflects change
@@ -367,6 +381,7 @@ export default function UserProfilePage() {
           username: derivedUsername,
           changes: {
             id: updatedUser.id,
+            username: derivedUsername,
             name: updatedUser.name,
             bio: updatedUser.bio,
             avatar: updatedUser.avatarUrl,
@@ -424,7 +439,9 @@ export default function UserProfilePage() {
 
   const handleReplyComment = async (commentId: string, text: string) => {
     try {
-      const post = allPosts.find((p: any) => p.comments.some((c: any) => c.id === commentId));
+      const post = allPosts.find((p: ReduxPost) => 
+        p.comments.some((c) => c.id === commentId)
+      );
       if (!post) return;
 
       await fetch(`/api/posts/${post.id}/comments`, {
@@ -517,51 +534,56 @@ export default function UserProfilePage() {
       </Box>
 
       {/* Posts Tab */}
-      {tab === 0 && (
-        <Stack spacing={2}>
-          {userPosts.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              No posts yet.
-            </Typography>
-          ) : (
-            userPosts.map((post: any) => (
-              <React.Fragment key={post.id}>
-                <PostCard
-                  currentUserId={currentUser?.id ?? ""}
-                  post={post}
-                  currentUserName={currentUserName}
-                  onLike={onLike}
-                  onCommentClick={onCommentClick}
-                  onEdit={startEditFor}
-                  onDelete={askDeleteFor}
-                  onShare={onShare}
-                  canEdit={isOwner}
-                  commentsOpen={activeCommentPost === post.id}
-                  commentSection={
-                    <CommentBox
-                      openForPostId={activeCommentPost}
-                      postId={post.id}
-                      comments={post.comments}
-                      value={commentText}
-                      setValue={setCommentText}
-                      onSubmit={() => onSubmitComment(post.id)}
-                      currentUserId={currentUser?.id}
-                      currentUserAvatar={currentAvatar}
-                      onLikeComment={handleLikeComment}
-                      onEditComment={handleEditComment}
-                      onDeleteComment={handleDeleteComment}
-                      onReplyComment={handleReplyComment}
-                    />
-                  }
-                />
-              </React.Fragment>
-            ))
-          )}
-        </Stack>
-      )}
+      <Stack spacing={2}>
+        {userPosts.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            No posts yet.
+          </Typography>
+        ) : (
+          userPosts.map((post: ReduxPost) => (
+            <React.Fragment key={post.id}>
+              <PostCard
+                currentUserId={currentUser?.id ?? ""}
+                post={post}
+                currentUserName={currentUserName}
+                onLike={onLike}
+                onCommentClick={onCommentClick}
+                onEdit={startEditFor}
+                onDelete={askDeleteFor}
+                onShare={onShare}
+                canEdit={isOwner}
+                commentsOpen={activeCommentPost === post.id}
+                commentSection={
+                  <CommentBox
+                    openForPostId={activeCommentPost}
+                    postId={post.id}
+                    comments={post.comments}
+                    value={commentText}
+                    setValue={setCommentText}
+                    onSubmit={() => onSubmitComment(post.id)}
+                    currentUserId={currentUser?.id}
+                    currentUserAvatar={currentAvatar}
+                    onLikeComment={handleLikeComment}
+                    onEditComment={handleEditComment}
+                    onDeleteComment={handleDeleteComment}
+                    onReplyComment={handleReplyComment}
+                  />
+                }
+              />
+            </React.Fragment>
+          ))
+        )}
+      </Stack>
 
       {/* Dialogs */}
-      <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} user={sharePost?.user} content={sharePost?.content} tags={sharePost?.tags} postId={sharePost?.id} />
+      <ShareDialog 
+        open={shareOpen} 
+        onClose={() => setShareOpen(false)} 
+        user={sharePost?.user as string | undefined} 
+        content={sharePost?.content as string | undefined} 
+        tags={sharePost?.tags} 
+        postId={sharePost?.id} 
+      />
 
       <EditPostDialog
         open={editOpen}

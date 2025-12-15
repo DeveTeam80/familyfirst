@@ -22,6 +22,7 @@ import {
   Close,
   PhotoLibrary,
 } from "@mui/icons-material";
+import Image from "next/image";
 
 type Props = {
   content: string;
@@ -180,8 +181,7 @@ export default function PostComposer({
                   borderColor: 'divider',
                 }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={imageUrl}
                   alt={`Preview ${index + 1}`}
                   style={{
