@@ -21,6 +21,8 @@ import {
   Tooltip,
   Badge,
   AvatarGroup,
+  Grow,
+  Fade,
 } from "@mui/material";
 import {
   MoreVert,
@@ -71,6 +73,7 @@ export type PostCardData = {
   eventDate?: string;
   createdAt?: string;
   visibility?: 'PUBLIC' | 'FAMILY' | 'PRIVATE';
+  isOnline?: boolean;
 };
 
 type Props = {
@@ -93,68 +96,49 @@ type Props = {
    ----------------------- */
 const DesktopImageGrid = ({
   images,
-  onImageClick
+  onImageClick,
+  scrollY,
 }: {
   images: string[];
   onImageClick?: (index: number) => void;
+  scrollY: number;
 }) => {
   const theme = useTheme();
   const count = images.length;
-
-  if (count === 0) return null;
-
+  
   const handleImageClick = (index: number) => {
-    if (onImageClick) {
-      onImageClick(index);
-    }
-  };
-
-  const hoverEffectSx = {
-    overflow: 'hidden',
-    position: 'relative',
-    height: '100%',
-    backgroundColor: alpha(theme.palette.common.black, 0.02),
-    cursor: 'pointer',
-    '&:hover img': { transform: 'scale(1.08)' },
-    '&::before': {
-      content: '""',
-      position: 'absolute',
-      top: 0, left: 0, right: 0, bottom: 0,
-      background: `linear-gradient(180deg, transparent 0%, ${alpha(theme.palette.common.black, 0)} 50%, ${alpha(theme.palette.common.black, 0.1)} 100%)`,
-      opacity: 0,
-      transition: 'opacity 0.3s',
-      zIndex: 1,
-      pointerEvents: 'none'
-    },
-    '&:hover::before': { opacity: 1 }
+    onImageClick?.(index);
   };
 
   const containerStyle = {
-    display: "grid",
-    gap: "6px",
     width: "100%",
-    height: count === 1 ? "auto" : "420px",
-    borderRadius: "16px",
+    borderRadius: 3,
     overflow: "hidden",
-    mt: 2,
+    display: "grid",
+    gap: 1,
     mb: 2,
-    border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-    boxShadow: `0 4px 20px ${alpha(theme.palette.common.black, 0.04)}`,
+    border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
   };
 
-  // Single image
+  // ⭐ PREMIUM: Parallax effect (no transition - handled by parent)
+  const getParallaxTransform = (index: number) => ({
+    transform: `translateY(${scrollY * (0.02 + index * 0.01)}px)`,
+  });
+
+  const hoverEffectSx = {
+    overflow: "hidden",
+    cursor: "pointer",
+    transition: "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+    "&:hover img": {
+      transform: "scale(1.08)",
+    },
+  };
+
+  // One image
   if (count === 1) {
     return (
-      <Box sx={containerStyle}>
-        <Box
-          sx={{
-            ...hoverEffectSx,
-            maxHeight: '600px',
-            position: 'relative',
-            minHeight: '400px'
-          }}
-          onClick={() => handleImageClick(0)}
-        >
+      <Box sx={{ ...containerStyle, aspectRatio: '16/9', position: 'relative', border: 'none' }}>
+        <Box sx={{ ...hoverEffectSx, position: 'relative', width: '100%', height: '100%' }} onClick={() => handleImageClick(0)}>
           <Image
             src={images[0]}
             alt="post-img-0"
@@ -163,8 +147,9 @@ const DesktopImageGrid = ({
               objectFit: "cover",
               cursor: "pointer",
               transition: "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              ...getParallaxTransform(0),
             }}
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            sizes="(max-width: 768px) 100vw, 60vw"
           />
         </Box>
       </Box>
@@ -174,7 +159,7 @@ const DesktopImageGrid = ({
   // Two images
   if (count === 2) {
     return (
-      <Box sx={{ ...containerStyle, gridTemplateColumns: "1fr 1fr" }}>
+      <Box sx={{ ...containerStyle, gridTemplateColumns: "1fr 1fr", aspectRatio: '16/9' }}>
         {images.map((img, i) => (
           <Box key={i} sx={{ ...hoverEffectSx, position: 'relative' }} onClick={() => handleImageClick(i)}>
             <Image
@@ -185,8 +170,9 @@ const DesktopImageGrid = ({
                 objectFit: "cover",
                 cursor: "pointer",
                 transition: "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                ...getParallaxTransform(i),
               }}
-              sizes="(max-width: 768px) 50vw, 25vw"
+              sizes="(max-width: 768px) 50vw, 30vw"
             />
           </Box>
         ))}
@@ -207,36 +193,27 @@ const DesktopImageGrid = ({
               objectFit: "cover",
               cursor: "pointer",
               transition: "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              ...getParallaxTransform(0),
             }}
             sizes="(max-width: 768px) 66vw, 40vw"
           />
         </Box>
-        <Box sx={{ ...hoverEffectSx, position: 'relative' }} onClick={() => handleImageClick(1)}>
-          <Image
-            src={images[1]}
-            alt="post-img-1"
-            fill
-            style={{
-              objectFit: "cover",
-              cursor: "pointer",
-              transition: "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
-            }}
-            sizes="(max-width: 768px) 33vw, 20vw"
-          />
-        </Box>
-        <Box sx={{ ...hoverEffectSx, position: 'relative' }} onClick={() => handleImageClick(2)}>
-          <Image
-            src={images[2]}
-            alt="post-img-2"
-            fill
-            style={{
-              objectFit: "cover",
-              cursor: "pointer",
-              transition: "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
-            }}
-            sizes="(max-width: 768px) 33vw, 20vw"
-          />
-        </Box>
+        {images.slice(1).map((img, i) => (
+          <Box key={i + 1} sx={{ ...hoverEffectSx, position: 'relative' }} onClick={() => handleImageClick(i + 1)}>
+            <Image
+              src={img}
+              alt={`post-img-${i + 1}`}
+              fill
+              style={{
+                objectFit: "cover",
+                cursor: "pointer",
+                transition: "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                ...getParallaxTransform(i + 1),
+              }}
+              sizes="(max-width: 768px) 33vw, 20vw"
+            />
+          </Box>
+        ))}
       </Box>
     );
   }
@@ -257,6 +234,7 @@ const DesktopImageGrid = ({
                 objectFit: "cover",
                 cursor: "pointer",
                 transition: "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                ...getParallaxTransform(i),
               }}
               sizes="(max-width: 768px) 50vw, 25vw"
             />
@@ -310,10 +288,18 @@ export default function PostCard({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
+  // State
   const [menuAnchor, setMenuAnchor] = React.useState<null | HTMLElement>(null);
   const [isHovered, setIsHovered] = React.useState(false);
-  const [,setLikeAnimating] = React.useState(false);
+  const [isLikeAnimating, setIsLikeAnimating] = React.useState(false);
+  const [heartParticles, setHeartParticles] = React.useState<number[]>([]);
+  const [scrollY, setScrollY] = React.useState(0);
+  const [showDoubleTapHeart, setShowDoubleTapHeart] = React.useState(false);
+  
+  // ⭐ PREMIUM: Mobile double-tap
+  const [lastTap, setLastTap] = React.useState(0);
 
+  // Refs
   const isLiked = post.likedBy.includes(currentUserId);
   const isOwnPost = post.userId === currentUserId;
 
@@ -323,10 +309,54 @@ export default function PostCard({
     return [];
   }, [post.images, post.image]);
 
+  // ⭐ PREMIUM: Parallax scroll effect
+  React.useEffect(() => {
+    if (isMobile) return; // Only on desktop
+    
+    const handleScroll = () => setScrollY(window.scrollY);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isMobile]);
+
+  // ⭐ PREMIUM: Heart burst animation on like
   const handleLikeClick = () => {
-    setLikeAnimating(true);
+    setIsLikeAnimating(true);
     onLike(post.id);
-    setTimeout(() => setLikeAnimating(false), 600);
+    
+    // Create heart burst effect
+    if (!isLiked) {
+      setHeartParticles([1, 2, 3, 4, 5, 6]);
+      setTimeout(() => setHeartParticles([]), 1000);
+    }
+    
+    setTimeout(() => setIsLikeAnimating(false), 600);
+  };
+
+  // ⭐ PREMIUM: Double-tap to like (mobile)
+  const handleDoubleTap = (e: React.TouchEvent) => {
+    if (!isMobile) return;
+    
+    // Prevent if tapping buttons
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('a')) return;
+    
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+    
+    if (now - lastTap < DOUBLE_TAP_DELAY && now - lastTap > 0) {
+      e.preventDefault();
+      
+      // Show big heart animation
+      setShowDoubleTapHeart(true);
+      setTimeout(() => setShowDoubleTapHeart(false), 1000);
+      
+      // Like the post
+      handleLikeClick();
+      
+      // Haptic feedback
+      if (navigator.vibrate) navigator.vibrate(50);
+    }
+    setLastTap(now);
   };
 
   const formatDate = (dateString: string) => {
@@ -357,207 +387,552 @@ export default function PostCard({
   const topLikers = post.likedBy.slice(0, 3);
 
   return (
-    <Paper
-      elevation={0}
-      onMouseEnter={() => !isMobile && setIsHovered(true)}
-      onMouseLeave={() => !isMobile && setIsHovered(false)}
-      sx={{
-        mb: 3,
-        borderRadius: 3,
-        border: '1px solid',
-        borderColor: alpha(theme.palette.divider, 0.6),
-        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-        overflow: 'hidden',
-        backgroundColor: theme.palette.background.paper,
-        position: 'relative',
-        ...(!isMobile && {
-          '&:hover': {
-            boxShadow: `0 12px 40px -12px ${alpha(theme.palette.common.black, 0.1)}`,
-            transform: 'translateY(-2px)',
-            borderColor: alpha(theme.palette.primary.main, 0.3),
-          },
-        }),
-      }}
-    >
-      <Box sx={{ height: 3, background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`, opacity: isHovered ? 1 : 0, transition: 'opacity 0.3s' }} />
+    <Grow in={true} timeout={400}>
+      <Paper
+        elevation={0}
+        onMouseEnter={() => !isMobile && setIsHovered(true)}
+        onMouseLeave={() => !isMobile && setIsHovered(false)}
+        sx={{
+          mb: 3,
+          borderRadius: 4,
+          border: '1px solid',
+          borderColor: alpha(theme.palette.divider, 0.6),
+          transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+          overflow: 'hidden',
+          backgroundColor: theme.palette.background.paper,
+          position: 'relative',
+          ...(!isMobile && {
+            '&:hover': {
+              boxShadow: theme.palette.mode === 'dark'
+                ? `0 20px 48px ${alpha(theme.palette.common.black, 0.5)}`
+                : `0 20px 48px ${alpha(theme.palette.common.black, 0.12)}`,
+              transform: 'translateY(-3px)',
+              borderColor: alpha(theme.palette.primary.main, 0.2),
+            },
+          }),
+        }}
+      >
+        {/* ⭐ PREMIUM: Top gradient bar on hover */}
+        <Box 
+          sx={{ 
+            height: 3, 
+            background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`, 
+            opacity: isHovered ? 1 : 0, 
+            transition: 'opacity 0.3s' 
+          }} 
+        />
 
-      <Box sx={{ p: isMobile ? 2 : 3, pb: 1 }}>
-        <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-          <Box display="flex" alignItems="center" gap={1.5}>
-            <Badge
-              overlap="circular"
-              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-              badgeContent={isOwnPost && <VerifiedUser sx={{ width: 16, height: 16, color: 'primary.main', bgcolor: 'background.paper', borderRadius: '50%' }} />}
+        {/* ⭐ PREMIUM: Double-Tap Heart Animation */}
+        <Fade in={showDoubleTapHeart}>
+          <Box
+            sx={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 20,
+              pointerEvents: 'none',
+              animation: 'doubleTapHeart 1s ease-out',
+              '@keyframes doubleTapHeart': {
+                '0%': {
+                  opacity: 0,
+                  transform: 'translate(-50%, -50%) scale(0.5)',
+                },
+                '15%': {
+                  opacity: 1,
+                  transform: 'translate(-50%, -50%) scale(1.3)',
+                },
+                '30%': {
+                  opacity: 1,
+                  transform: 'translate(-50%, -50%) scale(1.1)',
+                },
+                '100%': {
+                  opacity: 0,
+                  transform: 'translate(-50%, -50%) scale(1.5)',
+                },
+              },
+            }}
+          >
+            <Favorite 
+              sx={{ 
+                fontSize: '5rem', 
+                color: 'error.main',
+                filter: 'drop-shadow(0 4px 20px rgba(239, 68, 68, 0.5))',
+              }} 
+            />
+          </Box>
+        </Fade>
+
+        <Box sx={{ p: isMobile ? 2 : 3, pb: 1 }}>
+          {/* Header */}
+          <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+            <Box 
+              display="flex" 
+              alignItems="center" 
+              gap={1.5}
             >
-              <Avatar src={post.avatar} sx={{ width: 44, height: 44, border: `2px solid ${alpha(theme.palette.divider, 0.5)}` }}>
-                {post.user.charAt(0)}
-              </Avatar>
-            </Badge>
-            <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2, fontSize: '0.95rem' }}>{post.user}</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.2 }}>
-                <Typography variant="caption" color="text.secondary" fontWeight={500}>{formatDate(post.date)}</Typography>
-                <Box sx={{ width: 3, height: 3, borderRadius: '50%', bgcolor: 'text.disabled' }} />
-                <Tooltip title={visibilityConfig.desc} arrow>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary', bgcolor: alpha(theme.palette.action.hover, 0.5), px: 0.8, py: 0.2, borderRadius: 1 }}>
-                    {visibilityConfig.icon}
-                    <Typography variant="caption" fontWeight={600} sx={{ fontSize: '0.7rem' }}>{visibilityConfig.label}</Typography>
-                  </Box>
-                </Tooltip>
+              {/* ⭐ PREMIUM: Avatar with online status ring */}
+              <Badge
+                overlap="circular"
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                badgeContent={
+                  <>
+                    {/* Online status indicator with pulse */}
+                    {post.isOnline && (
+                      <Box
+                        sx={{
+                          width: 14,
+                          height: 14,
+                          borderRadius: '50%',
+                          bgcolor: 'success.main',
+                          border: `3px solid ${theme.palette.background.paper}`,
+                          boxShadow: `0 0 12px ${alpha(theme.palette.success.main, 0.6)}`,
+                          animation: 'pulse 2s infinite',
+                          '@keyframes pulse': {
+                            '0%, 100%': {
+                              boxShadow: `0 0 12px ${alpha(theme.palette.success.main, 0.6)}`,
+                            },
+                            '50%': {
+                              boxShadow: `0 0 20px ${alpha(theme.palette.success.main, 0.9)}`,
+                            },
+                          },
+                        }}
+                      />
+                    )}
+                    {/* Verified badge for own posts */}
+                    {isOwnPost && !post.isOnline && (
+                      <VerifiedUser 
+                        sx={{ 
+                          width: 18, 
+                          height: 18, 
+                          color: 'primary.main', 
+                          bgcolor: 'background.paper', 
+                          borderRadius: '50%',
+                          border: `2px solid ${theme.palette.background.paper}`,
+                        }} 
+                      />
+                    )}
+                  </>
+                }
+              >
+                <Avatar 
+                  src={post.avatar} 
+                  sx={{ 
+                    width: 46, 
+                    height: 46, 
+                    border: `2px solid ${alpha(theme.palette.primary.main, 0.15)}`,
+                    transition: 'all 0.3s',
+                    cursor: 'pointer',
+                    '&:hover': {
+                      transform: 'scale(1.08) rotate(2deg)',
+                      boxShadow: `0 4px 16px ${alpha(theme.palette.common.black, 0.15)}`,
+                    },
+                  }}
+                >
+                  {post.user.charAt(0)}
+                </Avatar>
+              </Badge>
+
+              <Box>
+                {/* ⭐ PREMIUM: Gradient text for username */}
+                <Typography 
+                  variant="subtitle1" 
+                  sx={{ 
+                    fontWeight: 700, 
+                    lineHeight: 1.2, 
+                    fontSize: '0.95rem',
+                    background: theme.palette.mode === 'dark'
+                      ? 'linear-gradient(135deg, #D4C5F9 0%, #B794F6 100%)'
+                      : 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
+                    backgroundClip: 'text',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    letterSpacing: '-0.01em',
+                  }}
+                >
+                  {post.user}
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.2 }}>
+                  {/* ⭐ PREMIUM: Gradient timestamp */}
+                  <Typography 
+                    variant="caption" 
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: '0.7rem',
+                      background: theme.palette.mode === 'dark'
+                        ? 'linear-gradient(90deg, rgba(180, 184, 197, 0.7) 0%, rgba(180, 184, 197, 0.4) 100%)'
+                        : 'linear-gradient(90deg, rgba(83, 100, 113, 0.6) 0%, rgba(83, 100, 113, 0.3) 100%)',
+                      backgroundClip: 'text',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                    }}
+                  >
+                    {formatDate(post.date)}
+                  </Typography>
+                  <Box sx={{ width: 3, height: 3, borderRadius: '50%', bgcolor: 'text.disabled' }} />
+                  <Tooltip title={visibilityConfig.desc} arrow>
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 0.5, 
+                      color: 'text.secondary', 
+                      bgcolor: alpha(theme.palette.action.hover, 0.5), 
+                      px: 0.8, 
+                      py: 0.3, 
+                      borderRadius: 1.5,
+                      transition: 'all 0.2s',
+                      '&:hover': {
+                        bgcolor: alpha(theme.palette.primary.main, 0.1),
+                        color: 'primary.main',
+                      },
+                    }}>
+                      {visibilityConfig.icon}
+                      <Typography variant="caption" fontWeight={600} sx={{ fontSize: '0.7rem' }}>
+                        {visibilityConfig.label}
+                      </Typography>
+                    </Box>
+                  </Tooltip>
+                </Box>
               </Box>
             </Box>
+            <Stack direction="row" spacing={0.5}>
+              {canEdit && isOwnPost && (
+                <IconButton 
+                  onClick={(e) => setMenuAnchor(e.currentTarget)} 
+                  size="small" 
+                  sx={{ 
+                    color: 'text.secondary',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      transform: 'scale(1.1)',
+                      color: 'text.primary',
+                    },
+                  }}
+                >
+                  <MoreVert fontSize="small" />
+                </IconButton>
+              )}
+            </Stack>
           </Box>
-          <Stack direction="row" spacing={0.5}>
-            {canEdit && isOwnPost && <IconButton onClick={(e) => setMenuAnchor(e.currentTarget)} size="small" sx={{ color: 'text.secondary' }}><MoreVert fontSize="small" /></IconButton>}
+
+          {/* Menu */}
+          <Menu 
+            anchorEl={menuAnchor} 
+            open={Boolean(menuAnchor)} 
+            onClose={() => setMenuAnchor(null)} 
+            PaperProps={{ 
+              elevation: 8, 
+              sx: { 
+                borderRadius: 3, 
+                minWidth: 160,
+                backdropFilter: 'blur(20px)',
+                bgcolor: alpha(theme.palette.background.paper, 0.98),
+                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              } 
+            }}
+          >
+            <MenuItem 
+              onClick={() => { setMenuAnchor(null); onEdit(post.id); }} 
+              sx={{ 
+                fontSize: '0.9rem', 
+                borderRadius: 2, 
+                mx: 1, 
+                my: 0.5,
+                transition: 'all 0.2s',
+                '&:hover': {
+                  bgcolor: alpha(theme.palette.primary.main, 0.1),
+                },
+              }}
+            >
+              <Edit fontSize="small" sx={{ mr: 1.5, color: 'primary.main' }} /> 
+              Edit
+            </MenuItem>
+            <MenuItem 
+              onClick={() => { setMenuAnchor(null); onDelete(post.id); }} 
+              sx={{ 
+                fontSize: '0.9rem', 
+                color: 'error.main',
+                borderRadius: 2,
+                mx: 1,
+                my: 0.5,
+                transition: 'all 0.2s',
+                '&:hover': {
+                  bgcolor: alpha(theme.palette.error.main, 0.1),
+                },
+              }}
+            >
+              <Delete fontSize="small" sx={{ mr: 1.5 }} /> 
+              Delete
+            </MenuItem>
+          </Menu>
+
+          {/* Content */}
+          {post.content && (
+            <Box onTouchEnd={handleDoubleTap}>
+              <Typography 
+                variant="body1" 
+                sx={{ 
+                  mb: 2, 
+                  lineHeight: 1.7, 
+                  whiteSpace: 'pre-wrap', 
+                  color: 'text.primary', 
+                  fontSize: '0.95rem',
+                  letterSpacing: '0.01em',
+                }}
+              >
+                {post.content}
+              </Typography>
+            </Box>
+          )}
+
+          {/* Tags */}
+          {post.tags && post.tags.length > 0 && (
+            <Stack direction="row" spacing={1} mb={2} flexWrap="wrap" useFlexGap>
+              {post.tags.map((tag) => (
+                <Chip 
+                  key={tag} 
+                  label={`#${tag}`} 
+                  size="small" 
+                  sx={{ 
+                    borderRadius: 2.5, 
+                    fontWeight: 700, 
+                    fontSize: '0.75rem', 
+                    bgcolor: alpha(theme.palette.primary.main, 0.08), 
+                    color: 'primary.main', 
+                    border: '1.5px solid', 
+                    borderColor: alpha(theme.palette.primary.main, 0.2), 
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    '&:hover': { 
+                      bgcolor: alpha(theme.palette.primary.main, 0.15),
+                      borderColor: alpha(theme.palette.primary.main, 0.4),
+                      transform: 'translateY(-2px)',
+                    },
+                  }} 
+                />
+              ))}
+            </Stack>
+          )}
+
+          {/* Images - Carousel on mobile, Grid on desktop with parallax */}
+          {postImages.length > 0 && (
+            <Box onTouchEnd={handleDoubleTap}>
+              {isMobile ? (
+                <ImageCarousel
+                  images={postImages}
+                  onImageClick={onImageClick}
+                  aspectRatio={1}
+                />
+              ) : (
+                <DesktopImageGrid 
+                  images={postImages} 
+                  onImageClick={onImageClick}
+                  scrollY={scrollY}
+                />
+              )}
+            </Box>
+          )}
+
+          {/* Event Date */}
+          {post.eventDate && (
+            <Box sx={{ mb: 2 }}>
+              <Chip 
+                label={`📅 ${new Date(post.eventDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`} 
+                size="small" 
+                sx={{ 
+                  borderRadius: 2.5, 
+                  bgcolor: alpha(theme.palette.info.main, 0.1), 
+                  color: 'info.main', 
+                  fontWeight: 600,
+                  border: `1.5px solid ${alpha(theme.palette.info.main, 0.2)}`,
+                }} 
+              />
+            </Box>
+          )}
+
+          {/* Engagement Stats */}
+          {(post.likes > 0 || post.comments.length > 0) && (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1.5, px: 0.5 }}>
+              {post.likes > 0 && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <AvatarGroup 
+                    max={3} 
+                    sx={{ 
+                      '& .MuiAvatar-root': { 
+                        width: 24, 
+                        height: 24, 
+                        fontSize: '0.7rem', 
+                        border: `2px solid ${theme.palette.background.paper}`,
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          transform: 'scale(1.2)',
+                          zIndex: 10,
+                        },
+                      } 
+                    }}
+                  >
+                    {topLikers.map((liker, i) => (
+                      <Avatar key={i} sx={{ bgcolor: 'error.main' }}>{liker[0]}</Avatar>
+                    ))}
+                  </AvatarGroup>
+                  <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ fontSize: '0.8rem' }}>
+                    {post.likes} {post.likes === 1 ? 'like' : 'likes'}
+                  </Typography>
+                </Box>
+              )}
+              {post.comments.length > 0 && (
+                <Typography 
+                  variant="caption" 
+                  color="text.secondary" 
+                  fontWeight={600} 
+                  sx={{ 
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    transition: 'all 0.2s',
+                    '&:hover': { 
+                      color: 'primary.main',
+                      transform: 'translateX(-2px)',
+                    },
+                  }} 
+                  onClick={() => onCommentClick(post.id)}
+                >
+                  {post.comments.length} {post.comments.length === 1 ? 'comment' : 'comments'}
+                </Typography>
+              )}
+            </Box>
+          )}
+
+          <Divider sx={{ my: 1.5 }} />
+
+          {/* Action Buttons */}
+          <Stack direction="row" spacing={1} justifyContent="space-around">
+            {/* ⭐ PREMIUM: Like Button with Heart Burst */}
+            <Button
+              onClick={handleLikeClick}
+              startIcon={isLiked ? <Favorite /> : <FavoriteBorder />}
+              sx={{
+                flex: 1,
+                textTransform: 'none',
+                fontWeight: 700,
+                fontSize: isMobile ? '0.8rem' : '0.9rem',
+                py: 1.2,
+                borderRadius: 2.5,
+                color: isLiked ? 'error.main' : 'text.secondary',
+                bgcolor: isLiked ? alpha(theme.palette.error.main, 0.12) : 'transparent',
+                position: 'relative',
+                overflow: 'visible',
+                transform: isLikeAnimating ? 'scale(1.05)' : 'scale(1)',
+                transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                '&:hover': {
+                  bgcolor: alpha(theme.palette.error.main, 0.15),
+                  color: 'error.main',
+                  transform: 'translateY(-2px)',
+                },
+              }}
+            >
+              Like
+              
+              {/* Heart particle burst */}
+              {heartParticles.map((particle, i) => (
+                <Box
+                  key={particle}
+                  sx={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    fontSize: '1.2rem',
+                    animation: `heartBurst${i} 1s ease-out forwards`,
+                    pointerEvents: 'none',
+                    zIndex: 10,
+                    
+                    [`@keyframes heartBurst${i}`]: {
+                      '0%': {
+                        opacity: 1,
+                        transform: `translate(-50%, -50%) scale(0.5) rotate(0deg)`,
+                      },
+                      '50%': {
+                        opacity: 1,
+                        transform: `translate(
+                          calc(-50% + ${Math.cos(i * 60 * Math.PI / 180) * 30}px),
+                          calc(-50% + ${Math.sin(i * 60 * Math.PI / 180) * 30}px)
+                        ) scale(1.2) rotate(${i * 60}deg)`,
+                      },
+                      '100%': {
+                        opacity: 0,
+                        transform: `translate(
+                          calc(-50% + ${Math.cos(i * 60 * Math.PI / 180) * 60}px),
+                          calc(-50% + ${Math.sin(i * 60 * Math.PI / 180) * 60}px)
+                        ) scale(0.5) rotate(${i * 60 + 180}deg)`,
+                      },
+                    },
+                  }}
+                >
+                  ❤️
+                </Box>
+              ))}
+            </Button>
+
+            {/* Comment Button */}
+            <Button
+              onClick={() => onCommentClick(post.id)}
+              startIcon={<CommentIcon />}
+              sx={{
+                flex: 1,
+                textTransform: 'none',
+                fontWeight: 700,
+                fontSize: isMobile ? '0.8rem' : '0.9rem',
+                py: 1.2,
+                borderRadius: 2.5,
+                color: commentsOpen ? 'primary.main' : 'text.secondary',
+                bgcolor: commentsOpen ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                transition: 'all 0.3s',
+                '&:hover': {
+                  bgcolor: alpha(theme.palette.primary.main, 0.15),
+                  color: 'primary.main',
+                  transform: 'translateY(-2px)',
+                },
+              }}
+            >
+              Comment
+            </Button>
+
+            {/* Share Button */}
+            <Button
+              onClick={() => onShare(post.id)}
+              startIcon={<ShareIcon />}
+              sx={{
+                flex: 1,
+                textTransform: 'none',
+                fontWeight: 700,
+                fontSize: isMobile ? '0.8rem' : '0.9rem',
+                py: 1.2,
+                borderRadius: 2.5,
+                color: 'text.secondary',
+                transition: 'all 0.3s',
+                '&:hover': {
+                  bgcolor: alpha(theme.palette.info.main, 0.15),
+                  color: 'info.main',
+                  transform: 'translateY(-2px)',
+                },
+              }}
+            >
+              Share
+            </Button>
           </Stack>
         </Box>
 
-        <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)} PaperProps={{ elevation: 4, sx: { borderRadius: 2, minWidth: 140 } }}>
-          <MenuItem onClick={() => { setMenuAnchor(null); onEdit(post.id); }} sx={{ fontSize: '0.9rem' }}><Edit fontSize="small" sx={{ mr: 1.5 }} /> Edit</MenuItem>
-          <MenuItem onClick={() => { setMenuAnchor(null); onDelete(post.id); }} sx={{ fontSize: '0.9rem', color: 'error.main' }}><Delete fontSize="small" sx={{ mr: 1.5 }} /> Delete</MenuItem>
-        </Menu>
-
-        {/* Content */}
-        {post.content && <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: 'text.primary', fontSize: '0.95rem' }}>{post.content}</Typography>}
-
-        {/* Tags */}
-        {post.tags && post.tags.length > 0 && (
-          <Stack direction="row" spacing={1} mb={2} flexWrap="wrap" useFlexGap>
-            {post.tags.map((tag) => (
-              <Chip key={tag} label={`#${tag}`} size="small" sx={{ borderRadius: 2, fontWeight: 700, fontSize: '0.75rem', bgcolor: alpha(theme.palette.primary.main, 0.08), color: 'primary.main', border: '1px solid', borderColor: alpha(theme.palette.primary.main, 0.2), cursor: 'pointer', '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.15) } }} />
-            ))}
-          </Stack>
+        {/* Comments Section */}
+        {commentSection && (
+          <Collapse in={commentsOpen} timeout="auto" unmountOnExit>
+            <Box sx={{ 
+              bgcolor: alpha(theme.palette.background.default, 0.3), 
+              borderTop: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+            }}>
+              {commentSection}
+            </Box>
+          </Collapse>
         )}
-
-        {/* Images - Carousel on mobile, Grid on desktop */}
-        {postImages.length > 0 && (
-          <>
-            {isMobile ? (
-              <ImageCarousel
-                images={postImages}
-                onImageClick={onImageClick}
-                aspectRatio={1}
-              />
-            ) : (
-              <DesktopImageGrid images={postImages} onImageClick={onImageClick} />
-            )}
-          </>
-        )}
-
-        {/* Event Date */}
-        {post.eventDate && (
-          <Box sx={{ mb: 2 }}>
-            <Chip label={`📅 ${new Date(post.eventDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`} size="small" sx={{ borderRadius: 2, bgcolor: alpha(theme.palette.info.main, 0.1), color: 'info.main', fontWeight: 600 }} />
-          </Box>
-        )}
-
-        {/* Engagement Stats */}
-        {(post.likes > 0 || post.comments.length > 0) && (
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1.5, px: 0.5 }}>
-            {post.likes > 0 && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <AvatarGroup max={3} sx={{ '& .MuiAvatar-root': { width: 24, height: 24, fontSize: '0.75rem', border: `2px solid ${theme.palette.background.paper}` } }}>
-                  {topLikers.map((liker, i) => (
-                    <Avatar key={i} sx={{ bgcolor: 'error.main' }}>{liker[0]}</Avatar>
-                  ))}
-                </AvatarGroup>
-                <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                  {post.likes} {post.likes === 1 ? 'like' : 'likes'}
-                </Typography>
-              </Box>
-            )}
-            {post.comments.length > 0 && (
-              <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ cursor: 'pointer', '&:hover': { color: 'primary.main' } }} onClick={() => onCommentClick(post.id)}>
-                {post.comments.length} {post.comments.length === 1 ? 'comment' : 'comments'}
-              </Typography>
-            )}
-          </Box>
-        )}
-
-        <Divider sx={{ my: 1.5 }} />
-
-        <Stack direction="row" spacing={1} justifyContent="space-around">
-          {/* Like Button */}
-          <Button
-            onClick={handleLikeClick}
-            startIcon={isLiked ? <Favorite /> : <FavoriteBorder />}
-            sx={{
-              flex: 1,
-              textTransform: 'none',
-              fontWeight: 700,
-              fontSize: isMobile ? '0.8rem' : '0.9rem',
-              py: 1,
-              borderRadius: 2,
-              color: isLiked ? 'error.main' : 'text.secondary',
-              bgcolor: isLiked ? alpha(theme.palette.error.main, 0.1) : 'transparent',
-              transition: 'all 0.3s',
-              '&:hover': {
-                bgcolor: alpha(theme.palette.error.main, 0.15),
-                color: 'error.main',
-                transform: 'translateY(-2px)',
-              }
-            }}
-          >
-            Like
-          </Button>
-
-          {/* Comment Button */}
-          <Button
-            onClick={() => onCommentClick(post.id)}
-            startIcon={<CommentIcon />}
-            sx={{
-              flex: 1,
-              textTransform: 'none',
-              fontWeight: 700,
-              fontSize: isMobile ? '0.8rem' : '0.9rem',
-              py: 1,
-              borderRadius: 2,
-              color: commentsOpen ? 'primary.main' : 'text.secondary',
-              bgcolor: commentsOpen ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
-              transition: 'all 0.3s',
-              '&:hover': {
-                bgcolor: alpha(theme.palette.primary.main, 0.15),
-                color: 'primary.main',
-                transform: 'translateY(-2px)',
-              }
-            }}
-          >
-            Comment
-          </Button>
-
-          {/* Share Button */}
-          <Button
-            onClick={() => onShare(post.id)}
-            startIcon={<ShareIcon />}
-            sx={{
-              flex: 1,
-              textTransform: 'none',
-              fontWeight: 700,
-              fontSize: isMobile ? '0.8rem' : '0.9rem',
-              py: 1,
-              borderRadius: 2,
-              color: 'text.secondary',
-              transition: 'all 0.3s',
-              '&:hover': {
-                bgcolor: alpha(theme.palette.info.main, 0.15),
-                color: 'info.main',
-                transform: 'translateY(-2px)',
-              }
-            }}
-          >
-            Share
-          </Button>
-        </Stack>
-      </Box>
-
-      {/* Comments Section */}
-      {commentSection && (
-        <Collapse in={commentsOpen} timeout="auto" unmountOnExit>
-          <Box sx={{ bgcolor: alpha(theme.palette.background.default, 0.3), borderTop: `1px solid ${alpha(theme.palette.divider, 0.5)}` }}>
-            {commentSection}
-          </Box>
-        </Collapse>
-      )}
-    </Paper>
+      </Paper>
+    </Grow>
   );
 }

@@ -2,8 +2,8 @@
 "use client";
 
 import { useDispatch, useSelector } from "react-redux";
-import { addPost, setPosts, appendPosts, likePost, Post as StorePost } from "@/store/postSlice";
-import { RootState } from "@/store";
+import { addPost, setPosts, appendPosts, likePost, Post as StorePost, addCommentAsync, addCommentOptimistic } from "@/store/postSlice";
+import { RootState, AppDispatch } from "@/store";
 import * as React from "react";
 import {
   Container,
@@ -129,7 +129,7 @@ function mapPostToCardData(post: Post): PostCardData {
 /* ---------------- Feed Component ---------------- */
 export default function Feed() {
   const theme = useTheme();
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
   const searchParams = useSearchParams();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -243,7 +243,7 @@ export default function Feed() {
       dispatch(setPosts(data.posts));
       setHasMore(data.pagination?.hasMore ?? false);
       setCurrentPage(1);
-      
+
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       console.error("Error refreshing posts:", error);
@@ -253,20 +253,20 @@ export default function Feed() {
   // Handle notification click from URL or callback
   const handleNotificationPostOpen = React.useCallback((postId: string) => {
     const post = postsArr.find(p => p.id === postId);
-    
+
     if (post) {
       // Post found in feed - check if it's visible on screen
       const postElement = postRefs.current.get(postId);
-      
+
       if (postElement) {
         // Scroll to the post smoothly
         postElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
+
         // Highlight the post briefly
         postElement.style.transition = 'all 0.3s';
         postElement.style.transform = 'scale(1.02)';
         postElement.style.boxShadow = `0 0 0 3px ${alpha(theme.palette.primary.main, 0.3)}`;
-        
+
         setTimeout(() => {
           postElement.style.transform = '';
           postElement.style.boxShadow = '';
@@ -291,17 +291,16 @@ export default function Feed() {
     }
   }, [searchParams, isLoadingPosts, handleNotificationPostOpen, router]);
 
- // Listen for notification clicks
-React.useEffect(() => {
-  const unsubscribe = notificationEmitter.subscribe((postId: string) => {
-    console.log("🎯 Feed received notification for post:", postId);
-    handleNotificationPostOpen(postId);
-  });
-  // RIGHT: Wrap it in a proper cleanup function
-  return () => {
-    unsubscribe();
-  };
-}, [handleNotificationPostOpen]);
+  React.useEffect(() => {
+    const unsubscribe = notificationEmitter.subscribe((postId: string) => {
+      console.log("🎯 Feed received notification for post:", postId);
+      handleNotificationPostOpen(postId);
+    });
+    // RIGHT: Wrap it in a proper cleanup function
+    return () => {
+      unsubscribe();
+    };
+  }, [handleNotificationPostOpen]);
 
   React.useEffect(() => {
     loadInitialPosts();
@@ -560,42 +559,25 @@ React.useEffect(() => {
       createdAt: new Date().toISOString(),
     };
 
-    dispatch(
-      setPosts(
-        postsArr.map((p) =>
-          p.id === postId ? { ...p, comments: [...(p.comments || []), tempComment] } : p
-        )
-      )
-    );
+    // Step 1: Optimistic update - add temp comment immediately
+    dispatch(addCommentOptimistic({ postId, comment: tempComment }));
 
+    // Clear input immediately
     if (!text) setCommentText("");
 
-    try {
-      const result = await addCommentApi(postId, textToSubmit);
+    // Step 2: Dispatch async thunk - handles API call and state update
+    const resultAction = await dispatch(
+      addCommentAsync({
+        postId,
+        text: textToSubmit,
+        tempComment,
+        addCommentApi,
+      })
+    );
 
-      dispatch(
-        setPosts(
-          postsArr.map((p) =>
-            p.id === postId
-              ? {
-                  ...p,
-                  comments: (p.comments || []).map((c) => (c.id === tempComment.id ? result : c)),
-                }
-              : p
-          )
-        )
-      );
-    } catch (error) {
-      console.error("Error adding comment:", error);
-      dispatch(
-        setPosts(
-          postsArr.map((p) =>
-            p.id === postId
-              ? { ...p, comments: (p.comments || []).filter((c) => c.id !== tempComment.id) }
-              : p
-          )
-        )
-      );
+    // Step 3: Handle errors (thunk automatically reverts on rejection)
+    if (addCommentAsync.rejected.match(resultAction)) {
+      console.error("Error adding comment:", resultAction.payload);
       alert("Failed to add comment");
       if (!text) setCommentText(textToSubmit);
     }
