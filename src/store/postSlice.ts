@@ -1,5 +1,5 @@
 // src/store/postSlice.ts
-import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
 
 interface Comment {
   id: string;
@@ -47,6 +47,32 @@ const initialState: PostState = {
   error: null,
 };
 
+// ⭐ Async thunk for adding comments with proper state management
+export const addCommentAsync = createAsyncThunk(
+  'posts/addComment',
+  async (
+    { 
+      postId, 
+      text, 
+      tempComment,
+      addCommentApi 
+    }: { 
+      postId: string; 
+      text: string; 
+      tempComment: Comment;
+      addCommentApi: (postId: string, text: string) => Promise<Comment>;
+    },
+    { rejectWithValue }
+  ) => {
+    try {
+      const result = await addCommentApi(postId, text);
+      return { postId, tempComment, realComment: result };
+    } catch (error) {
+      return rejectWithValue({ postId, tempComment, error });
+    }
+  }
+);
+
 const postSlice = createSlice({
   name: "posts",
   initialState,
@@ -93,6 +119,36 @@ const postSlice = createSlice({
       post.updatedAt = new Date().toISOString();
     },
 
+    // ⭐ Add optimistic comment (for immediate UI update)
+    addCommentOptimistic(
+      state,
+      action: PayloadAction<{
+        postId: string;
+        comment: Comment;
+      }>
+    ) {
+      const post = state.items.find((p) => p.id === action.payload.postId);
+      if (!post) return;
+
+      post.comments.push(action.payload.comment);
+      post.updatedAt = new Date().toISOString();
+    },
+
+    // ⭐ Remove comment (for revert on error)
+    removeComment(
+      state,
+      action: PayloadAction<{
+        postId: string;
+        commentId: string;
+      }>
+    ) {
+      const post = state.items.find((p) => p.id === action.payload.postId);
+      if (!post) return;
+
+      post.comments = post.comments.filter((c) => c.id !== action.payload.commentId);
+    },
+
+    // Legacy addComment (kept for backward compatibility)
     addComment(
       state,
       action: PayloadAction<{
@@ -146,16 +202,44 @@ const postSlice = createSlice({
       state.error = null;
     },
   },
+  // ⭐ Handle async thunk states
+  extraReducers: (builder) => {
+    builder
+      // Optimistic update already happened, now replace temp with real
+      .addCase(addCommentAsync.fulfilled, (state, action) => {
+        const { postId, tempComment, realComment } = action.payload;
+        const post = state.items.find((p) => p.id === postId);
+        if (!post) return;
+
+        // Replace temp comment with real one
+        const index = post.comments.findIndex((c) => c.id === tempComment.id);
+        if (index !== -1) {
+          post.comments[index] = realComment;
+        }
+        post.updatedAt = new Date().toISOString();
+      })
+      // Revert optimistic update on error
+      .addCase(addCommentAsync.rejected, (state, action) => {
+        const payload = action.payload as { postId: string; tempComment: Comment };
+        const post = state.items.find((p) => p.id === payload.postId);
+        if (!post) return;
+
+        // Remove temp comment
+        post.comments = post.comments.filter((c) => c.id !== payload.tempComment.id);
+      });
+  },
 });
 
 export const {
   setLoading,
   setError,
   setPosts,
-  appendPosts, // ⭐ Export new action
+  appendPosts,
   addPost,
   likePost,
   addComment,
+  addCommentOptimistic,
+  removeComment,
   updatePost,
   deletePost,
   clearPosts,
