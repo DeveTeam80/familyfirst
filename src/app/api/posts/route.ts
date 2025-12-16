@@ -4,6 +4,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/nextauth.config";
 import { prisma } from "@/lib/prisma";
 
+// ⭐ CRITICAL: Users are considered offline if no heartbeat for 2 minutes
+const OFFLINE_THRESHOLD_MS = 2 * 60 * 1000; 
+
 export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions);
 
@@ -130,11 +133,7 @@ export async function POST(request: NextRequest) {
                 })) || [],
                 createdAt: c.createdAt.toISOString(),
             })),
-            date: new Date(post.createdAt).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-            }),
+            date: post.createdAt.toISOString(),
             createdAt: post.createdAt.toISOString(),
             updatedAt: post.updatedAt.toISOString(),
         });
@@ -148,152 +147,161 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions);
 
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+    if (!session?.user) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  try {
-    // ⭐ Get pagination parameters from query
-    const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '5');
-    const skip = (page - 1) * limit;
+    try {
+        const { searchParams } = new URL(request.url);
+        const page = parseInt(searchParams.get('page') || '1');
+        const limit = parseInt(searchParams.get('limit') || '5');
+        const skip = (page - 1) * limit;
 
-    const userFamilies = await prisma.familyMember.findMany({
-      where: { userId: session.user.id },
-      select: { familyId: true },
-    });
+        const userFamilies = await prisma.familyMember.findMany({
+            where: { userId: session.user.id },
+            select: { familyId: true },
+        });
 
-    const familyIds = userFamilies.map((f) => f.familyId);
+        const familyIds = userFamilies.map((f) => f.familyId);
 
-    // ⭐ Get total count for pagination info
-    const totalPosts = await prisma.post.count({
-      where: {
-        familyId: { in: familyIds },
-      },
-    });
-
-    const posts = await prisma.post.findMany({
-      where: {
-        familyId: { in: familyIds },
-      },
-      include: {
-        author: {
-          select: {
-            id: true,
-            name: true,
-            avatarUrl: true,
-          },
-        },
-        photos: true,
-        reactions: {
-          select: {
-            userId: true,
-            type: true,
-          },
-        },
-        comments: {
-          where: {
-            parentId: null,
-          },
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                avatarUrl: true,
-              },
+        const totalPosts = await prisma.post.count({
+            where: {
+                familyId: { in: familyIds },
             },
-            likes: true,
-            replies: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    name: true,
-                    avatarUrl: true,
-                  },
+        });
+
+        const posts = await prisma.post.findMany({
+            where: {
+                familyId: { in: familyIds },
+            },
+            include: {
+                author: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatarUrl: true,
+                        // ⭐ ADDED: Fetch online status fields
+                        isOnline: true,
+                        lastSeenAt: true,
+                    },
                 },
-                likes: true,
-              },
-              orderBy: {
-                createdAt: "asc",
-              },
+                photos: true,
+                reactions: {
+                    select: {
+                        userId: true,
+                        type: true,
+                    },
+                },
+                comments: {
+                    where: {
+                        parentId: null,
+                    },
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                name: true,
+                                avatarUrl: true,
+                            },
+                        },
+                        likes: true,
+                        replies: {
+                            include: {
+                                user: {
+                                    select: {
+                                        id: true,
+                                        name: true,
+                                        avatarUrl: true,
+                                    },
+                                },
+                                likes: true,
+                            },
+                            orderBy: {
+                                createdAt: "asc",
+                            },
+                        },
+                    },
+                    orderBy: {
+                        createdAt: "asc",
+                    },
+                },
             },
-          },
-          orderBy: {
-            createdAt: "asc",
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      skip, // ⭐ Pagination
-      take: limit, // ⭐ Pagination
-    });
+            orderBy: {
+                createdAt: "desc",
+            },
+            skip,
+            take: limit,
+        });
 
-    const formattedPosts = posts.map((post) => ({
-      id: post.id,
-      userId: post.author?.id || "",
-      user: post.author?.name || "Deleted User",
-      username: post.author?.name?.toLowerCase().replace(/\s+/g, "") || "deleted",
-      avatar: post.author?.avatarUrl || null,
-      content: post.content,
-      tags: post.tags,
-      images: post.photos.map(p => p.url),
-      image: post.photos?.[0]?.url || null,
-      eventDate: post.eventDate?.toISOString(),
-      visibility: post.visibility,
-      likes: post.reactions.filter(r => r.type === "LIKE").length,
-      likedBy: post.reactions.filter(r => r.type === "LIKE").map(r => r.userId),
-      comments: post.comments.map((c) => ({
-        id: c.id,
-        user: c.user?.name || "Deleted User",
-        userId: c.user?.id,
-        avatar: c.user?.avatarUrl || null,
-        text: c.content,
-        likes: c.likes?.length || 0,
-        likedBy: c.likes?.map(l => l.userId) || [],
-        replies: c.replies?.map(r => ({
-          id: r.id,
-          user: r.user?.name || "Deleted User",
-          userId: r.user?.id,
-          avatar: r.user?.avatarUrl || null,
-          text: r.content,
-          likes: r.likes?.length || 0,
-          likedBy: r.likes?.map(l => l.userId) || [],
-          createdAt: r.createdAt.toISOString(),
-        })) || [],
-        createdAt: c.createdAt.toISOString(),
-      })),
-      date: new Date(post.createdAt).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      }),
-      createdAt: post.createdAt.toISOString(),
-      updatedAt: post.updatedAt.toISOString(),
-    }));
+        // ⭐ CALCULATE THRESHOLD ONCE
+        const threshold = new Date(Date.now() - OFFLINE_THRESHOLD_MS);
 
-    // ⭐ Return posts with pagination metadata
-    return NextResponse.json({
-      posts: formattedPosts,
-      pagination: {
-        page,
-        limit,
-        total: totalPosts,
-        totalPages: Math.ceil(totalPosts / limit),
-        hasMore: skip + limit < totalPosts,
-      },
-    });
-  } catch (error) {
-    console.error("Error fetching posts:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch posts" },
-      { status: 500 }
-    );
-  }
+        const formattedPosts = posts.map((post) => {
+            // ⭐ CALCULATE ACTUAL STATUS
+            const isActuallyOnline =
+                post.author?.isOnline &&
+                post.author?.lastSeenAt &&
+                post.author.lastSeenAt >= threshold;
+
+            return {
+                id: post.id,
+                userId: post.author?.id || "",
+                user: post.author?.name || "Deleted User",
+                username: post.author?.name?.toLowerCase().replace(/\s+/g, "") || "deleted",
+                avatar: post.author?.avatarUrl || null,
+                // ⭐ ADDED: Return calculated status
+                isOnline: !!isActuallyOnline,
+                content: post.content,
+                tags: post.tags,
+                images: post.photos.map(p => p.url),
+                image: post.photos?.[0]?.url || null,
+                eventDate: post.eventDate?.toISOString(),
+                visibility: post.visibility,
+                likes: post.reactions.filter(r => r.type === "LIKE").length,
+                likedBy: post.reactions.filter(r => r.type === "LIKE").map(r => r.userId),
+                comments: post.comments.map((c) => ({
+                    id: c.id,
+                    user: c.user?.name || "Deleted User",
+                    userId: c.user?.id,
+                    avatar: c.user?.avatarUrl || null,
+                    text: c.content,
+                    likes: c.likes?.length || 0,
+                    likedBy: c.likes?.map(l => l.userId) || [],
+                    replies: c.replies?.map(r => ({
+                        id: r.id,
+                        user: r.user?.name || "Deleted User",
+                        userId: r.user?.id,
+                        avatar: r.user?.avatarUrl || null,
+                        text: r.content,
+                        likes: r.likes?.length || 0,
+                        likedBy: r.likes?.map(l => l.userId) || [],
+                        createdAt: r.createdAt.toISOString(),
+                    })) || [],
+                    createdAt: c.createdAt.toISOString(),
+                })),
+                date: post.createdAt.toISOString(),
+                createdAt: post.createdAt.toISOString(),
+                updatedAt: post.updatedAt.toISOString(),
+            };
+        });
+
+        return NextResponse.json({
+            posts: formattedPosts,
+            pagination: {
+                page,
+                limit,
+                total: totalPosts,
+                totalPages: Math.ceil(totalPosts / limit),
+                hasMore: skip + limit < totalPosts,
+            },
+        });
+    } catch (error) {
+        console.error("Error fetching posts:", error);
+        return NextResponse.json(
+            { error: "Failed to fetch posts" },
+            { status: 500 }
+        );
+    }
 }

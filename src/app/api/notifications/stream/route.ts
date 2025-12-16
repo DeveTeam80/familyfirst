@@ -9,6 +9,7 @@ export const runtime = 'nodejs';
 
 const HEARTBEAT_INTERVAL = 30000; // 30 seconds
 const UPDATE_INTERVAL = 5000; // 5 seconds
+const OFFLINE_THRESHOLD_MS = 2 * 60 * 1000; // ⭐ 2 minutes - match with online-status route
 
 // Type for session user
 interface SessionUser {
@@ -76,7 +77,9 @@ export async function GET(_request: NextRequest) {
 
           const unreadCount = notifications.length;
 
-          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+          // ⭐ CRITICAL FIX: Use 2-minute threshold instead of 5 minutes
+          const now = new Date();
+          const threshold = new Date(now.getTime() - OFFLINE_THRESHOLD_MS);
           
           const userFamilies = await prisma.familyMember.findMany({
             where: { userId: userId },
@@ -85,6 +88,7 @@ export async function GET(_request: NextRequest) {
 
           const familyIds = userFamilies.map((f) => f.familyId);
 
+          // ⭐ CRITICAL FIX: Only check lastSeenAt threshold, not isOnline flag
           const onlineMembers = await prisma.user.findMany({
             where: {
               familyMemberships: {
@@ -93,10 +97,8 @@ export async function GET(_request: NextRequest) {
                 },
               },
               id: { not: userId },
-              OR: [
-                { isOnline: true },
-                { lastSeenAt: { gte: fiveMinutesAgo } },
-              ],
+              // ⭐ Only show users with recent heartbeat
+              lastSeenAt: { gte: threshold },
             },
             select: {
               id: true,
@@ -109,6 +111,19 @@ export async function GET(_request: NextRequest) {
               lastSeenAt: 'desc',
             },
           });
+
+          // ⭐ Auto-cleanup: Mark stale users as offline
+          await prisma.user.updateMany({
+            where: {
+              isOnline: true,
+              lastSeenAt: {
+                lt: threshold,
+              },
+            },
+            data: {
+              isOnline: false,
+            },
+          }).catch(console.error);
 
           sendEvent({
             type: 'update',
@@ -131,11 +146,12 @@ export async function GET(_request: NextRequest) {
               id: m.id,
               name: m.name,
               avatar: m.avatarUrl,
-              online: m.isOnline,
+              online: true, // ⭐ All members here are truly online (passed threshold)
               lastSeen: m.lastSeenAt?.toISOString(),
             })),
           });
 
+          // ⭐ Update current user's lastSeenAt
           await prisma.user.update({
             where: { id: userId },
             data: { lastSeenAt: new Date() },

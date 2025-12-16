@@ -2,8 +2,8 @@
 "use client";
 
 import { useDispatch, useSelector } from "react-redux";
-import { addPost, setPosts, appendPosts, likePost, Post as StorePost } from "@/store/postSlice";
-import { RootState } from "@/store";
+import { addPost, setPosts, appendPosts, likePost, Post as StorePost, addCommentAsync, addCommentOptimistic } from "@/store/postSlice";
+import { RootState, AppDispatch } from "@/store";
 import * as React from "react";
 import {
   Container,
@@ -16,8 +16,17 @@ import {
   Stack,
   CircularProgress,
   Button,
+  Fade,
+  useMediaQuery,
+  Snackbar,
+  Alert,
 } from "@mui/material";
-import { KeyboardArrowUp } from "@mui/icons-material";
+import { KeyboardArrowUp, Refresh as RefreshIcon } from "@mui/icons-material";
+import PullToRefresh from 'react-simple-pull-to-refresh';
+import { useSearchParams, useRouter } from "next/navigation";
+
+// Import notification emitter
+import { notificationEmitter } from "../layout";
 
 import PostComposer from "@/components/feed/PostComposer";
 import PostCard, { PostCardData, Comment as PostComment } from "@/components/feed/PostCard";
@@ -26,6 +35,8 @@ import ShareDialog from "@/components/dialogs/ShareDialog";
 import EventDialog from "@/components/dialogs/EventDialog";
 import DeleteDialog from "@/components/dialogs/DeleteDialog";
 import EditPostDialog from "@/components/dialogs/EditPostDialog";
+import ImageLightbox from "@/components/feed/ImageLightbox";
+import PostModal from "@/components/feed/PostModal";
 import imageCompression from "browser-image-compression";
 
 // Import API helpers
@@ -38,9 +49,6 @@ import {
   deletePostApi,
 } from "@/lib/api-posts";
 
-/**
- * Use the Post type exported from the Redux slice so TS types remain consistent.
- */
 type Post = StorePost;
 
 /* ---------------- Loading skeleton ---------------- */
@@ -121,19 +129,21 @@ function mapPostToCardData(post: Post): PostCardData {
 /* ---------------- Feed Component ---------------- */
 export default function Feed() {
   const theme = useTheme();
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const currentUser = useSelector((s: RootState) => s.user.currentUser);
   const postsFromStore = useSelector((s: RootState) => s.posts.items);
-  // console.log("raw posts from store:", postsFromStore);
 
   // Normalize posts state to always be an array.
   const postsArr = React.useMemo<Post[]>(() => {
     if (!postsFromStore) return [];
     if (Array.isArray(postsFromStore)) return postsFromStore as Post[];
     if (Array.isArray((postsFromStore as Record<string, unknown>).posts)) {
-  return (postsFromStore as { posts: Post[] }).posts;
-}
+      return (postsFromStore as { posts: Post[] }).posts;
+    }
     return [];
   }, [postsFromStore]);
 
@@ -145,8 +155,18 @@ export default function Feed() {
   const [isLoadingComments, setIsLoadingComments] = React.useState<Record<string, boolean>>({});
   const [showScrollTop, setShowScrollTop] = React.useState(false);
 
+  // Modal state for viewing specific post
+  const [modalPostId, setModalPostId] = React.useState<string | null>(null);
+  const [showNotFoundSnackbar, setShowNotFoundSnackbar] = React.useState(false);
+
+  // Image Lightbox state
+  const [lightboxOpen, setLightboxOpen] = React.useState(false);
+  const [lightboxImages, setLightboxImages] = React.useState<string[]>([]);
+  const [lightboxInitialIndex, setLightboxInitialIndex] = React.useState(0);
+
   // Refs
   const observerTarget = React.useRef<HTMLDivElement | null>(null);
+  const postRefs = React.useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Composer state
   const [content, setContent] = React.useState("");
@@ -188,7 +208,6 @@ export default function Feed() {
     try {
       setIsLoadingPosts(true);
       const data = await fetchPosts(1, 5);
-      // data = { posts, pagination }
       dispatch(setPosts(data.posts));
       setHasMore(data.pagination?.hasMore ?? false);
       setCurrentPage(1);
@@ -216,6 +235,72 @@ export default function Feed() {
       setIsLoadingMore(false);
     }
   }, [dispatch, currentPage, hasMore, isLoadingMore]);
+
+  // Pull-to-refresh handler
+  const handleRefresh = React.useCallback(async () => {
+    try {
+      const data = await fetchPosts(1, 5);
+      dispatch(setPosts(data.posts));
+      setHasMore(data.pagination?.hasMore ?? false);
+      setCurrentPage(1);
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      console.error("Error refreshing posts:", error);
+    }
+  }, [dispatch]);
+
+  // Handle notification click from URL or callback
+  const handleNotificationPostOpen = React.useCallback((postId: string) => {
+    const post = postsArr.find(p => p.id === postId);
+
+    if (post) {
+      // Post found in feed - check if it's visible on screen
+      const postElement = postRefs.current.get(postId);
+
+      if (postElement) {
+        // Scroll to the post smoothly
+        postElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Highlight the post briefly
+        postElement.style.transition = 'all 0.3s';
+        postElement.style.transform = 'scale(1.02)';
+        postElement.style.boxShadow = `0 0 0 3px ${alpha(theme.palette.primary.main, 0.3)}`;
+
+        setTimeout(() => {
+          postElement.style.transform = '';
+          postElement.style.boxShadow = '';
+        }, 2000);
+      } else {
+        // Post exists but not rendered - open modal
+        setModalPostId(postId);
+      }
+    } else {
+      // Post not found in current feed - open modal (will try to load)
+      setModalPostId(postId);
+    }
+  }, [postsArr, theme.palette.primary.main]);
+
+  // Check URL for postId param on mount
+  React.useEffect(() => {
+    const postIdFromUrl = searchParams.get('postId');
+    if (postIdFromUrl && !isLoadingPosts) {
+      handleNotificationPostOpen(postIdFromUrl);
+      // Clean up URL
+      router.replace('/feed', { scroll: false });
+    }
+  }, [searchParams, isLoadingPosts, handleNotificationPostOpen, router]);
+
+  React.useEffect(() => {
+    const unsubscribe = notificationEmitter.subscribe((postId: string) => {
+      console.log("🎯 Feed received notification for post:", postId);
+      handleNotificationPostOpen(postId);
+    });
+    // RIGHT: Wrap it in a proper cleanup function
+    return () => {
+      unsubscribe();
+    };
+  }, [handleNotificationPostOpen]);
 
   React.useEffect(() => {
     loadInitialPosts();
@@ -275,7 +360,7 @@ export default function Feed() {
               maxSizeMB: 8,
               maxWidthOrHeight: 1920,
               useWebWorker: true,
-fileType: blob.type as string,
+              fileType: blob.type as string,
             };
             const compressedBlob = await imageCompression(file, options);
             fileToUpload = compressedBlob;
@@ -435,14 +520,12 @@ fileType: blob.type as string,
   };
 
   const handleLike = async (postId: string) => {
-    // Optimistic update using username = currentUserId
     dispatch(likePost({ postId, username: currentUserId }));
 
     try {
       await toggleLike(postId);
     } catch (error) {
       console.error("Error toggling like:", error);
-      // Revert optimistic
       dispatch(likePost({ postId, username: currentUserId }));
     }
   };
@@ -460,63 +543,43 @@ fileType: blob.type as string,
     }
   };
 
-  const handleComment = async (postId: string) => {
-    if (!commentText.trim()) return;
+  const handleComment = async (postId: string, text?: string) => {
+    const textToSubmit = text || commentText.trim();
+    if (!textToSubmit) return;
 
     const tempComment: PostComment = {
       id: `temp-${Date.now()}`,
       user: currentUserName,
       userId: currentUserId,
       avatar: currentAvatar,
-      text: commentText.trim(),
+      text: textToSubmit,
       likes: 0,
       likedBy: [],
       replies: [],
       createdAt: new Date().toISOString(),
     };
 
-    // Optimistic update
-    dispatch(
-      setPosts(
-        postsArr.map((p) =>
-          p.id === postId ? { ...p, comments: [...(p.comments || []), tempComment] } : p
-        )
-      )
+    // Step 1: Optimistic update - add temp comment immediately
+    dispatch(addCommentOptimistic({ postId, comment: tempComment }));
+
+    // Clear input immediately
+    if (!text) setCommentText("");
+
+    // Step 2: Dispatch async thunk - handles API call and state update
+    const resultAction = await dispatch(
+      addCommentAsync({
+        postId,
+        text: textToSubmit,
+        tempComment,
+        addCommentApi,
+      })
     );
 
-    const textToSubmit = commentText.trim();
-    setCommentText("");
-
-    try {
-      const result = await addCommentApi(postId, textToSubmit);
-
-      // Replace temp comment with real one
-      dispatch(
-        setPosts(
-          postsArr.map((p) =>
-            p.id === postId
-              ? {
-                  ...p,
-                  comments: (p.comments || []).map((c) => (c.id === tempComment.id ? result : c)),
-                }
-              : p
-          )
-        )
-      );
-    } catch (error) {
-      console.error("Error adding comment:", error);
-      // revert
-      dispatch(
-        setPosts(
-          postsArr.map((p) =>
-            p.id === postId
-              ? { ...p, comments: (p.comments || []).filter((c) => c.id !== tempComment.id) }
-              : p
-          )
-        )
-      );
+    // Step 3: Handle errors (thunk automatically reverts on rejection)
+    if (addCommentAsync.rejected.match(resultAction)) {
+      console.error("Error adding comment:", resultAction.payload);
       alert("Failed to add comment");
-      setCommentText(textToSubmit);
+      if (!text) setCommentText(textToSubmit);
     }
   };
 
@@ -528,7 +591,6 @@ fileType: blob.type as string,
 
     const originalPosts = [...postsArr];
 
-    // Recursive helper to update comment at any nesting level
     const updateCommentLikes = (comments: PostComment[]): PostComment[] => {
       return comments.map((comment) => {
         if (comment.id === commentId) {
@@ -548,7 +610,6 @@ fileType: blob.type as string,
       });
     };
 
-    // Optimistic update
     dispatch(
       setPosts(
         postsArr.map((p) => {
@@ -577,7 +638,6 @@ fileType: blob.type as string,
 
     const originalPosts = [...postsArr];
 
-    // Recursive helper
     const updateCommentText = (comments: PostComment[]): PostComment[] => {
       return comments.map((comment) => {
         if (comment.id === commentId) {
@@ -590,7 +650,6 @@ fileType: blob.type as string,
       });
     };
 
-    // Optimistic update
     dispatch(
       setPosts(
         postsArr.map((p) => {
@@ -631,7 +690,6 @@ fileType: blob.type as string,
         });
     };
 
-    // Optimistic removal
     dispatch(
       setPosts(
         postsArr.map((p) => (p.id === post.id ? { ...p, comments: deleteCommentRecursive(p.comments || []) } : p))
@@ -664,7 +722,6 @@ fileType: blob.type as string,
 
     const originalPosts = [...postsArr];
 
-    // Optimistic update
     dispatch(
       setPosts(
         postsArr.map((p) => {
@@ -683,7 +740,6 @@ fileType: blob.type as string,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, parentId: commentId }),
       });
-      // Refresh to get real reply ID
       await loadInitialPosts();
     } catch (error) {
       console.error("Error replying to comment:", error);
@@ -691,110 +747,175 @@ fileType: blob.type as string,
     }
   };
 
+  // Image click handler - opens lightbox
+  const handleImageClick = (postId: string, imageIndex: number) => {
+    const post = postsArr.find((p) => p.id === postId);
+    if (!post) return;
+
+    const images = post.images || (post.image ? [post.image] : []);
+    setLightboxImages(images);
+    setLightboxInitialIndex(imageIndex);
+    setLightboxOpen(true);
+  };
+
+  // Get post for modal
+  const modalPost = modalPostId ? postsArr.find(p => p.id === modalPostId) : null;
+  const modalPostData = modalPost ? mapPostToCardData(modalPost) : null;
+
   /* ---------------- Render ---------------- */
 
   return (
-    <Container maxWidth="md" sx={{ py: 4, pt: 0, position: "relative" }}>
-      {/* Post Composer */}
-      <Box sx={{ mb: 3 }}>
-        <PostComposer
-          content={content}
-          setContent={setContent}
-          selectedImages={selectedImages}
-          setSelectedImages={setSelectedImages}
-          selectedTags={selectedTags}
-          setSelectedTags={setSelectedTags}
-          onOpenEvent={() => setOpenEventDialog(true)}
-          onPost={handlePost}
-        />
-      </Box>
-
-      {/* Posts Feed */}
-      {isLoadingPosts ? (
+    <Container maxWidth="md" sx={{ py: { xs: 2, md: 4 }, pt: 0, position: "relative" }}>
+      {/* Pull-to-Refresh Wrapper */}
+      <PullToRefresh
+        onRefresh={handleRefresh}
+        pullingContent=""
+        refreshingContent={
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+            <CircularProgress size={24} sx={{ color: theme.palette.primary.main }} />
+          </Box>
+        }
+        resistance={2}
+        maxPullDownDistance={100}
+      >
         <Box>
-          <PostCardSkeleton />
-          <PostCardSkeleton />
-          <PostCardSkeleton />
-        </Box>
-      ) : postsArr.length === 0 ? (
-        <Paper
-          elevation={0}
-          sx={{
-            p: 6,
-            textAlign: "center",
-            border: "2px dashed",
-            borderColor: "divider",
-            borderRadius: 3,
-            backgroundColor: alpha(theme.palette.background.default, 0.5),
-          }}
-        >
-          <Typography variant="h6" color="text.secondary" gutterBottom sx={{ mb: 1 }}>
-            No posts yet
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Be the first to share something with your family! 🎉
-          </Typography>
-        </Paper>
-      ) : (
-        <>
-          <Box>
-            {postsArr.map((post: Post) => {
-              const postCardData = mapPostToCardData(post);
+          {/* Post Composer */}
+          <Box sx={{ mb: 3 }}>
+            <PostComposer
+              content={content}
+              setContent={setContent}
+              selectedImages={selectedImages}
+              setSelectedImages={setSelectedImages}
+              selectedTags={selectedTags}
+              setSelectedTags={setSelectedTags}
+              onOpenEvent={() => setOpenEventDialog(true)}
+              onPost={handlePost}
+            />
+          </Box>
 
-              return (
-                <React.Fragment key={post.id}>
-                  <PostCard
-                    post={postCardData}
-                    currentUserName={currentUserName}
-                    currentUserId={currentUserId}
-                    onLike={handleLike}
-                    onCommentClick={handleCommentClick}
-                    onEdit={startEditFor}
-                    onDelete={askDeleteFor}
-                    onShare={onShare}
-                    canEdit={post.userId === currentUserId}
-                    commentsOpen={activeCommentPost === post.id}
-                    commentSection={
-                      <CommentBox
-                        openForPostId={activeCommentPost}
-                        postId={post.id}
-                        comments={post.comments}
-                        value={commentText}
-                        setValue={setCommentText}
-                        onSubmit={() => handleComment(post.id)}
-                        currentUserId={currentUserId}
-                        currentUserAvatar={currentAvatar}
-                        onLikeComment={handleLikeComment}
-                        onEditComment={handleEditComment}
-                        onDeleteComment={handleDeleteComment}
-                        onReplyComment={handleReplyComment}
-                        isLoading={isLoadingComments[post.id] || false}
-                      />
+          {/* Manual Refresh Button (Desktop fallback) */}
+          {!isMobile && (
+            <Fade in={!isLoadingPosts}>
+              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                <Button
+                  onClick={handleRefresh}
+                  disabled={isLoadingPosts}
+                  variant="outlined"
+                  size="small"
+                  startIcon={<RefreshIcon />}
+                  sx={{
+                    borderRadius: 20,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderStyle: 'dashed',
+                    transition: 'all 0.3s',
+                    '&:hover': {
+                      borderStyle: 'solid',
+                      transform: 'translateY(-2px)',
                     }
-                  />
-                </React.Fragment>
-              );
-            })}
-          </Box>
+                  }}
+                >
+                  Refresh Feed
+                </Button>
+              </Box>
+            </Fade>
+          )}
 
-          {/* Infinite Scroll Trigger */}
-          <Box ref={observerTarget} sx={{ py: 2, textAlign: "center" }}>
-            {isLoadingMore && (
-              <Stack spacing={2} alignItems="center">
-                <CircularProgress size={32} />
-                <Typography variant="body2" color="text.secondary">
-                  Loading more posts...
-                </Typography>
-              </Stack>
-            )}
-            {!hasMore && postsArr.length > 0 && (
-              <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-              You&apos;ve reached the end!
+          {/* Posts Feed */}
+          {isLoadingPosts ? (
+            <Box>
+              <PostCardSkeleton />
+              <PostCardSkeleton />
+              <PostCardSkeleton />
+            </Box>
+          ) : postsArr.length === 0 ? (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 6,
+                textAlign: "center",
+                border: "2px dashed",
+                borderColor: "divider",
+                borderRadius: 3,
+                backgroundColor: alpha(theme.palette.background.default, 0.5),
+              }}
+            >
+              <Typography variant="h6" color="text.secondary" gutterBottom sx={{ mb: 1 }}>
+                No posts yet
               </Typography>
-            )}
-          </Box>
-        </>
-      )}
+              <Typography variant="body2" color="text.secondary">
+                Be the first to share something with your family! 🎉
+              </Typography>
+            </Paper>
+          ) : (
+            <>
+              <Box>
+                {postsArr.map((post: Post) => {
+                  const postCardData = mapPostToCardData(post);
+
+                  return (
+                    <Box
+                      key={post.id}
+                      ref={(el: HTMLDivElement | null) => {
+                        if (el) postRefs.current.set(post.id, el);
+                        else postRefs.current.delete(post.id);
+                      }}
+                    >
+                      <PostCard
+                        post={postCardData}
+                        currentUserName={currentUserName}
+                        currentUserId={currentUserId}
+                        onLike={handleLike}
+                        onCommentClick={handleCommentClick}
+                        onEdit={startEditFor}
+                        onDelete={askDeleteFor}
+                        onShare={onShare}
+                        onImageClick={(index) => handleImageClick(post.id, index)}
+                        canEdit={post.userId === currentUserId}
+                        commentsOpen={activeCommentPost === post.id}
+                        commentSection={
+                          <CommentBox
+                            openForPostId={activeCommentPost}
+                            postId={post.id}
+                            comments={post.comments}
+                            value={commentText}
+                            setValue={setCommentText}
+                            onSubmit={() => handleComment(post.id)}
+                            currentUserId={currentUserId}
+                            currentUserAvatar={currentAvatar}
+                            onLikeComment={handleLikeComment}
+                            onEditComment={handleEditComment}
+                            onDeleteComment={handleDeleteComment}
+                            onReplyComment={handleReplyComment}
+                            isLoading={isLoadingComments[post.id] || false}
+                          />
+                        }
+                      />
+                    </Box>
+                  );
+                })}
+              </Box>
+
+              {/* Infinite Scroll Trigger */}
+              <Box ref={observerTarget} sx={{ py: 2, textAlign: "center" }}>
+                {isLoadingMore && (
+                  <Stack spacing={2} alignItems="center">
+                    <CircularProgress size={32} />
+                    <Typography variant="body2" color="text.secondary">
+                      Loading more posts...
+                    </Typography>
+                  </Stack>
+                )}
+                {!hasMore && postsArr.length > 0 && (
+                  <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                    You&apos;ve reached the end!
+                  </Typography>
+                )}
+              </Box>
+            </>
+          )}
+        </Box>
+      </PullToRefresh>
 
       {/* Scroll to Top Button */}
       {showScrollTop && (
@@ -802,11 +923,11 @@ fileType: blob.type as string,
           onClick={scrollToTop}
           sx={{
             position: "fixed",
-            bottom: 32,
-            right: 32,
-            minWidth: 56,
-            width: 56,
-            height: 56,
+            bottom: { xs: 16, md: 32 },
+            right: { xs: 16, md: 32 },
+            minWidth: { xs: 48, md: 56 },
+            width: { xs: 48, md: 56 },
+            height: { xs: 48, md: 56 },
             borderRadius: "50%",
             bgcolor: "primary.main",
             color: "white",
@@ -823,6 +944,46 @@ fileType: blob.type as string,
           <KeyboardArrowUp />
         </Button>
       )}
+
+      {/* Post Modal */}
+      <PostModal
+        post={modalPostData}
+        open={!!modalPostId}
+        onClose={() => setModalPostId(null)}
+        currentUserName={currentUserName}
+        currentUserId={currentUserId}
+        currentAvatar={currentAvatar}
+        onLike={handleLike}
+        onEdit={startEditFor}
+        onDelete={askDeleteFor}
+        onShare={onShare}
+        onImageClick={(index) => modalPostId && handleImageClick(modalPostId, index)}
+        onComment={handleComment}
+        onLikeComment={handleLikeComment}
+        onEditComment={handleEditComment}
+        onDeleteComment={handleDeleteComment}
+        onReplyComment={handleReplyComment}
+      />
+
+      {/* Image Lightbox */}
+      <ImageLightbox
+        images={lightboxImages}
+        initialIndex={lightboxInitialIndex}
+        open={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+      />
+
+      {/* Post Not Found Snackbar */}
+      <Snackbar
+        open={showNotFoundSnackbar}
+        autoHideDuration={4000}
+        onClose={() => setShowNotFoundSnackbar(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="info" onClose={() => setShowNotFoundSnackbar(false)}>
+          Post not found or has been deleted
+        </Alert>
+      </Snackbar>
 
       {/* Dialogs */}
       <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} user={sharePost?.user} content={sharePost?.content} tags={sharePost?.tags} postId={sharePost?.id} />
