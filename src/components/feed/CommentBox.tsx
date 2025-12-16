@@ -586,8 +586,8 @@ export default function CommentBox({
           bgcolor: theme.palette.mode === 'dark'
             ? alpha(theme.palette.background.paper, 0.3)
             : alpha(theme.palette.action.hover, 0.2),
-          borderRadius: 3,
-          mb: 3,
+          // borderRadius: 3,
+          // mb: 3,
         }}
       >
         

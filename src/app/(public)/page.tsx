@@ -9,6 +9,7 @@ import {
   Box,
   Grid,
 } from "@mui/material";
+import Image from "next/image";
 import { Style_Script } from "next/font/google";
 
 const styleScript = Style_Script({
@@ -29,25 +30,39 @@ export default function LandingPage() {
           bgcolor: "background.paper",
         }}
       >
-        <Typography
-          variant="h3"
-          sx={{
-            fontFamily: styleScript.style.fontFamily,
-            mb: 2,
-            fontWeight: 500,
-            letterSpacing: 0.5,
-          }}
-        >
-          First Family
-        </Typography>
+        {/* Logo */}
+        <Box sx={{ mb: 2, display: "flex", justifyContent: "center" }}>
+          <Image
+            src="/assets/ff-logo.png" 
+            alt="First Family Logo"
+            width={220}
+            height={80}
+            style={{
+              maxWidth: "100%",
+              height: "auto",
+            }}
+            priority
+          />
+        </Box>
 
         <Typography
           variant="body1"
           color="text.secondary"
-          sx={{ maxWidth: 480, mx: "auto", mb: 3 }}
+          sx={{ maxWidth: 700, mx: "auto", mb: 3 }}
         >
-          A private, invite-only space for your family to stay connected. Share
-          memories, photos, recipes, and your family tree, securely.
+          This private family space was created in remembrance of late{" "}
+          <Box
+            component="span"
+            sx={{
+              fontWeight: 700,
+              color: "text.primary",
+            }}
+          >
+            Mr. Russel Issac
+          </Box>
+          , whose love, values, and legacy continue to bring family together. An
+          invite-only space for the family to stay connected. End-to-end secure.
+          Share updates, photos, recipes securely.
         </Typography>
 
         <Stack
@@ -91,7 +106,7 @@ export default function LandingPage() {
           {[
             {
               title: "Family Feed",
-              desc: "Share updates and everyday moments privately with your family.",
+              desc: "Share updates and everyday moments privately with the family.",
             },
             {
               title: "Photo Gallery",
@@ -107,7 +122,6 @@ export default function LandingPage() {
             },
           ].map((item, i) => (
             <Grid key={i} size={{ xs: 12, sm: 3 }}>
-              {/* <Grid key={i} item xs={12} sm={6}> */}
               <Paper
                 elevation={1}
                 sx={{
@@ -129,40 +143,6 @@ export default function LandingPage() {
         </Grid>
       </Box>
 
-      {/* Privacy Section */}
-      <Paper
-        elevation={0}
-        sx={{
-          mt: 10,
-          p: 4,
-          borderRadius: 3,
-          textAlign: "center",
-          bgcolor: "background.default",
-        }}
-      >
-        <Typography
-          variant="h4"
-          sx={{
-            fontFamily: styleScript.style.fontFamily,
-            mb: 2,
-            fontWeight: 400,
-          }}
-        >
-          Privacy First
-        </Typography>
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ maxWidth: 500, mx: "auto", mb: 3 }}
-        >
-          End-to-end secure, invite-only, and built for families who value
-          privacy. No Ads, No Algorithms, No Strangers, Ever!
-        </Typography>
-        <Button variant="contained" size="large" sx={{ borderRadius: 2 }}>
-          Learn More
-        </Button>
-      </Paper>
-
       {/* How It Works */}
       <Box sx={{ mt: 10 }}>
         <Typography
@@ -183,15 +163,14 @@ export default function LandingPage() {
             {
               num: "2",
               title: "Create Your Account",
-              desc: "Register using the code, instantly join your family.",
+              desc: "Register using the code, instantly join the family.",
             },
             {
               num: "3",
               title: "Start Sharing",
-              desc: "Post updates, upload photos & explore your Family Tree.",
+              desc: "Post updates, upload photos & explore the family Tree.",
             },
           ].map((step, idx) => (
-            // <Grid item xs={12} sm={4} key={idx}>
             <Grid key={idx} size={{ xs: 12, sm: 4 }}>
               <Paper
                 elevation={1}
@@ -223,8 +202,15 @@ export default function LandingPage() {
       {/* Footer */}
       <Box sx={{ mt: 10, textAlign: "center", color: "text.secondary" }}>
         <Typography variant="body2">
-          © {new Date().getFullYear()} First Family | Built with ❤️ for every
-          family.
+          © {new Date().getFullYear()} First Family | Built with love for the
+          family. | Empowered by{" "}
+          <a
+            href="https://www.visionarybizz.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Visionary Services
+          </a>
         </Typography>
       </Box>
     </Container>

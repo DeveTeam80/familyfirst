@@ -527,7 +527,7 @@ export default function Header({ children, onNotificationClick }: HeaderProps) {
               color="inherit"
               aria-label="open drawer"
               edge="start"
-              onClick={() => setMobileOpen(true)}
+              onClick={() => setMobileOpen((prev) => !prev)}
               sx={{ mr: 2 }}
             >
               <MenuIcon />
@@ -543,7 +543,7 @@ export default function Header({ children, onNotificationClick }: HeaderProps) {
             }}
           >
             <Image
-              src="/assets/FF logo.png"
+              src="/assets/ff-logo.png"
               alt="First Family Logo"
               width={isMobile ? 110 : 150}
               height={isMobile ? 34 : 46}

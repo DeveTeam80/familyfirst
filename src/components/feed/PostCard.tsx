@@ -394,7 +394,7 @@ export default function PostCard({
         onMouseLeave={() => !isMobile && setIsHovered(false)}
         sx={{
           mb: 3,
-          borderRadius: 4,
+          borderRadius: 2,
           border: '1px solid',
           borderColor: alpha(theme.palette.divider, 0.6),
           transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -890,6 +890,7 @@ export default function PostCard({
                   bgcolor: alpha(theme.palette.primary.main, 0.15),
                   color: 'primary.main',
                   transform: 'translateY(-2px)',
+                  padding:'5px 32px'
                 },
               }}
             >
