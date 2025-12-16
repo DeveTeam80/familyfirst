@@ -41,7 +41,7 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs, { Dayjs } from "dayjs";
 import { useRouter } from "next/navigation";
-import { familyTreeData } from "@/data/familyTree";
+// import { familyTreeData } from "@/data/familyTree";
 import { CloudinaryUpload } from "@/components/CloudinaryUpload";
 import { FamilyRole } from "@prisma/client";
 
@@ -60,6 +60,7 @@ interface FamilyTreeNodeData {
 
 interface FamilyTreeNode {
   id: string;
+  userId?: string | null;
   data: FamilyTreeNodeData;
   rels?: {
     parents?: string[];
@@ -88,7 +89,6 @@ function FamilyTreeChart({
 }: {
   isAdmin: boolean;
   isMobile: boolean;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   theme: any;
   treeData: FamilyTreeNode[];
   onNodeSelect?: (node: FamilyTreeNode) => void;
@@ -114,16 +114,16 @@ function FamilyTreeChart({
 
       chartDataRef.current = data;
 
-      const f3Chart = f3
-        .createChart("#FamilyChart", data)
-        .setTransitionTime(1000)
-        .setCardXSpacing(isMobile ? 200 : 250)
-        .setCardYSpacing(isMobile ? 120 : 150)
-        .setSingleParentEmptyCard(isAdmin, { label: "ADD" })
-        .setShowSiblingsOfMain(true)
-        .setOrientationVertical();
+const f3Chart = f3
+  .createChart("#FamilyChart", data)
+  .setTransitionTime(1000)
+  .setCardXSpacing(isMobile ? 200 : 250)
+  .setCardYSpacing(isMobile ? 120 : 150)
+  .setSingleParentEmptyCard(isAdmin, { label: "ADD" })
+  .setShowSiblingsOfMain(true)
+  .setOrientationVertical();
 
-      const f3Card = f3Chart
+  const f3Card = f3Chart
         .setCardHtml()
         .setCardDisplay([["first name", "last name"], ["birthday"]])
         .setCardDim({})
@@ -795,10 +795,9 @@ export default function FamilyTreePage() {
 
   const router = useRouter();
 
-  const [treeData, setTreeData] = useState<FamilyTreeNode[]>(
-    familyTreeData as FamilyTreeNode[]
-  );
-
+  const [treeData, setTreeData] = useState<FamilyTreeNode[]>([]);
+  const [treeLoading, setTreeLoading] = useState(true);
+  const familyId = "demo-family";
   const [quickActionNode, setQuickActionNode] = useState<FamilyTreeNode | null>(
     null
   );
@@ -806,9 +805,27 @@ export default function FamilyTreePage() {
     null
   );
   const [editOpen, setEditOpen] = useState(false);
-
+  const [loggedInUserId, setLoggedInUserId] = useState<string | null>(null);
   const [role, setRole] = useState<FamilyRole>("VIEWER");
   const isAdmin = role === "OWNER" || role === "ADMIN";
+
+  const fetchUsersMap = async () => {
+  const res = await fetch(`/api/users?familyId=${familyId}`, {
+    credentials: "include",
+  });
+  if (!res.ok) return new Map<string, string>();
+
+  const json = await res.json();
+  const map = new Map<string, string>();
+
+  json.users?.forEach((u: any) => {
+    if (u.id && u.avatarUrl) {
+      map.set(u.id, u.avatarUrl);
+    }
+  });
+
+  return map;
+};
 
   useEffect(() => {
     (async () => {
@@ -820,6 +837,7 @@ export default function FamilyTreePage() {
 
         const json = await res.json();
         console.log("family role", json?.memberships[0].role)
+         setLoggedInUserId(json.user.id);
         const familyRole = json?.memberships[0].role as FamilyRole | undefined;
         if (
           familyRole === "OWNER" ||
@@ -835,6 +853,55 @@ export default function FamilyTreePage() {
     })();
   }, []);
 
+useEffect(() => {
+  if (!loggedInUserId) return;
+
+  (async () => {
+    try {
+      setTreeLoading(true);
+
+      const [treeRes, userAvatarMap] = await Promise.all([
+        fetch(`/api/family/${familyId}/tree`, { credentials: "include" }),
+        fetchUsersMap(),
+      ]);
+
+      if (!treeRes.ok) throw new Error("Tree fetch failed");
+
+      const data: FamilyTreeNode[] = await treeRes.json();
+
+      const normalized = data.map((node) => {
+        const userAvatar =
+          node.userId && userAvatarMap.get(node.userId);
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            avatar: userAvatar || (node.data as any).photoUrl || undefined,
+          },
+        };
+      });
+
+      // POV logic (keep yours)
+      const povNode = normalized.find(
+        (n) => n.userId === loggedInUserId
+      );
+
+      const orderedTree = povNode
+        ? [povNode, ...normalized.filter((n) => n.id !== povNode.id)]
+        : normalized;
+
+      setTreeData(orderedTree);
+    } catch (e) {
+      console.error("Tree load failed", e);
+    } finally {
+      setTreeLoading(false);
+    }
+  })();
+}, [familyId, loggedInUserId]);
+
+    
+    console.log("treeData", treeData)
   const handleNodeSelect = useCallback(
     (node: FamilyTreeNode) => {
       const freshNode = treeData.find((n) => n.id === node.id) || node;

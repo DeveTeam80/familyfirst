@@ -29,12 +29,6 @@ interface FamilyMembershipData {
   };
 }
 
-/**
- * GET -> returns current user + family memberships (returns up to all memberships).
- * PATCH -> update profile (name, bio, avatarUrl, location).
- *
- * Note: Ensure NextAuth session callback includes user.id if you want session.user.id to be available.
- */
 export async function GET(_req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
