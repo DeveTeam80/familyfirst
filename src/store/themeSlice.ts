@@ -1,11 +1,20 @@
 import { createSlice } from "@reduxjs/toolkit";
 
+export type ThemeMode = "light" | "dark";
+
 interface ThemeState {
-  mode: "light" | "dark";
+  mode: ThemeMode;
 }
 
+// 🔹 Safe initializer (SSR-safe)
+const getInitialMode = (): ThemeMode => {
+  if (typeof window === "undefined") return "dark"; // fallback for SSR
+  const saved = localStorage.getItem("theme-mode");
+  return saved === "light" || saved === "dark" ? saved : "dark";
+};
+
 const initialState: ThemeState = {
-  mode: "dark",
+  mode: getInitialMode(),
 };
 
 export const themeSlice = createSlice({
@@ -14,9 +23,11 @@ export const themeSlice = createSlice({
   reducers: {
     toggleMode: (state) => {
       state.mode = state.mode === "light" ? "dark" : "light";
+      localStorage.setItem("theme-mode", state.mode);
     },
-    setMode: (state, action: { payload: "light" | "dark" }) => {
+    setMode: (state, action: { payload: ThemeMode }) => {
       state.mode = action.payload;
+      localStorage.setItem("theme-mode", state.mode);
     },
   },
 });

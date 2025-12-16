@@ -41,7 +41,7 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs, { Dayjs } from "dayjs";
 import { useRouter } from "next/navigation";
-// import { familyTreeData } from "@/data/familyTree";
+import { Theme } from "@mui/material/styles";
 import { CloudinaryUpload } from "@/components/CloudinaryUpload";
 import { FamilyRole } from "@prisma/client";
 
@@ -53,10 +53,12 @@ interface FamilyTreeNodeData {
   "last name"?: string;
   birthday?: string;
   avatar?: string;
+  photoUrl?: string; // ✅ add this
   gender: "M" | "F";
   email?: string;
   [key: string]: unknown;
 }
+
 
 interface FamilyTreeNode {
   id: string;
@@ -76,6 +78,10 @@ interface F3CardData {
     [key: string]: unknown;
   };
 }
+interface UserAvatarDTO {
+  id: string;
+  avatarUrl?: string | null;
+}
 
 /* -----------------------
    Family Tree Chart Component
@@ -89,7 +95,7 @@ function FamilyTreeChart({
 }: {
   isAdmin: boolean;
   isMobile: boolean;
-  theme: any;
+  theme: Theme;
   treeData: FamilyTreeNode[];
   onNodeSelect?: (node: FamilyTreeNode) => void;
 }) {
@@ -818,11 +824,17 @@ export default function FamilyTreePage() {
   const json = await res.json();
   const map = new Map<string, string>();
 
-  json.users?.forEach((u: any) => {
-    if (u.id && u.avatarUrl) {
-      map.set(u.id, u.avatarUrl);
-    }
-  });
+  json.users?.forEach((u: UserAvatarDTO) => {
+  if (u.id && u.avatarUrl) {
+    map.set(u.id, u.avatarUrl);
+  }
+});
+
+  // json.users?.forEach((u: any) => {
+  //   if (u.id && u.avatarUrl) {
+  //     map.set(u.id, u.avatarUrl);
+  //   }
+  // });
 
   return map;
 };
@@ -877,7 +889,7 @@ useEffect(() => {
           ...node,
           data: {
             ...node.data,
-            avatar: userAvatar || (node.data as any).photoUrl || undefined,
+avatar: userAvatar || node.data.photoUrl || undefined,
           },
         };
       });
