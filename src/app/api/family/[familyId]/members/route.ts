@@ -19,6 +19,7 @@ interface FamilyMemberWithUser {
   } | null;
 }
 
+// GET: Fetch all members of a family
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ familyId: string }> } // ⭐ Fixed for Next.js 15
@@ -28,7 +29,6 @@ export async function GET(
   try {
     const requesterId = await getUserIdFromRequest(req);
     if (!requesterId) {
-      // return unauthenticated but still safe to return 200 with empty? we return 401
       return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
     }
 
@@ -77,5 +77,100 @@ export async function GET(
   } catch (err) {
     console.error("[GET /api/family/:id/members] error:", err);
     return NextResponse.json({ error: "Failed to load members" }, { status: 500 });
+  }
+}
+
+// POST: Add a new member (Family Tree Node) to the family
+
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ familyId: string }> }
+) {
+  const { familyId } = await context.params;
+
+  try {
+    const requesterId = await getUserIdFromRequest(req);
+    if (!requesterId) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+
+    const body = await req.json();
+    const { firstName, lastName, gender, birthday, avatar, relativeId, relationType } = body;
+
+    if (!firstName || !relativeId || !relationType) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    const newNode = await prisma.$transaction(async (tx) => {
+      // 1. Create the new Node
+      const node = await tx.familyTreeNode.create({
+        data: {
+          firstName,
+          lastName,
+          gender,
+          photoUrl: avatar,
+          birthDate: birthday ? new Date(birthday) : null,
+          familyId,
+          createdBy: requesterId,
+        },
+      });
+
+      // 2. Prepare Relationships
+      const relationshipsToCreate = [];
+
+      if (relationType === "children") {
+        // A. Link to the selected Parent (The one you clicked)
+        relationshipsToCreate.push(
+          { person1Id: relativeId, person2Id: node.id, relationshipType: "PARENT" },
+          { person1Id: node.id, person2Id: relativeId, relationshipType: "CHILD" }
+        );
+
+        // B. ⭐ FIX: Find if this parent has a SPOUSE and link them too
+        const spouses = await tx.familyRelationship.findMany({
+          where: {
+            person1Id: relativeId,
+            relationshipType: "SPOUSE",
+          },
+          select: { person2Id: true }, // Get the spouse's ID
+        });
+
+        for (const spouse of spouses) {
+          relationshipsToCreate.push(
+            { person1Id: spouse.person2Id, person2Id: node.id, relationshipType: "PARENT" },
+            { person1Id: node.id, person2Id: spouse.person2Id, relationshipType: "CHILD" }
+          );
+        }
+      } 
+      else if (relationType === "parents") {
+        // Link New Node (Parent) <-> Relative (Child)
+        relationshipsToCreate.push(
+          { person1Id: node.id, person2Id: relativeId, relationshipType: "PARENT" },
+          { person1Id: relativeId, person2Id: node.id, relationshipType: "CHILD" }
+        );
+        // Note: We usually don't auto-link parents to spouses implicitly 
+        // because biological parents might not be the current spouses.
+      } 
+      else if (relationType === "spouses") {
+        // Link New Node <-> Relative
+        relationshipsToCreate.push(
+          { person1Id: relativeId, person2Id: node.id, relationshipType: "SPOUSE" },
+          { person1Id: node.id, person2Id: relativeId, relationshipType: "SPOUSE" }
+        );
+      }
+
+      // 3. Create all links
+      if (relationshipsToCreate.length > 0) {
+        // cast to any to bypass strict type checking on the enum for batch create if needed, 
+        // or ensure your enums match exactly.
+        await tx.familyRelationship.createMany({
+          data: relationshipsToCreate as any, 
+        });
+      }
+
+      return node;
+    });
+
+    return NextResponse.json(newNode);
+  } catch (err) {
+    console.error("[POST Error]:", err);
+    return NextResponse.json({ error: "Failed to create member" }, { status: 500 });
   }
 }

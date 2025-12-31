@@ -36,38 +36,34 @@ export async function GET(
     const nodes = await prisma.familyTreeNode.findMany({
       where: { familyId },
       include: {
-        relationshipsFrom: true,
-        relationshipsTo: true,
+        relationshipsFrom: true, // Outgoing connections
+        relationshipsTo: true,   // Incoming connections
       },
     });
 
-    // 🔁 Transform → family-chart format (NO duplicates)
+    // 🔁 Transform → family-chart format
     const formatted = nodes.map((node) => {
       const parents = new Set<string>();
       const children = new Set<string>();
       const spouses = new Set<string>();
 
-      // Incoming → parents
+      // 1. Process Outgoing Relationships (relationshipsFrom)
+      // Node is the "Source" (Person 1)
+      for (const rel of node.relationshipsFrom) {
+        if (rel.relationshipType === RelationshipType.PARENT) {
+          // If Node is Parent of X, then X is a child
+          children.add(rel.person2Id);
+        } else if (rel.relationshipType === RelationshipType.SPOUSE) {
+          // ✅ Add spouse unconditionally (Outgoing)
+          spouses.add(rel.person2Id);
+        }
+      }
+
       for (const rel of node.relationshipsTo) {
         if (rel.relationshipType === RelationshipType.PARENT) {
           parents.add(rel.person1Id);
-        }
-      }
-
-      // Outgoing → children
-      for (const rel of node.relationshipsFrom) {
-        if (rel.relationshipType === RelationshipType.PARENT) {
-          children.add(rel.person2Id);
-        }
-      }
-
-      // SPOUSE (declare once only, stable direction)
-      for (const rel of node.relationshipsFrom) {
-        if (
-          rel.relationshipType === RelationshipType.SPOUSE &&
-          node.id < rel.person2Id
-        ) {
-          spouses.add(rel.person2Id);
+        } else if (rel.relationshipType === RelationshipType.SPOUSE) {
+          spouses.add(rel.person1Id);
         }
       }
 

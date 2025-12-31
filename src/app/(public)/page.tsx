@@ -33,7 +33,7 @@ export default function LandingPage() {
         {/* Logo */}
         <Box sx={{ mb: 2, display: "flex", justifyContent: "center" }}>
           <Image
-            src="/assets/ff-logo.png" 
+            src="/assets/ff-logo.png"
             alt="First Family Logo"
             width={220}
             height={80}
@@ -45,25 +45,60 @@ export default function LandingPage() {
           />
         </Box>
 
-        <Typography
-          variant="body1"
-          color="text.secondary"
-          sx={{ maxWidth: 700, mx: "auto", mb: 3 }}
-        >
-          This private family space was created in remembrance of late{" "}
-          <Box
-            component="span"
+        {/* Russell Issac Image */}
+        <Box sx={{ mb: 3, display: "flex", justifyContent: "center" }}>
+          <Image
+            src="/assets/russell-issac.jpg" // Ensure you have this image in your public/assets folder
+            alt="Mr. Russell Issac"
+            width={180}
+            height={180}
+            style={{
+              borderRadius: "50%",
+              border: "4px solid white",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+              objectFit: "cover",
+            }}
+            priority
+          />
+        </Box>
+
+        {/* Dedication / Intro */}
+        <Box sx={{ mb: 3 }}>
+          <Typography
+            variant="h5"
             sx={{
-              fontWeight: 700,
+              fontFamily: styleScript.style.fontFamily,
               color: "text.primary",
+              mb: 1,
             }}
           >
-            Mr. Russel Issac
-          </Box>
-          , whose love, values, and legacy continue to bring family together. An
-          invite-only space for the family to stay connected. End-to-end secure.
-          Share updates, photos, recipes securely.
-        </Typography>
+            In Loving Memory of
+          </Typography>
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{ fontWeight: 700, color: "text.primary", mb: 0.5 }}
+          >
+            Russell Issac
+          </Typography>
+          <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 2 }}>
+            (12th July 1946 - 12th January 2025)
+          </Typography>
+
+          <Typography
+            variant="body1"
+            color="text.secondary"
+            sx={{ maxWidth: 700, mx: "auto", lineHeight: 1.8 }}
+          >
+            Though he no longer walks beside us, his soul, love, and light live
+            forever in the deepest corners of our hearts. We created this
+            private space to honour him with gratitude, for every memory he
+            blessed us with and every lesson he left behind. <br />
+            <br />
+            Here, the family stays connected, sharing the strength his life
+            still gives us.
+          </Typography>
+        </Box>
 
         <Stack
           direction={{ xs: "column", sm: "row" }}
@@ -74,14 +109,7 @@ export default function LandingPage() {
             variant="contained"
             size="large"
             sx={{ px: 4, borderRadius: 2 }}
-          >
-            Request an Invite
-          </Button>
-          <Button
-            variant="outlined"
-            size="large"
-            sx={{ px: 4, borderRadius: 2 }}
-            href="/login"
+             href="/login"
           >
             Login
           </Button>
@@ -99,26 +127,26 @@ export default function LandingPage() {
             fontWeight: 400,
           }}
         >
-          What You Can Do
+          Keeping His Light Alive
         </Typography>
 
         <Grid container spacing={4}>
           {[
             {
               title: "Family Feed",
-              desc: "Share updates and everyday moments privately with the family.",
+              desc: "Share updates and everyday moments. Keep the family close, just as he would have wanted.",
             },
             {
               title: "Photo Gallery",
-              desc: "Organize and preserve precious memories in one secure place.",
+              desc: "A sanctuary for our cherished memories. Revisit the laughter and presence we miss so much.",
             },
             {
               title: "Family Tree",
-              desc: "Visualize your entire lineage beautifully and interactively.",
+              desc: "Visualize the roots he strengthened and the legacy that continues through all of us.",
             },
             {
               title: "Recipe Book",
-              desc: "Store traditional recipes and pass them down generations.",
+              desc: "The comfort of home. Preserve the traditional recipes that remind us of his love.",
             },
           ].map((item, i) => (
             <Grid key={i} size={{ xs: 12, sm: 3 }}>
@@ -150,7 +178,7 @@ export default function LandingPage() {
           align="center"
           sx={{ fontFamily: styleScript.style.fontFamily, mb: 5 }}
         >
-          How It Works
+          Join the Family Space
         </Typography>
 
         <Grid container spacing={4}>
@@ -158,17 +186,17 @@ export default function LandingPage() {
             {
               num: "1",
               title: "Get an Invite",
-              desc: "Family admin sends you an invite code.",
+              desc: "Family admin sends you a secure invite code.",
             },
             {
               num: "2",
               title: "Create Your Account",
-              desc: "Register using the code, instantly join the family.",
+              desc: "Register using the code to instantly join the circle.",
             },
             {
               num: "3",
               title: "Start Sharing",
-              desc: "Post updates, upload photos & explore the family Tree.",
+              desc: "Post updates, upload photos, and celebrate his life.",
             },
           ].map((step, idx) => (
             <Grid key={idx} size={{ xs: 12, sm: 4 }}>
@@ -202,12 +230,13 @@ export default function LandingPage() {
       {/* Footer */}
       <Box sx={{ mt: 10, textAlign: "center", color: "text.secondary" }}>
         <Typography variant="body2">
-          © {new Date().getFullYear()} First Family | Built with love for the
-          family. | Empowered by{" "}
+          © {new Date().getFullYear()} First Family | Forever in our hearts. |
+          Empowered by{" "}
           <a
             href="https://www.visionarybizz.com/"
             target="_blank"
             rel="noopener noreferrer"
+            style={{ color: "inherit", textDecoration: "underline" }}
           >
             Visionary Services
           </a>
