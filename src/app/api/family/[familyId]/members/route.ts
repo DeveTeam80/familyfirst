@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserIdFromRequest } from "@/lib/session";
+import { Prisma } from "@prisma/client"; // 1. Import Prisma types
 
 // ⭐ Add proper interface for family member with user
 interface FamilyMemberWithUser {
@@ -114,7 +115,8 @@ export async function POST(
       });
 
       // 2. Prepare Relationships
-      const relationshipsToCreate = [];
+      // ⭐ FIX: Explicitly type the array using Prisma's input type
+      const relationshipsToCreate: Prisma.FamilyRelationshipCreateManyInput[] = [];
 
       if (relationType === "children") {
         // A. Link to the selected Parent (The one you clicked)
@@ -158,10 +160,9 @@ export async function POST(
 
       // 3. Create all links
       if (relationshipsToCreate.length > 0) {
-        // cast to any to bypass strict type checking on the enum for batch create if needed, 
-        // or ensure your enums match exactly.
+        // ⭐ FIX: Removed 'as any' cast. The array is now properly typed.
         await tx.familyRelationship.createMany({
-          data: relationshipsToCreate as any, 
+          data: relationshipsToCreate, 
         });
       }
 

@@ -41,9 +41,9 @@ import {
   Send as SendIcon,
   Person as PersonIcon,
   Cake as CakeIcon,
-  Edit as EditIcon,
-  Replay as ReplayIcon,
   Add as AddIcon,
+  Replay as ReplayIcon, // 👈 Restored
+  Edit as EditIcon,     // 👈 Restored
 } from "@mui/icons-material";
 import { AiOutlineUserAdd } from "react-icons/ai";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
@@ -192,16 +192,6 @@ export interface FamilyTreeChartHandle {
   cancelAddMode: () => void;
 }
 
-/* -----------------------
-   🌳 Family Tree Chart Component
-   ----------------------- */
-
-export interface FamilyTreeChartHandle {
-  resetView: () => void;
-  triggerAddMode: (nodeId: string) => void;
-  cancelAddMode: () => void;
-}
-
 const FamilyTreeChart = React.forwardRef<
   FamilyTreeChartHandle,
   {
@@ -223,6 +213,7 @@ const FamilyTreeChart = React.forwardRef<
     {
       isAdmin,
       isMobile,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       theme,
       treeData,
       onNodeSelect,
@@ -239,10 +230,11 @@ const FamilyTreeChart = React.forwardRef<
     const f3LibRef = useRef<any>(null);
 
     // Refs to hold latest props
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const chartDataRef = useRef<any[]>([]);
     const onNodeSelectRef = useRef(onNodeSelect);
     const onAddRelativeRef = useRef(onAddRelative);
-    
+
     // Track previous data to prevent unnecessary redraws
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const prevTreeDataRef = useRef<any[]>([]);
@@ -257,7 +249,7 @@ const FamilyTreeChart = React.forwardRef<
       if (prevTreeDataRef.current === treeData) {
         return;
       }
-      
+
       prevTreeDataRef.current = treeData;
 
       if (f3ChartInstance.current) {
@@ -282,7 +274,10 @@ const FamilyTreeChart = React.forwardRef<
 
         const f3Card = f3Chart
           .setCardHtml()
-          .setCardDisplay([["first name", "last name"], ["birthday"]])
+          .setCardDisplay([
+            ["first name", "last name"],
+            ["birthday"],
+          ])
           .setCardDim({})
           .setMiniTree(true)
           .setStyle("imageCircle")
@@ -297,47 +292,53 @@ const FamilyTreeChart = React.forwardRef<
           f3EditTreeRef.current = editTree;
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         f3Card.setOnCardUpdate(function (this: HTMLElement, d: F3CardData) {
-          const cardElement = this;
-
           // ============================================================
           // 🟢 LOGIC FOR GHOST CARDS
           // ============================================================
           if (d.data._new_rel_data) {
-            cardElement.style.cursor = "pointer";
+            this.style.cursor = "pointer";
 
             // Check if we've already bound the listener to avoid duplicates
-            if (!cardElement.getAttribute("data-click-bound")) {
-              cardElement.setAttribute("data-click-bound", "true");
+            if (!this.getAttribute("data-click-bound")) {
+              this.setAttribute("data-click-bound", "true");
 
               // 🛑 USE { capture: true } TO INTERCEPT BEFORE LIBRARY
-              cardElement.addEventListener("click", (e) => {
-                // 🛑 STOP EVERYTHING
-                e.stopPropagation();
-                e.stopImmediatePropagation(); // Kills library listeners
-                e.preventDefault();
+              this.addEventListener(
+                "click",
+                (e) => {
+                  // 🛑 STOP EVERYTHING
+                  e.stopPropagation();
+                  e.stopImmediatePropagation(); // Kills library listeners
+                  e.preventDefault();
 
-                // Get Handler
-                const handler = onAddRelativeRef.current;
-                
-                // Get IDs
-                const realParentId = d.data._new_rel_data?.rel_id || d.data.id;
-                const rawRelType = d.data._new_rel_data?.rel_type;
+                  // Get Handler
+                  const handler = onAddRelativeRef.current;
 
-                // Map Types
-                let appRelType: "children" | "spouses" | "parents" | null = null;
-                if (rawRelType === "son" || rawRelType === "daughter")
-                  appRelType = "children";
-                else if (rawRelType === "spouse") appRelType = "spouses";
-                else if (rawRelType === "father" || rawRelType === "mother")
-                  appRelType = "parents";
+                  // Get IDs
+                  const realParentId =
+                    d.data._new_rel_data?.rel_id || d.data.id;
+                  const rawRelType = d.data._new_rel_data?.rel_type;
 
-                // Trigger Parent Action
-                if (realParentId && appRelType && rawRelType && handler) {
-                  handler(realParentId, appRelType, rawRelType);
-                }
-              }, { capture: true }); // <--- IMPORTANT
+                  // Map Types
+                  let appRelType:
+                    | "children"
+                    | "spouses"
+                    | "parents"
+                    | null = null;
+                  if (rawRelType === "son" || rawRelType === "daughter")
+                    appRelType = "children";
+                  else if (rawRelType === "spouse") appRelType = "spouses";
+                  else if (rawRelType === "father" || rawRelType === "mother")
+                    appRelType = "parents";
+
+                  // Trigger Parent Action
+                  if (realParentId && appRelType && rawRelType && handler) {
+                    handler(realParentId, appRelType, rawRelType);
+                  }
+                },
+                { capture: true }
+              ); // <--- IMPORTANT
             }
             return;
           }
@@ -348,7 +349,7 @@ const FamilyTreeChart = React.forwardRef<
           const nodeData = chartDataRef.current.find((n) => n.id === d.data.id);
           if (nodeData) {
             // Standard onclick is fine for regular nodes, or use capture if you want to stop centering there too
-            cardElement.onclick = (e: MouseEvent) => {
+            this.onclick = (e: MouseEvent) => {
               e.stopPropagation();
               if (onNodeSelectRef.current) {
                 onNodeSelectRef.current(nodeData);
@@ -924,7 +925,12 @@ function InspectorPanel({
             >
               Add Relative
             </Button>
-            <Button variant="outlined" onClick={onEdit} fullWidth>
+            <Button
+              variant="outlined"
+              onClick={onEdit}
+              fullWidth
+              startIcon={<EditIcon />}
+            >
               Edit Profile
             </Button>
           </Stack>
@@ -1205,7 +1211,7 @@ export default function FamilyTreePage() {
   const fetchTreeData = useCallback(async () => {
     if (!loggedInUserId) return;
     try {
-      setTreeLoading(true); // Optional: keep loading spinner or remove for silent update
+      setTreeLoading(true);
 
       const [treeRes, userAvatarMap] = await Promise.all([
         fetch(`/api/family/${familyId}/tree`, { credentials: "include" }),
@@ -1246,7 +1252,6 @@ export default function FamilyTreePage() {
     }
   }, [familyId, loggedInUserId]);
 
-  // 👇 2. Use it in the effect
   useEffect(() => {
     fetchTreeData();
   }, [fetchTreeData]);
@@ -1276,54 +1281,6 @@ export default function FamilyTreePage() {
     })();
   }, []);
 
-  useEffect(() => {
-    if (!loggedInUserId) return;
-
-    (async () => {
-      try {
-        setTreeLoading(true);
-
-        const [treeRes, userAvatarMap] = await Promise.all([
-          fetch(`/api/family/${familyId}/tree`, { credentials: "include" }),
-          fetchUsersMap(),
-        ]);
-
-        if (!treeRes.ok) throw new Error("Tree fetch failed");
-
-        const rawData: FamilyTreeNode[] = await treeRes.json();
-
-        // 👇 NORMALIZE DATA
-        const normalized = rawData.map((node) => {
-          const userAvatar = node.userId && userAvatarMap.get(node.userId);
-          return {
-            ...node,
-            id: String(node.id),
-            data: {
-              ...node.data,
-              avatar: userAvatar || node.data.photoUrl || undefined,
-            },
-            rels: {
-              children: node.rels?.children?.map((id) => String(id)) || [],
-              spouses: node.rels?.spouses?.map((id) => String(id)) || [],
-              parents: node.rels?.parents?.map((id) => String(id)) || [],
-            },
-          };
-        });
-
-        const povNode = normalized.find((n) => n.userId === loggedInUserId);
-        const orderedTree = povNode
-          ? [povNode, ...normalized.filter((n) => n.id !== povNode.id)]
-          : normalized;
-
-        setTreeData(orderedTree);
-      } catch (e) {
-        console.error("Tree load failed", e);
-      } finally {
-        setTreeLoading(false);
-      }
-    })();
-  }, [familyId, loggedInUserId]);
-
   const handleNodeSelect = useCallback(
     (node: FamilyTreeNode) => {
       const freshNode = treeData.find((n) => n.id === node.id) || node;
@@ -1347,6 +1304,7 @@ export default function FamilyTreePage() {
     }
   };
 
+  // 👇 Restored Function
   const handleResetView = () => {
     if (chartRef.current) {
       chartRef.current.resetView();
@@ -1419,7 +1377,7 @@ export default function FamilyTreePage() {
     [treeData]
   );
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleAddMember = async (newMemberData: any) => {
     try {
       // 1. Call API
@@ -1445,7 +1403,6 @@ export default function FamilyTreePage() {
 
       // 4. 🔄 REFETCH the tree to get the complete graph (including spouse links)
       await fetchTreeData();
-
     } catch (error) {
       console.error("❌ Error adding member:", error);
       alert("Failed to add member. Please try again.");
@@ -1463,8 +1420,6 @@ export default function FamilyTreePage() {
           bgcolor: theme.palette.mode === "dark" ? "#1a1229" : "#faf8ff",
         }}
       >
-        {/* Header and Skeleton skipped for brevity but included in full code */}
-        
         {treeLoading && (
           <Box
             sx={{
@@ -1481,6 +1436,31 @@ export default function FamilyTreePage() {
             <TreeSkeleton />
           </Box>
         )}
+
+        {/* 👇 Added Reset View Button */}
+        <Box
+          sx={{
+            position: "absolute",
+            top: 20,
+            left: 20,
+            zIndex: 100,
+          }}
+        >
+          <Tooltip title="Reset View">
+            <IconButton
+              onClick={handleResetView}
+              sx={{
+                bgcolor: theme.palette.background.paper,
+                boxShadow: 1,
+                "&:hover": {
+                  bgcolor: alpha(theme.palette.background.paper, 0.9),
+                },
+              }}
+            >
+              <ReplayIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
 
         <Box
           sx={{
@@ -1535,7 +1515,6 @@ export default function FamilyTreePage() {
             setAddDialogOpen(false);
             setTargetNodeForAdd(null);
             setAddSpecificRole(null);
-            // 🛑 REMOVED: chartRef.current.cancelAddMode();
           }}
           relativeNode={targetNodeForAdd || inspectorNode}
           relationType={addRelationType}
