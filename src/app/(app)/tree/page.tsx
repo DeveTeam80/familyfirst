@@ -35,6 +35,8 @@ import {
   Skeleton,
   Tooltip,
 } from "@mui/material";
+import { MdOutlineArrowBack } from "react-icons/md";
+import { RxCross2 } from "react-icons/rx";
 import {
   Close as CloseIcon,
   Email as EmailIcon,
@@ -42,8 +44,7 @@ import {
   Person as PersonIcon,
   Cake as CakeIcon,
   Add as AddIcon,
-  Replay as ReplayIcon, // 👈 Restored
-  Edit as EditIcon,     // 👈 Restored
+  Edit as EditIcon,
 } from "@mui/icons-material";
 import { AiOutlineUserAdd } from "react-icons/ai";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
@@ -207,6 +208,7 @@ const FamilyTreeChart = React.forwardRef<
       relationType: "children" | "spouses" | "parents",
       specificRole: string
     ) => void;
+    onAddModeChange?: (isAddMode: boolean) => void;
   }
 >(
   (
@@ -218,6 +220,7 @@ const FamilyTreeChart = React.forwardRef<
       treeData,
       onNodeSelect,
       onAddRelative,
+      onAddModeChange,
     },
     ref
   ) => {
@@ -229,43 +232,41 @@ const FamilyTreeChart = React.forwardRef<
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const f3LibRef = useRef<any>(null);
 
-    // Refs to hold latest props
+    // This ref will store the ACTUAL data instance being used by the chart
+    // (which is a clone of the props). We need this to look up nodes correctly.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const chartDataRef = useRef<any[]>([]);
+    const activeChartDataRef = useRef<any[]>([]);
+    
+    // Refs for event listeners
     const onNodeSelectRef = useRef(onNodeSelect);
     const onAddRelativeRef = useRef(onAddRelative);
 
-    // Track previous data to prevent unnecessary redraws
+    // Track previous data
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const prevTreeDataRef = useRef<any[]>([]);
 
-    // 🔄 1. ALWAYS Keep Refs Fresh
-    chartDataRef.current = treeData;
+    // Always keep listener refs fresh
     onNodeSelectRef.current = onNodeSelect;
     onAddRelativeRef.current = onAddRelative;
 
-    // 🎨 2. Chart Update Effect (Runs ONLY when treeData changes)
-    useEffect(() => {
-      if (prevTreeDataRef.current === treeData) {
-        return;
-      }
-
-      prevTreeDataRef.current = treeData;
-
-      if (f3ChartInstance.current) {
-        f3ChartInstance.current.updateTree({ data: treeData });
-      }
-    }, [treeData]);
-
+    // 🎨 CORE CHART CREATION
     const createChart = useCallback(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (f3: any, data: any[]) => {
+      (f3: any, dataProps: any[]) => {
         if (!containerRef.current) return;
-        chartDataRef.current = data;
-        prevTreeDataRef.current = data;
+
+        // 1. Clear DOM
+        containerRef.current.innerHTML = "";
+
+        // 2. Clone Data & Update Ref
+        // This is crucial. We create a working copy for the library.
+        // We MUST save this copy to 'activeChartDataRef' so triggerAddMode can find the correct object references later.
+        const dataClone = JSON.parse(JSON.stringify(dataProps));
+        activeChartDataRef.current = dataClone;
+        prevTreeDataRef.current = dataProps; // track props for comparison
 
         const f3Chart = f3
-          .createChart("#FamilyChart", data)
+          .createChart("#FamilyChart", dataClone)
           .setTransitionTime(1000)
           .setCardXSpacing(isMobile ? 200 : 250)
           .setCardYSpacing(isMobile ? 120 : 150)
@@ -293,62 +294,40 @@ const FamilyTreeChart = React.forwardRef<
         }
 
         f3Card.setOnCardUpdate(function (this: HTMLElement, d: F3CardData) {
-          // ============================================================
-          // 🟢 LOGIC FOR GHOST CARDS
-          // ============================================================
+          // GHOST NODE LOGIC
           if (d.data._new_rel_data) {
             this.style.cursor = "pointer";
-
-            // Check if we've already bound the listener to avoid duplicates
             if (!this.getAttribute("data-click-bound")) {
               this.setAttribute("data-click-bound", "true");
-
-              // 🛑 USE { capture: true } TO INTERCEPT BEFORE LIBRARY
               this.addEventListener(
                 "click",
                 (e) => {
-                  // 🛑 STOP EVERYTHING
                   e.stopPropagation();
-                  e.stopImmediatePropagation(); // Kills library listeners
+                  e.stopImmediatePropagation();
                   e.preventDefault();
-
-                  // Get Handler
                   const handler = onAddRelativeRef.current;
-
-                  // Get IDs
-                  const realParentId =
-                    d.data._new_rel_data?.rel_id || d.data.id;
+                  const realParentId = d.data._new_rel_data?.rel_id || d.data.id;
                   const rawRelType = d.data._new_rel_data?.rel_type;
 
-                  // Map Types
-                  let appRelType:
-                    | "children"
-                    | "spouses"
-                    | "parents"
-                    | null = null;
-                  if (rawRelType === "son" || rawRelType === "daughter")
-                    appRelType = "children";
+                  let appRelType: "children" | "spouses" | "parents" | null = null;
+                  if (rawRelType === "son" || rawRelType === "daughter") appRelType = "children";
                   else if (rawRelType === "spouse") appRelType = "spouses";
-                  else if (rawRelType === "father" || rawRelType === "mother")
-                    appRelType = "parents";
+                  else if (rawRelType === "father" || rawRelType === "mother") appRelType = "parents";
 
-                  // Trigger Parent Action
                   if (realParentId && appRelType && rawRelType && handler) {
                     handler(realParentId, appRelType, rawRelType);
                   }
                 },
                 { capture: true }
-              ); // <--- IMPORTANT
+              );
             }
             return;
           }
 
-          // ============================================================
-          // 🔵 LOGIC FOR REGULAR NODES
-          // ============================================================
-          const nodeData = chartDataRef.current.find((n) => n.id === d.data.id);
+          // REGULAR NODE LOGIC
+          // Note: We use activeChartDataRef (the clone) to find the node data
+          const nodeData = activeChartDataRef.current.find((n) => n.id === d.data.id);
           if (nodeData) {
-            // Standard onclick is fine for regular nodes, or use capture if you want to stop centering there too
             this.onclick = (e: MouseEvent) => {
               e.stopPropagation();
               if (onNodeSelectRef.current) {
@@ -364,43 +343,43 @@ const FamilyTreeChart = React.forwardRef<
       [isAdmin, isMobile]
     );
 
-    useImperativeHandle(ref, () => ({
-      resetView: () => {
-        if (
-          containerRef.current &&
-          f3LibRef.current &&
-          chartDataRef.current.length > 0
-        ) {
-          containerRef.current.innerHTML = "";
-          createChart(f3LibRef.current, chartDataRef.current);
+// 🛠️ EXIT HELPER
+    const performExitAddMode = useCallback(() => {
+      try {
+        // 1. Safely attempt to call the library's internal cancel
+        // We use optional chaining (?.) to prevent crashes if instances are null
+        if (f3EditTreeRef.current?.addRelativeInstance?.onCancel) {
+          f3EditTreeRef.current.addRelativeInstance.onCancel();
         }
-      },
-      triggerAddMode: (nodeId: string) => {
-        if (f3ChartInstance.current && f3EditTreeRef.current) {
-          const node = chartDataRef.current.find((n) => n.id === nodeId);
-          if (node) {
-            f3ChartInstance.current.updateTree({ main_id: nodeId });
-            f3EditTreeRef.current.open(node);
-            setTimeout(() => {
-              const addBtn = document.querySelector(
-                ".f3-add-relative-btn"
-              ) as HTMLElement;
-              if (addBtn) addBtn.click();
-            }, 0);
-          }
-        }
-      },
-      cancelAddMode: () => {
-        if (f3EditTreeRef.current) {
+
+        // 2. Close the form sidebar
+        if (f3EditTreeRef.current?.closeForm) {
           f3EditTreeRef.current.closeForm();
         }
-      },
-    }));
+      } catch (e) {
+        // Suppress errors here. If UI cleanup fails, we don't want to crash the app
+        // or make the user think the data wasn't saved.
+        console.warn("Minor UI cleanup warning:", e);
+      }
 
+      // 3. Notify Parent
+      if (onAddModeChange) onAddModeChange(false);
+    }, [onAddModeChange]);
+
+
+    // Handle Prop Changes (Initial Load / DB Updates)
+    useEffect(() => {
+      if (prevTreeDataRef.current === treeData) return;
+      // If props changed, re-create chart with new data
+      if (f3LibRef.current && treeData.length > 0) {
+        createChart(f3LibRef.current, treeData);
+      }
+    }, [treeData, createChart]);
+
+    // Load Library Initially
     const loadFamilyChart = useCallback(async () => {
       if (!containerRef.current) return;
       try {
-        containerRef.current.innerHTML = "";
         const f3Module = await import("family-chart");
         const f3 = f3Module.default || f3Module;
         f3LibRef.current = f3;
@@ -415,6 +394,58 @@ const FamilyTreeChart = React.forwardRef<
         loadFamilyChart();
       }
     }, [loadFamilyChart, treeData]);
+
+    // Background Click Listener
+    useEffect(() => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const handleBgClick = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (target.classList.contains("f3-cont") || target.tagName === "svg") {
+          performExitAddMode();
+        }
+      };
+
+      container.addEventListener("click", handleBgClick);
+      return () => container.removeEventListener("click", handleBgClick);
+    }, [performExitAddMode]);
+
+    useImperativeHandle(ref, () => ({
+      resetView: () => {
+        // Full reset: Exit mode + Center
+        performExitAddMode();
+        if (f3ChartInstance.current) {
+            f3ChartInstance.current.updateTree({ initial: true });
+        }
+      },
+      triggerAddMode: (nodeId: string) => {
+        if (f3ChartInstance.current && f3EditTreeRef.current) {
+          // CRITICAL FIX: Look up the node in the CLONED data set
+          // The library relies on reference equality. If we passed a node from 'treeData' props,
+          // it wouldn't match the node inside the chart's memory.
+          const node = activeChartDataRef.current.find((n) => n.id === nodeId);
+          
+          if (node) {
+            f3ChartInstance.current.updateTree({ main_id: nodeId });
+            f3EditTreeRef.current.open(node);
+
+            if (onAddModeChange) onAddModeChange(true);
+
+            // Trigger library ghost node generation
+            setTimeout(() => {
+              const addBtn = document.querySelector(
+                ".f3-add-relative-btn"
+              ) as HTMLElement;
+              if (addBtn) addBtn.click();
+            }, 0);
+          }
+        }
+      },
+      cancelAddMode: () => {
+        performExitAddMode();
+      },
+    }));
 
     const bgColor = theme.palette.mode === "dark" ? "#1a1229" : "#faf8ff";
 
@@ -457,6 +488,11 @@ function AddMemberDialog({
   specificRole,
   onAdd,
 }: AddMemberDialogProps) {
+  // --- Upload State & Refs ---
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -465,6 +501,7 @@ function AddMemberDialog({
     avatar: "",
   });
 
+  // --- Reset logic on open ---
   useEffect(() => {
     if (open) {
       let initialGender: "M" | "F" = "M";
@@ -483,24 +520,98 @@ function AddMemberDialog({
         birthday: null,
         avatar: "",
       });
+      // Reset upload state
+      setSelectedFile(null);
+      setUploading(false);
     }
   }, [open, specificRole, relativeNode]);
 
-  const handleSave = () => {
-    const payload = {
-      ...formData,
-      birthday: formData.birthday
-        ? formData.birthday.format("YYYY")
-        : undefined,
-      relativeId: relativeNode?.id,
-      relationType: relationType,
-    };
-    onAdd(payload);
-    onClose();
+  // --- File Handling Functions ---
+
+  const triggerFile = () => {
+    if (!inputRef.current) return;
+    inputRef.current.value = "";
+    inputRef.current.click();
+  };
+
+  const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+
+    // Store the file for upload
+    setSelectedFile(f);
+
+    // Create blob URL for preview
+    const url = URL.createObjectURL(f);
+    setFormData((prev) => ({ ...prev, avatar: url }));
+  };
+
+  const onRemoveAvatar = () => {
+    setFormData((prev) => ({ ...prev, avatar: "" }));
+    setSelectedFile(null);
+  };
+
+  const uploadToCloudinary = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append(
+      "upload_preset",
+      process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || ""
+    );
+    formData.append("folder", "familyfirst/avatars"); // Kept your original folder path
+
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to upload image");
+    }
+
+    const data = await response.json();
+    return data.secure_url;
+  };
+
+  // --- Save Handler ---
+
+  const handleSave = async () => {
+    try {
+      setUploading(true);
+
+      let finalAvatarUrl = formData.avatar;
+
+      // If there's a selected file and the avatar is currently a blob URL, upload it
+      if (selectedFile && formData.avatar.startsWith("blob:")) {
+        console.log("🔄 Uploading avatar to Cloudinary...");
+        finalAvatarUrl = await uploadToCloudinary(selectedFile);
+        console.log("✅ Upload successful:", finalAvatarUrl);
+      }
+
+      const payload = {
+        ...formData,
+        avatar: finalAvatarUrl,
+        birthday: formData.birthday
+          ? formData.birthday.format("YYYY")
+          : undefined,
+        relativeId: relativeNode?.id,
+        relationType: relationType,
+      };
+
+      onAdd(payload);
+      onClose();
+    } catch (error) {
+      console.error("Error adding member:", error);
+      alert("Failed to upload avatar or add member. Please try again.");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const getTitle = () => {
-    // Robust Name Check (CamelCase vs Space)
     const rawName =
       relativeNode?.data?.["first name"] ||
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -521,15 +632,56 @@ function AddMemberDialog({
       <DialogContent>
         <LocalizationProvider dateAdapter={AdapterDayjs}>
           <Stack spacing={3} sx={{ mt: 1 }}>
-            <Box sx={{ display: "flex", justifyContent: "center" }}>
-              <CloudinaryUpload
-                currentImage={formData.avatar}
-                onUploadSuccess={(url) =>
-                  setFormData({ ...formData, avatar: url })
-                }
-                folder="familyfirst/avatars"
+            
+            {/* --- Avatar Upload UI (Replaced CloudinaryUpload) --- */}
+            <Stack direction="row" spacing={2} alignItems="center" justifyContent="center">
+              <Avatar
+                src={formData.avatar || undefined}
+                alt={formData.firstName || "Avatar"}
+                sx={{ width: 84, height: 84 }}
               />
-            </Box>
+              <Stack direction="column" spacing={1}>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="outlined"
+                    onClick={triggerFile}
+                    disabled={uploading}
+                    size="small"
+                  >
+                    Replace
+                  </Button>
+                  <Button
+                    variant="text"
+                    color="error"
+                    onClick={onRemoveAvatar}
+                    disabled={!formData.avatar || uploading}
+                    size="small"
+                  >
+                    Remove
+                  </Button>
+                </Stack>
+                {/* Hidden Input */}
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={onPick}
+                />
+              </Stack>
+            </Stack>
+
+            {/* Loading Indicator */}
+            {uploading && (
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
+                <CircularProgress size={20} />
+                <Typography variant="body2" color="text.secondary">
+                  Uploading image...
+                </Typography>
+              </Box>
+            )}
+
+            {/* Form Fields */}
             <Stack direction="row" spacing={2}>
               <TextField
                 fullWidth
@@ -538,6 +690,7 @@ function AddMemberDialog({
                 onChange={(e) =>
                   setFormData({ ...formData, firstName: e.target.value })
                 }
+                disabled={uploading}
               />
               <TextField
                 fullWidth
@@ -546,6 +699,7 @@ function AddMemberDialog({
                 onChange={(e) =>
                   setFormData({ ...formData, lastName: e.target.value })
                 }
+                disabled={uploading}
               />
             </Stack>
             <Stack direction="row" spacing={2}>
@@ -556,6 +710,7 @@ function AddMemberDialog({
                   setFormData({ ...formData, birthday: newValue })
                 }
                 slotProps={{ textField: { fullWidth: true } }}
+                disabled={uploading}
               />
               <TextField
                 select
@@ -568,6 +723,7 @@ function AddMemberDialog({
                     gender: e.target.value as "M" | "F",
                   })
                 }
+                disabled={uploading}
               >
                 <MenuItem value="M">Male</MenuItem>
                 <MenuItem value="F">Female</MenuItem>
@@ -577,23 +733,24 @@ function AddMemberDialog({
         </LocalizationProvider>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3 }}>
-        <Button onClick={onClose} color="inherit">
+        <Button onClick={onClose} color="inherit" disabled={uploading}>
           Cancel
         </Button>
         <Button
           variant="contained"
           onClick={handleSave}
-          disabled={!formData.firstName}
+          disabled={!formData.firstName || uploading}
           sx={{
             background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
           }}
         >
-          Add Member
+          {uploading ? "Adding..." : "Add Member"}
         </Button>
       </DialogActions>
     </Dialog>
   );
 }
+
 
 /* -----------------------
    ✨ Floating Quick Actions
@@ -1188,6 +1345,9 @@ export default function FamilyTreePage() {
   const [role, setRole] = useState<FamilyRole>("VIEWER");
   const isAdmin = role === "OWNER" || role === "ADMIN";
 
+  // UI State
+  const [isAddMode, setIsAddMode] = useState(false);
+
   const chartRef = useRef<FamilyTreeChartHandle>(null);
 
   const fetchUsersMap = async () => {
@@ -1222,14 +1382,17 @@ export default function FamilyTreePage() {
 
       const rawData: FamilyTreeNode[] = await treeRes.json();
 
-      const normalized = rawData.map((node) => {
+const normalized = rawData.map((node) => {
         const userAvatar = node.userId && userAvatarMap.get(node.userId);
+        
+        const finalAvatar = userAvatar || node.data.photoUrl || node.data.avatar;
+
         return {
           ...node,
           id: String(node.id),
           data: {
             ...node.data,
-            avatar: userAvatar || node.data.photoUrl || undefined,
+            avatar: finalAvatar, // ✅ Use the robust fallback
           },
           rels: {
             children: node.rels?.children?.map((id) => String(id)) || [],
@@ -1251,11 +1414,12 @@ export default function FamilyTreePage() {
       setTreeLoading(false);
     }
   }, [familyId, loggedInUserId]);
-
+  
   useEffect(() => {
     fetchTreeData();
   }, [fetchTreeData]);
-
+  
+  console.log("treeData", treeData)
   useEffect(() => {
     (async () => {
       try {
@@ -1304,11 +1468,24 @@ export default function FamilyTreePage() {
     }
   };
 
-  // 👇 Restored Function
+  // 👇 Handles Reset and Exit Add Mode
   const handleResetView = () => {
     if (chartRef.current) {
+      // 1. Exit Edit Mode
+      chartRef.current.cancelAddMode();
+      // 2. Reset Camera/Tree
       chartRef.current.resetView();
     }
+    // Force update state
+    setIsAddMode(false);
+  };
+
+  // 👇 Handle Exit Add Mode ONLY
+  const handleExitEditMode = () => {
+    if (chartRef.current) {
+      chartRef.current.cancelAddMode();
+    }
+    setIsAddMode(false);
   };
 
   const handleViewDetails = async () => {
@@ -1366,6 +1543,7 @@ export default function FamilyTreePage() {
       type: "children" | "spouses" | "parents",
       specificRole: string
     ) => {
+      // Find the node in the REAL treeData to ensure we have the correct ID and props
       const parentNode = treeData.find((n) => n.id === parentId);
       if (parentNode) {
         setTargetNodeForAdd(parentNode);
@@ -1377,7 +1555,7 @@ export default function FamilyTreePage() {
     [treeData]
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleAddMember = async (newMemberData: any) => {
     try {
       // 1. Call API
@@ -1392,17 +1570,22 @@ export default function FamilyTreePage() {
         throw new Error(errorData.error || "Failed to create member");
       }
 
-      // 2. 🎉 Success! Now verify we got data back
+      // 2. 🎉 Success! Data is saved.
       const createdMember = await res.json();
       console.log("Member created:", createdMember);
 
-      // 3. 🧹 Cleanup Ghost Cards FIRST
-      if (chartRef.current) {
-        chartRef.current.cancelAddMode();
+      // 3. 🧹 UI Cleanup (Wrapped to prevent crashing success flow)
+      try {
+        if (chartRef.current) {
+          chartRef.current.cancelAddMode();
+        }
+      } catch (uiError) {
+        console.warn("Ghost card cleanup failed", uiError);
       }
 
-      // 4. 🔄 REFETCH the tree to get the complete graph (including spouse links)
+      // 4. 🔄 Refresh Tree
       await fetchTreeData();
+
     } catch (error) {
       console.error("❌ Error adding member:", error);
       alert("Failed to add member. Please try again.");
@@ -1437,7 +1620,10 @@ export default function FamilyTreePage() {
           </Box>
         )}
 
-        {/* 👇 Added Reset View Button */}
+        {/* -------------------------------------------
+             1. RESET VIEW BUTTON (Top Left)
+             Resets camera AND exits add mode
+            ------------------------------------------- */}
         <Box
           sx={{
             position: "absolute",
@@ -1451,16 +1637,47 @@ export default function FamilyTreePage() {
               onClick={handleResetView}
               sx={{
                 bgcolor: theme.palette.background.paper,
-                boxShadow: 1,
+                boxShadow: 2,
                 "&:hover": {
                   bgcolor: alpha(theme.palette.background.paper, 0.9),
                 },
               }}
             >
-              <ReplayIcon />
+              <MdOutlineArrowBack />
             </IconButton>
           </Tooltip>
         </Box>
+
+        {/* -------------------------------------------
+             2. EXIT EDIT MODE BUTTON (Top Right)
+             Only visible when isAddMode === true
+            ------------------------------------------- */}
+        <Fade in={isAddMode}>
+          <Box
+            sx={{
+              position: "absolute",
+              top: 20,
+              right: 20,
+              zIndex: 100,
+            }}
+          >
+            <Tooltip title="Cancel Adding">
+              <IconButton
+                onClick={handleExitEditMode}
+                color="error"
+                sx={{
+                  bgcolor: theme.palette.background.paper,
+                  boxShadow: 2,
+                  "&:hover": {
+                    bgcolor: alpha(theme.palette.error.light, 0.1),
+                  },
+                }}
+              >
+                <RxCross2 size={24} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Fade>
 
         <Box
           sx={{
@@ -1477,6 +1694,7 @@ export default function FamilyTreePage() {
             treeData={treeData}
             onNodeSelect={handleNodeSelect}
             onAddRelative={handleAddRelativeFromChart}
+            onAddModeChange={setIsAddMode} // 👈 Pass sync handler
           />
         </Box>
 
@@ -1515,6 +1733,7 @@ export default function FamilyTreePage() {
             setAddDialogOpen(false);
             setTargetNodeForAdd(null);
             setAddSpecificRole(null);
+            handleExitEditMode();
           }}
           relativeNode={targetNodeForAdd || inspectorNode}
           relationType={addRelationType}
