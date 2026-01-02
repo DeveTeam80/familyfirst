@@ -331,6 +331,7 @@ export default function Header({ children, onNotificationClick }: HeaderProps) {
     onClick?: () => void;
     href?: string;
     match?: (p: string) => boolean;
+    comingSoon?: boolean;
   }[] = [
       {
         text: mode === "light" ? "Dark Mode" : "Light Mode",
@@ -347,6 +348,7 @@ export default function Header({ children, onNotificationClick }: HeaderProps) {
         text: "Help",
         icon: <HelpOutlineIcon />,
         href: "/help",
+        comingSoon: true,
         match: (p) => p.startsWith("/help"),
       },
       {
@@ -456,7 +458,7 @@ export default function Header({ children, onNotificationClick }: HeaderProps) {
 
       <Divider sx={{ mx: 2, my: 1 }} />
 
-      {/* Secondary Menu */}
+      {/* Secondary Menu - UPDATED WITH COMING SOON LOGIC */}
       <List sx={{ px: 1 }}>
         {secondaryMenu.map((item) => {
           const active = item.match?.(pathname) ?? false;
@@ -468,7 +470,11 @@ export default function Header({ children, onNotificationClick }: HeaderProps) {
             <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
               <ListItemButton
                 {...buttonProps}
-                onClick={() => {
+                onClick={(e) => {
+                  if (item.comingSoon) {
+                    e.preventDefault();
+                    return;
+                  }
                   if (item.onClick) {
                     item.onClick();
                   }
@@ -481,20 +487,35 @@ export default function Header({ children, onNotificationClick }: HeaderProps) {
                   borderRadius: 2,
                   px: 2,
                   transition: "all 0.2s",
-                  ...(active && {
+                  // Disabled Style for Coming Soon
+                  ...(item.comingSoon && {
+                    opacity: 0.6,
+                    cursor: "not-allowed",
+                  }),
+                  // Active Style
+                  ...(active && !item.comingSoon && {
                     bgcolor: alpha(theme.palette.primary.main, 0.12),
                     color: theme.palette.primary.main,
                   }),
-                  "&:hover": {
-                    bgcolor: alpha(theme.palette.action.hover, 0.6),
-                  },
+                  // Hover Style (Standard)
+                  ...(!active && !item.comingSoon && {
+                    "&:hover": {
+                      bgcolor: alpha(theme.palette.action.hover, 0.6),
+                    },
+                  }),
+                  // Hover Style (Coming Soon)
+                  ...(item.comingSoon && {
+                    "&:hover": {
+                      bgcolor: "transparent", // Or slight hover effect if preferred
+                    },
+                  }),
                 }}
               >
                 <ListItemIcon
                   sx={{
                     minWidth: 0,
                     mr: 2,
-                    color: active ? theme.palette.primary.main : "inherit",
+                    color: active && !item.comingSoon ? theme.palette.primary.main : "inherit",
                   }}
                 >
                   {item.icon}
@@ -506,6 +527,21 @@ export default function Header({ children, onNotificationClick }: HeaderProps) {
                     fontWeight: active ? 600 : 500,
                   }}
                 />
+                {/* Render 'Soon' Chip */}
+                {item.comingSoon && (
+                  <Chip
+                    label="Soon"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      fontWeight: 600,
+                      bgcolor: alpha(theme.palette.primary.main, 0.1),
+                      color: theme.palette.primary.main,
+                      border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+                    }}
+                  />
+                )}
               </ListItemButton>
             </ListItem>
           );
@@ -733,8 +769,17 @@ export default function Header({ children, onNotificationClick }: HeaderProps) {
             <ListItemButton
               component={Link}
               href="/help"
-              onClick={handleUserMenuClose}
-              sx={{ borderRadius: 2, mb: 0.5 }}
+              onClick={(e) => {
+                // Inline coming soon check for the popover menu item (optional but good for consistency)
+                e.preventDefault();
+                // handleUserMenuClose(); // Keep open or close based on preference for disabled items
+              }}
+              sx={{
+                borderRadius: 2,
+                mb: 0.5,
+                opacity: 0.6, // Visual cue in popover
+                cursor: "not-allowed",
+              }}
             >
               <ListItemIcon sx={{ minWidth: 32 }}>
                 <FiHelpCircle />
@@ -742,6 +787,19 @@ export default function Header({ children, onNotificationClick }: HeaderProps) {
               <ListItemText
                 primary="Help"
                 primaryTypographyProps={{ fontSize: "0.9rem", fontWeight: 500 }}
+              />
+              <Chip
+                label="Soon"
+                size="small"
+                sx={{
+                  height: 18,
+                  fontSize: "0.6rem",
+                  fontWeight: 600,
+                  bgcolor: alpha(theme.palette.primary.main, 0.1),
+                  color: theme.palette.primary.main,
+                  border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+                  ml: 1
+                }}
               />
             </ListItemButton>
 
