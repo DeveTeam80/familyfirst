@@ -411,21 +411,28 @@ const FamilyTreeChart = React.forwardRef<
       return () => container.removeEventListener("click", handleBgClick);
     }, [performExitAddMode]);
 
-    useImperativeHandle(ref, () => ({
+useImperativeHandle(ref, () => ({
       resetView: () => {
-        // Full reset: Exit mode + Center
+        // 1. Exit Add/Edit Mode first to clean up UI state
         performExitAddMode();
-        if (f3ChartInstance.current) {
-            f3ChartInstance.current.updateTree({ initial: true });
+
+        // 2. Nuclear Rebuild: Clear DOM and recreate chart
+        // This guarantees the view resets to the Root User (index 0) and resets zoom.
+        if (
+          containerRef.current &&
+          f3LibRef.current &&
+          treeData.length > 0
+        ) {
+          containerRef.current.innerHTML = "";
+          createChart(f3LibRef.current, treeData);
         }
       },
       triggerAddMode: (nodeId: string) => {
         if (f3ChartInstance.current && f3EditTreeRef.current) {
-          // CRITICAL FIX: Look up the node in the CLONED data set
-          // The library relies on reference equality. If we passed a node from 'treeData' props,
-          // it wouldn't match the node inside the chart's memory.
+          // CRITICAL FIX: Look up the node in the CLONED data set (activeChartDataRef)
+          // The library relies on reference equality.
           const node = activeChartDataRef.current.find((n) => n.id === nodeId);
-          
+
           if (node) {
             f3ChartInstance.current.updateTree({ main_id: nodeId });
             f3EditTreeRef.current.open(node);
@@ -446,7 +453,6 @@ const FamilyTreeChart = React.forwardRef<
         performExitAddMode();
       },
     }));
-
     const bgColor = theme.palette.mode === "dark" ? "#1a1229" : "#faf8ff";
 
     return (
