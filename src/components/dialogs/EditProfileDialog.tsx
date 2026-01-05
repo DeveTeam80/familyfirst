@@ -14,6 +14,7 @@ import {
   Typography,
   CircularProgress,
 } from "@mui/material";
+import imageCompression from "browser-image-compression";
 
 type Props = {
   open: boolean;
@@ -68,25 +69,50 @@ export default function EditProfileDialog({
   };
 
   const uploadToCloudinary = async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "");
-    formData.append("folder", "avatars");
+    try {
+      // Compress image
+      const options = {
+        maxSizeMB: 1,
+        maxWidthOrHeight: 1024,
+        useWebWorker: true,
+        fileType: "image/jpeg" as const,
+      };
 
-    const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
-      {
-        method: "POST",
-        body: formData,
+      console.log("🔄 Compressing avatar...");
+      const compressedFile = await imageCompression(file, options);
+      console.log(
+        `✅ Compressed: ${(file.size / 1024 / 1024).toFixed(2)} MB → ${(
+          compressedFile.size /
+          1024 /
+          1024
+        ).toFixed(2)} MB`
+      );
+
+      // Upload to Cloudinary
+      const formData = new FormData();
+      formData.append("file", compressedFile);
+      formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "");
+      formData.append("folder", "avatars");
+
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to upload image");
       }
-    );
 
-    if (!response.ok) {
-      throw new Error("Failed to upload image");
+      const data = await response.json();
+      console.log("✅ Upload successful:", data.secure_url);
+      return data.secure_url;
+    } catch (error) {
+      console.error("❌ Upload error:", error);
+      throw error;
     }
-
-    const data = await response.json();
-    return data.secure_url;
   };
 
   const handleSave = async () => {
@@ -99,7 +125,6 @@ export default function EditProfileDialog({
       if (selectedFile && avatar?.startsWith('blob:')) {
         console.log("🔄 Uploading avatar to Cloudinary...");
         finalAvatarUrl = await uploadToCloudinary(selectedFile);
-        console.log("✅ Upload successful:", finalAvatarUrl);
       }
 
       // Call onSave with the Cloudinary URL (or null if removed)
@@ -122,8 +147,22 @@ export default function EditProfileDialog({
   const previewSrc = avatar === null ? undefined : (avatar ?? currentAvatar) || undefined;
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Edit Profile</DialogTitle>
+    <Dialog 
+      open={open} 
+      onClose={onClose} 
+      fullWidth 
+      maxWidth="sm"
+      PaperProps={{
+        sx: {
+          borderRadius: 3,
+        }
+      }}
+    >
+      <DialogTitle>
+        <Typography variant="h6" fontWeight={600}>
+          Edit Profile
+        </Typography>
+      </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
           {/* Avatar section */}
@@ -132,9 +171,17 @@ export default function EditProfileDialog({
               src={previewSrc}
               alt={name || "Avatar"}
               sx={{ width: 84, height: 84 }}
-            />
+            >
+              {name?.[0]}
+            </Avatar>
             <Stack direction="row" spacing={1}>
-              <Button variant="outlined" onClick={triggerFile} disabled={uploading}>
+              <Button 
+                variant="outlined" 
+                onClick={triggerFile} 
+                disabled={uploading}
+                size="small"
+                sx={{ borderRadius: 2 }}
+              >
                 Replace
               </Button>
               <Button
@@ -142,6 +189,8 @@ export default function EditProfileDialog({
                 color="error"
                 onClick={onRemoveAvatar}
                 disabled={(!currentAvatar && avatar !== null) || uploading}
+                size="small"
+                sx={{ borderRadius: 2 }}
               >
                 Remove
               </Button>
@@ -170,6 +219,11 @@ export default function EditProfileDialog({
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={uploading}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+              }
+            }}
           />
 
           <TextField
@@ -180,17 +234,36 @@ export default function EditProfileDialog({
             value={bio}
             onChange={(e) => setBio(e.target.value)}
             disabled={uploading}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+              }
+            }}
           />
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={uploading}>
+      <DialogActions sx={{ p: 2.5 }}>
+        <Button 
+          onClick={onClose} 
+          disabled={uploading}
+          sx={{
+            borderRadius: 2,
+            textTransform: 'none',
+            fontWeight: 600,
+          }}
+        >
           Cancel
         </Button>
         <Button
           variant="contained"
           onClick={handleSave}
           disabled={(!name.trim() && !bio.trim() && avatar === undefined) || uploading}
+          sx={{
+            borderRadius: 2,
+            textTransform: 'none',
+            fontWeight: 600,
+            px: 3,
+          }}
         >
           {uploading ? "Saving..." : "Save"}
         </Button>

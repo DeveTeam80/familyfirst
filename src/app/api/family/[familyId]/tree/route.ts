@@ -1,3 +1,4 @@
+// src/app/api/family/[familyId]/tree/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
@@ -7,7 +8,6 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ familyId: string }> }
 ) {
-  // 🔐 Require authentication
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
@@ -15,7 +15,6 @@ export async function GET(
   const { familyId } = await params;
 
   try {
-    // 👥 Ensure user belongs to the family
     const membership = await prisma.familyMember.findUnique({
       where: {
         userId_familyId: {
@@ -32,33 +31,53 @@ export async function GET(
       );
     }
 
-    // 🌳 Fetch all nodes with relationships
+    // ⭐ OPTIMIZED: Use select instead of include to fetch only needed fields
     const nodes = await prisma.familyTreeNode.findMany({
       where: { familyId },
-      include: {
-        relationshipsFrom: true, // Outgoing connections
-        relationshipsTo: true,   // Incoming connections
+      select: {
+        // Only fetch fields we actually use
+        id: true,
+        userId: true,
+        firstName: true,
+        lastName: true,
+        gender: true,
+        birthDate: true,
+        deathDate: true,
+        weddingAnniversary: true,
+        photoUrl: true,
+        relationshipsFrom: {
+          select: {
+            relationshipType: true,
+            person2Id: true,
+            // Don't fetch id, createdAt, person1Id - we don't need them
+          },
+        },
+        relationshipsTo: {
+          select: {
+            relationshipType: true,
+            person1Id: true,
+            // Don't fetch id, createdAt, person2Id - we don't need them
+          },
+        },
       },
     });
 
-    // 🔁 Transform → family-chart format
+    // Transform to family-chart format (same as before)
     const formatted = nodes.map((node) => {
       const parents = new Set<string>();
       const children = new Set<string>();
       const spouses = new Set<string>();
 
-      // 1. Process Outgoing Relationships (relationshipsFrom)
-      // Node is the "Source" (Person 1)
+      // Process Outgoing Relationships
       for (const rel of node.relationshipsFrom) {
         if (rel.relationshipType === RelationshipType.PARENT) {
-          // If Node is Parent of X, then X is a child
           children.add(rel.person2Id);
         } else if (rel.relationshipType === RelationshipType.SPOUSE) {
-          // ✅ Add spouse unconditionally (Outgoing)
           spouses.add(rel.person2Id);
         }
       }
 
+      // Process Incoming Relationships
       for (const rel of node.relationshipsTo) {
         if (rel.relationshipType === RelationshipType.PARENT) {
           parents.add(rel.person1Id);
@@ -78,6 +97,12 @@ export async function GET(
             : undefined,
           avatar: node.photoUrl ?? undefined,
           gender: node.gender === "F" ? "F" : "M",
+          deathDate: node.deathDate 
+            ? node.deathDate.toISOString().split('T')[0] 
+            : undefined,
+          weddingAnniversary: node.weddingAnniversary 
+            ? node.weddingAnniversary.toISOString().split('T')[0] 
+            : undefined,
         },
         rels: {
           parents: parents.size ? [...parents] : undefined,
