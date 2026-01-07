@@ -4,6 +4,16 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/nextauth.config";
 import { prisma } from "@/lib/prisma";
 
+// ✅ Define proper types for the where clause
+interface AlbumWhereClause {
+  calendarEvent?: {
+    eventType: string;
+  };
+  tags?: {
+    has: string;
+  };
+}
+
 // GET all albums
 export async function GET(req: NextRequest) {
   try {
@@ -16,13 +26,18 @@ export async function GET(req: NextRequest) {
     const eventType = searchParams.get("eventType");
     const tag = searchParams.get("tag");
 
-    const where: any = {};
+    // ✅ Use proper type instead of any
+    const where: AlbumWhereClause = {};
+    
     if (eventType && eventType !== "all") {
       where.calendarEvent = {
         eventType: eventType
       };
     }
-    if (tag && tag !== "all") where.tags = { has: tag };
+    
+    if (tag && tag !== "all") {
+      where.tags = { has: tag };
+    }
 
     const albums = await prisma.album.findMany({
       where,
@@ -79,15 +94,16 @@ export async function POST(req: NextRequest) {
       where: { email: session.user.email },
     });
 
-   if (!user) {
+    if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     let body;
     try {
-        body = await req.json();
-    } catch (e) {
-        return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+      body = await req.json();
+    } catch (error) { // ✅ Changed from 'e' to 'error'
+      console.error("JSON parse error:", error);
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
     const { title, description, tags, coverImage, calendarEventId, familyId } = body;

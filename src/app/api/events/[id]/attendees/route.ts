@@ -1,3 +1,4 @@
+// src/app/api/events/[id]/attendees/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/nextauth.config";
@@ -6,9 +7,11 @@ import { prisma } from "@/lib/prisma";
 // POST add attendees to event
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // ✅ params is now a Promise
 ) {
   try {
+    const { id: eventId } = await params; // ✅ Await params
+    
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -26,7 +29,7 @@ export async function POST(
 
     await prisma.eventAttendee.createMany({
       data: userIds.map((userId: string) => ({
-        eventId: params.id,
+        eventId, // ✅ Use awaited eventId
         userId,
         status: "NO_RESPONSE",
       })),
@@ -46,9 +49,11 @@ export async function POST(
 // PATCH update attendee status (RSVP)
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // ✅ params is now a Promise
 ) {
   try {
+    const { id: eventId } = await params; // ✅ Await params
+    
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -68,7 +73,7 @@ export async function PATCH(
     const attendee = await prisma.eventAttendee.upsert({
       where: {
         eventId_userId: {
-          eventId: params.id,
+          eventId, // ✅ Use awaited eventId
           userId: user.id,
         },
       },
@@ -77,7 +82,7 @@ export async function PATCH(
         respondedAt: new Date(),
       },
       create: {
-        eventId: params.id,
+        eventId, // ✅ Use awaited eventId
         userId: user.id,
         status,
         respondedAt: new Date(),

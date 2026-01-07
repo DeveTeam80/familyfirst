@@ -196,7 +196,10 @@ export async function GET(request: NextRequest) {
         const familyIds = userFamilies.map((f) => f.familyId);
 
         // ⭐ Dynamic WHERE clause
-        const whereClause: any = {
+        const whereClause: {
+            familyId: { in: string[] };
+            authorId?: string;
+        } = {
             familyId: { in: familyIds },
         };
 
@@ -292,7 +295,7 @@ export async function GET(request: NextRequest) {
 
             // ⭐ FIX: Proper type annotation for photosArray
             let photosArray: Array<{ id: string; url: string }> = [];
-            
+
             if (post.photos && post.photos.length > 0) {
                 // New format: photos relation exists
                 photosArray = post.photos.map(p => ({ id: p.id, url: p.url }));

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Box,
@@ -50,10 +50,25 @@ import {
   Person as PersonIcon,
   ArrowUpward,
   ArrowDownward,
-  Visibility,
 } from "@mui/icons-material";
 import Image from "next/image";
 import BulkUploadDialog from "@/components/gallery/BulkUploadDialog";
+
+// ✅ Define proper type for photo items from API
+interface PhotoItem {
+  photo: {
+    id: string;
+    url: string;
+    caption?: string | null;
+    tags?: string[];
+    uploader?: {
+      name: string | null;
+      username: string | null;
+    };
+  };
+  caption?: string | null;
+  addedAt: string;
+}
 
 interface AlbumImage {
   id: string;
@@ -97,7 +112,7 @@ export default function AlbumDetailPage() {
   // ⭐ Filter & Sort States
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUploader, setSelectedUploader] = useState<string | null>(null);
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc"); // Default oldest first
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [showFilters, setShowFilters] = useState(false);
 
   // Lightbox
@@ -110,11 +125,8 @@ export default function AlbumDetailPage() {
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [snackbarMsg, setSnackbarMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchAlbum();
-  }, [params.id]);
-
-  const fetchAlbum = async () => {
+  // ✅ Use useCallback to prevent dependency warnings
+  const fetchAlbum = useCallback(async () => {
     try {
       const response = await fetch(`/api/albums/${params.id}`);
       if (response.ok) {
@@ -128,7 +140,7 @@ export default function AlbumDetailPage() {
           date: data.calendarEvent?.startTime || data.createdAt,
           tags: data.tags || [],
           creator: data.creator,
-          images: (data.photos || []).map((item: any) => ({
+          images: (data.photos || []).map((item: PhotoItem) => ({ // ✅ Proper typing instead of any
             id: item.photo.id,
             url: item.photo.url,
             title: item.caption,
@@ -148,13 +160,18 @@ export default function AlbumDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.id, router]);
+
+  useEffect(() => {
+    fetchAlbum();
+  }, [fetchAlbum]); // ✅ Now includes fetchAlbum
 
   // ⭐ Get Unique Uploaders with Photo Counts
   const uploaderStats = useMemo(() => {
     if (!album) return [];
     const stats = new Map<string, { name: string; count: number }>();
     
+    // ✅ Removed any type - TypeScript infers from album.images
     album.images.forEach((img) => {
       const name = img.user.name || img.user.username || "Unknown";
       if (stats.has(name)) {
@@ -171,8 +188,8 @@ export default function AlbumDetailPage() {
   const filteredImages = useMemo(() => {
     if (!album) return [];
 
-    // 1. Filter
-    let result = album.images.filter((img) => {
+    // ✅ Changed let to const
+    const result = album.images.filter((img) => {
       // Search filter
       const searchLower = searchQuery.toLowerCase();
       const matchesSearch =
@@ -277,22 +294,22 @@ export default function AlbumDetailPage() {
     setImageLoaded(false);
   };
 
-  const handleCloseLightbox = () => {
+  const handleCloseLightbox = useCallback(() => {
     setLightboxOpen(false);
     setImageLoaded(false);
-  };
+  }, []);
 
-  const handlePrevImage = (e?: React.SyntheticEvent) => {
+  const handlePrevImage = useCallback((e?: React.SyntheticEvent) => {
     if (e) e.stopPropagation();
     setImageLoaded(false);
     setLightboxIndex((prev) => (prev === 0 ? filteredImages.length - 1 : prev - 1));
-  };
+  }, [filteredImages.length]);
 
-  const handleNextImage = (e?: React.SyntheticEvent) => {
+  const handleNextImage = useCallback((e?: React.SyntheticEvent) => {
     if (e) e.stopPropagation();
     setImageLoaded(false);
     setLightboxIndex((prev) => (prev === filteredImages.length - 1 ? 0 : prev + 1));
-  };
+  }, [filteredImages.length]);
 
   const handleClearFilters = () => {
     setSearchQuery("");
@@ -301,6 +318,7 @@ export default function AlbumDetailPage() {
 
   const hasActiveFilters = searchQuery !== "" || selectedUploader !== null;
 
+  // ✅ Fixed dependencies
   useEffect(() => {
     if (!lightboxOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -310,7 +328,7 @@ export default function AlbumDetailPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [lightboxOpen, filteredImages]);
+  }, [lightboxOpen, handleCloseLightbox, handlePrevImage, handleNextImage]);
 
   const cols = isMobile ? 2 : isTablet ? 3 : 4;
 
