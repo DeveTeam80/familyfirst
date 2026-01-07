@@ -4,12 +4,21 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/nextauth.config";
 import { prisma } from "@/lib/prisma";
 
-// POST bulk upload images to album
+interface ImageUpload {
+  url: string;
+  cloudinaryId?: string;
+  caption?: string | null;
+  title?: string;
+  description?: string;
+}
+
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: albumId } = await params;
+    
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -24,7 +33,7 @@ export async function POST(
     }
 
     const album = await prisma.album.findUnique({
-      where: { id: params.id },
+      where: { id: albumId },
       include: { 
         calendarEvent: {
           select: { id: true }
@@ -37,7 +46,7 @@ export async function POST(
     }
 
     const body = await req.json();
-    const { images } = body; // Array of { url, title?, description?, caption? }
+    const { images } = body as { images: ImageUpload[] };
 
     if (!Array.isArray(images) || images.length === 0) {
       return NextResponse.json(
@@ -46,18 +55,15 @@ export async function POST(
       );
     }
 
-    // Get the current max order in this album
     const maxOrderResult = await prisma.albumPhoto.aggregate({
-      where: { albumId: params.id },
+      where: { albumId },
       _max: { order: true },
     });
     
-    let currentOrder = (maxOrderResult._max.order || 0) + 1;
+    const currentOrder = (maxOrderResult._max.order || 0) + 1;
 
-    // Create photos and link to album
     const createdPhotos = await Promise.all(
-      images.map(async (img: any, index: number) => {
-        // First create the photo
+      images.map(async (img: ImageUpload, index: number) => {
         const photo = await prisma.photo.create({
           data: {
             url: img.url,
@@ -68,10 +74,9 @@ export async function POST(
           },
         });
 
-        // Then create the album-photo relationship
         const albumPhoto = await prisma.albumPhoto.create({
           data: {
-            albumId: params.id,
+            albumId,
             photoId: photo.id,
             caption: img.caption || null,
             order: currentOrder + index,
@@ -86,10 +91,9 @@ export async function POST(
       })
     );
 
-    // Update album cover if not set
     if (!album.coverImage && images.length > 0) {
       await prisma.album.update({
-        where: { id: params.id },
+        where: { id: albumId },
         data: { coverImage: images[0].url },
       });
     }

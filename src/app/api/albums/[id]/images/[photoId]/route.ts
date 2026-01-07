@@ -5,14 +5,14 @@ import { prisma } from "@/lib/prisma";
 import cloudinary from "@/lib/cloudinary";
 
 export async function DELETE(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string; photoId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { id: albumId, photoId } = await params;
+    const { id: _albumId, photoId } = await params;
 
     // 1. Get the photo details
     const photo = await prisma.photo.findUnique({

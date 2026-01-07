@@ -22,7 +22,6 @@ import {
   Alert,
 } from "@mui/material";
 import AddToAlbumDialog from "@/components/dialogs/AddToAlbumDialog";
-import { PhotoLibrary } from "@mui/icons-material";
 import { KeyboardArrowUp, Refresh as RefreshIcon } from "@mui/icons-material";
 import PullToRefresh from 'react-simple-pull-to-refresh';
 import { useSearchParams, useRouter } from "next/navigation";

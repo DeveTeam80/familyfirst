@@ -1,3 +1,4 @@
+// src/app/api/events/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/nextauth.config";
@@ -5,17 +6,19 @@ import { prisma } from "@/lib/prisma";
 
 // GET single event with all related data
 export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> } // ✅ params is Promise
 ) {
   try {
+    const { id: eventId } = await params; // ✅ Await params
+    
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const event = await prisma.calendarEvent.findUnique({
-      where: { id: params.id },
+      where: { id: eventId }, // ✅ Use awaited eventId
       include: {
         creator: {
           select: {
@@ -85,9 +88,11 @@ export async function GET(
 // PATCH update event
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // ✅ params is Promise
 ) {
   try {
+    const { id: eventId } = await params; // ✅ Await params
+    
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -102,7 +107,7 @@ export async function PATCH(
     }
 
     const event = await prisma.calendarEvent.findUnique({
-      where: { id: params.id },
+      where: { id: eventId }, // ✅ Use awaited eventId
     });
 
     if (!event) {
@@ -112,7 +117,7 @@ export async function PATCH(
     // Check if user is creator or has GOING status
     const isAttendee = await prisma.eventAttendee.findFirst({
       where: {
-        eventId: params.id,
+        eventId, // ✅ Use awaited eventId
         userId: user.id,
         status: "GOING",
       },
@@ -138,7 +143,7 @@ export async function PATCH(
     } = body;
 
     const updated = await prisma.calendarEvent.update({
-      where: { id: params.id },
+      where: { id: eventId }, // ✅ Use awaited eventId
       data: {
         title,
         description,
@@ -182,10 +187,12 @@ export async function PATCH(
 
 // DELETE event
 export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> } // ✅ params is Promise
 ) {
   try {
+    const { id: eventId } = await params; // ✅ Await params
+    
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -200,7 +207,7 @@ export async function DELETE(
     }
 
     const event = await prisma.calendarEvent.findUnique({
-      where: { id: params.id },
+      where: { id: eventId }, // ✅ Use awaited eventId
     });
 
     if (!event) {
@@ -212,7 +219,7 @@ export async function DELETE(
     }
 
     await prisma.calendarEvent.delete({
-      where: { id: params.id },
+      where: { id: eventId }, // ✅ Use awaited eventId
     });
 
     return NextResponse.json({ success: true });
