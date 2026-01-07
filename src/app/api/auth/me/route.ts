@@ -1,8 +1,8 @@
-// src/app/api/auth/me/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/nextauth.config";
 import { prisma } from "@/lib/prisma";
+import cloudinary, { getPublicIdFromUrl } from "@/lib/cloudinary"; 
 
 // Types for session user
 interface SessionUser {
@@ -30,6 +30,7 @@ interface FamilyMembershipData {
 }
 
 export async function GET(_req: NextRequest) {
+  // ... (Keep your existing GET logic exactly as it is)
   try {
     const session = await getServerSession(authOptions);
 
@@ -37,7 +38,6 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    // Prefer session.user.id (if you added it in callbacks). Otherwise fallback to email.
     const sessionUser = session.user as SessionUser;
     const sessionUserId = sessionUser?.id;
     const sessionEmail = sessionUser?.email;
@@ -46,7 +46,6 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ error: "Session missing identifying information" }, { status: 401 });
     }
 
-    // find user by id (if present) or by email
     const user = await prisma.user.findUnique({
       where: sessionUserId ? { id: sessionUserId } : { email: sessionEmail },
       select: {
@@ -91,7 +90,7 @@ export async function GET(_req: NextRequest) {
         bio: user.bio ?? null,
         location: user.location ?? null,
       },
-      memberships, // array (may be empty)
+      memberships,
     });
   } catch (error) {
     console.error("GET /api/auth/me error:", error);
@@ -127,12 +126,44 @@ export async function PATCH(req: NextRequest) {
     if (typeof name === "string" && name.trim() !== "") data.name = name.trim();
     if (typeof bio === "string") data.bio = bio;
     if (typeof location === "string") data.location = location;
+    
+    // Normalize avatar input
     if (typeof avatarUrl === "string") data.avatarUrl = avatarUrl;
     else if (typeof avatar === "string") data.avatarUrl = avatar;
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
     }
+
+    // ============================================================
+    // 👇 START NEW LOGIC: CLOUDINARY CLEANUP
+    // ============================================================
+    
+    // If we are updating the avatar, we must fetch the OLD one first
+    if (data.avatarUrl) {
+      const currentUser = await prisma.user.findUnique({
+        where: sessionUserId ? { id: sessionUserId } : { email: sessionEmail },
+        select: { avatarUrl: true }
+      });
+
+      // If there was an old avatar, and it's different from the new one
+      if (currentUser?.avatarUrl && currentUser.avatarUrl !== data.avatarUrl) {
+        const publicId = getPublicIdFromUrl(currentUser.avatarUrl);
+        if (publicId) {
+          try {
+            console.log(`🗑️ Deleting old avatar: ${publicId}`);
+            // Don't await strictly if you want speed, but safer to await to catch errors
+            await cloudinary.uploader.destroy(publicId);
+          } catch (err) {
+            console.error("Failed to delete old avatar from Cloudinary:", err);
+            // We continue anyway so the DB update still happens
+          }
+        }
+      }
+    }
+    // ============================================================
+    // 👆 END NEW LOGIC
+    // ============================================================
 
     const updatedUser = await prisma.user.update({
       where: sessionUserId ? { id: sessionUserId } : { email: sessionEmail },

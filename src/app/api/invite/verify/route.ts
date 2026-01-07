@@ -29,6 +29,9 @@ export async function GET(request: NextRequest) {
             id: true,
             firstName: true,
             lastName: true,
+            birthDate: true,
+            deathDate: true,
+            weddingAnniversary: true,
           },
         },
       },
@@ -69,23 +72,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Return invitation details
-    // src/app/api/invite/verify/route.ts (modified response)
+    // Return invitation details including dates
     return NextResponse.json({
       valid: true,
       email: invite.email,
       familyId: invite.familyId,
       familyName: invite.family.name,
       treeNodeId: invite.treeNodeId,
-      // explicit fields
       treeNodeFirstName: invite.treeNode?.firstName ?? null,
       treeNodeLastName: invite.treeNode?.lastName ?? null,
-      // legacy / friendly fallback
       treeNodeName: invite.treeNode
-        ? `${invite.treeNode.firstName} ${
-            invite.treeNode.lastName || ""
-          }`.trim()
+        ? `${invite.treeNode.firstName} ${invite.treeNode.lastName || ""}`.trim()
         : null,
+      // ⭐ NEW: Include dates from tree node
+      birthDate: invite.treeNode?.birthDate ?? null,
+      weddingAnniversary: invite.treeNode?.weddingAnniversary ?? null,
+      deathDate: invite.treeNode?.deathDate ?? null,
     });
   } catch (error) {
     console.error("❌ Invitation verification error:", error);

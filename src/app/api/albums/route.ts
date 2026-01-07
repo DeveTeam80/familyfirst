@@ -1,0 +1,148 @@
+// src/app/api/albums/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/nextauth.config";
+import { prisma } from "@/lib/prisma";
+
+// GET all albums
+export async function GET(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const eventType = searchParams.get("eventType");
+    const tag = searchParams.get("tag");
+
+    const where: any = {};
+    if (eventType && eventType !== "all") {
+      where.calendarEvent = {
+        eventType: eventType
+      };
+    }
+    if (tag && tag !== "all") where.tags = { has: tag };
+
+    const albums = await prisma.album.findMany({
+      where,
+      include: {
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            avatarUrl: true,
+          },
+        },
+        photos: {
+          take: 1,
+          orderBy: { addedAt: "desc" },
+          include: {
+            photo: true,
+          },
+        },
+        calendarEvent: {
+          select: {
+            id: true,
+            title: true,
+            startTime: true,
+            eventType: true,
+          },
+        },
+        _count: {
+          select: { photos: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return NextResponse.json(albums);
+  } catch (error) {
+    console.error("Error fetching albums:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch albums" },
+      { status: 500 }
+    );
+  }
+}
+
+// POST create new album
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+   if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    let body;
+    try {
+        body = await req.json();
+    } catch (e) {
+        return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const { title, description, tags, coverImage, calendarEventId, familyId } = body;
+
+    // Get user's family if not provided
+    const targetFamilyId = familyId || (
+      await prisma.familyMember.findFirst({
+        where: { userId: user.id },
+        select: { familyId: true },
+      })
+    )?.familyId;
+
+    if (!targetFamilyId) {
+      return NextResponse.json({ error: "No family found" }, { status: 400 });
+    }
+
+    const album = await prisma.album.create({
+      data: {
+        title,
+        description,
+        tags: tags || [],
+        coverImage,
+        calendarEventId: calendarEventId || null,
+        familyId: targetFamilyId,
+        createdBy: user.id,
+      },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            avatarUrl: true,
+          },
+        },
+        calendarEvent: {
+          select: {
+            id: true,
+            title: true,
+            startTime: true,
+            eventType: true,
+          },
+        },
+        _count: {
+          select: { photos: true },
+        },
+      },
+    });
+
+    return NextResponse.json(album);
+  } catch (error) {
+    console.error("Error creating album:", error);
+    return NextResponse.json(
+      { error: "Failed to create album" },
+      { status: 500 }
+    );
+  }
+}

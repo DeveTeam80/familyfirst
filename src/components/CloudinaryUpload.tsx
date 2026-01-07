@@ -37,7 +37,7 @@ export function CloudinaryUpload({
   onUploadSuccess,
   currentImages = [],
   onUploadSuccessMultiple,
-  folder = "familyfirst/posts",
+  folder = "firstfamily/posts",
   maxFiles = 1,
   showPreview = true,
   buttonText,

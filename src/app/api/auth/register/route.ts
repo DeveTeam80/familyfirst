@@ -15,6 +15,9 @@ interface InvitationWithRelations {
   familyId: string;
   treeNode: {
     id: string;
+    birthDate: Date | null;
+    deathDate: Date | null;
+    weddingAnniversary: Date | null;
   } | null;
   family: {
     id: string;
@@ -105,7 +108,17 @@ export async function POST(req: NextRequest) {
     if (inviteCode) {
       const foundInvitation = await prisma.invitation.findUnique({
         where: { inviteCode },
-        include: { treeNode: true, family: true },
+        include: {
+          treeNode: {
+            select: {
+              id: true,
+              birthDate: true,
+              deathDate: true,
+              weddingAnniversary: true,
+            }
+          },
+          family: true
+        },
       });
 
       if (!foundInvitation) {
@@ -139,7 +152,26 @@ export async function POST(req: NextRequest) {
       // ensure uniqueness (this uses the transaction client)
       const username = await generateUniqueUsername(tx, baseForSlug);
 
-      // 1. Create user (including username)
+      // ⭐ NEW: Prepare date fields from tree node
+      const dateFields: {
+        birthday?: Date;
+        weddingAnniversary?: Date;
+        deathDay?: Date;
+      } = {};
+
+      if (invitation?.treeNode) {
+        if (invitation.treeNode.birthDate) {
+          dateFields.birthday = invitation.treeNode.birthDate;
+        }
+        if (invitation.treeNode.weddingAnniversary) {
+          dateFields.weddingAnniversary = invitation.treeNode.weddingAnniversary;
+        }
+        if (invitation.treeNode.deathDate) {
+          dateFields.deathDay = invitation.treeNode.deathDate;
+        }
+      }
+
+      // 1. Create user (including username and synced dates)
       const user = await tx.user.create({
         data: {
           email: emailNormalized,
@@ -147,6 +179,7 @@ export async function POST(req: NextRequest) {
           username,
           passwordHash,
           avatarUrl,
+          ...dateFields, // ⭐ NEW: Sync dates from tree node
         },
         select: {
           id: true,
@@ -154,6 +187,9 @@ export async function POST(req: NextRequest) {
           name: true,
           username: true,
           avatarUrl: true,
+          birthday: true,
+          weddingAnniversary: true,
+          deathDay: true,
         },
       });
 
@@ -185,6 +221,83 @@ export async function POST(req: NextRequest) {
             acceptedAt: new Date(),
           },
         });
+
+        // ⭐ NEW: Create automatic calendar events for important dates
+        const events = [];
+
+        // Around line 240-290, replace the entire event creation section with this:
+
+        // ⭐ NEW: Create automatic calendar events for important dates
+        if (user.birthday || user.weddingAnniversary || user.deathDay) {
+          try {
+            // Get user's family to create events in
+            const userFamily = await tx.familyMember.findFirst({
+              where: { userId: user.id },
+              select: { familyId: true },
+            });
+
+            if (userFamily) {
+              const eventsToCreate = [];
+
+              if (user.birthday) {
+                eventsToCreate.push({
+                  title: `${name}'s Birthday`,
+                  description: `Birthday celebration for ${name}`,
+                  startTime: user.birthday,
+                  eventType: "Birthday",
+                  tags: ["Birthday", "Family"],
+                  familyId: userFamily.familyId,
+                  creatorId: user.id,
+                  isRecurring: true,
+                  recurrenceRule: "FREQ=YEARLY",
+                  allDay: true,
+                  timezone: "UTC",
+                });
+              }
+
+              if (user.weddingAnniversary) {
+                eventsToCreate.push({
+                  title: `${name}'s Anniversary`,
+                  description: `Wedding anniversary for ${name}`,
+                  startTime: user.weddingAnniversary,
+                  eventType: "Anniversary",
+                  tags: ["Anniversary", "Family"],
+                  familyId: userFamily.familyId,
+                  creatorId: user.id,
+                  isRecurring: true,
+                  recurrenceRule: "FREQ=YEARLY",
+                  allDay: true,
+                  timezone: "UTC",
+                });
+              }
+
+              if (user.deathDay) {
+                eventsToCreate.push({
+                  title: `${name}'s Memorial Day`,
+                  description: `In memory of ${name}`,
+                  startTime: user.deathDay,
+                  eventType: "Memorial",
+                  tags: ["Memorial", "Family"],
+                  familyId: userFamily.familyId,
+                  creatorId: user.id,
+                  isRecurring: true,
+                  recurrenceRule: "FREQ=YEARLY",
+                  allDay: true,
+                  timezone: "UTC",
+                });
+              }
+
+              for (const eventData of eventsToCreate) {
+                await tx.calendarEvent.create({
+                  data: eventData,
+                });
+              }
+            }
+          } catch (eventError) {
+            // If CalendarEvent creation fails, log but don't fail registration
+            console.log("CalendarEvent creation skipped:", eventError);
+          }
+        }
       }
 
       return user;
@@ -198,6 +311,9 @@ export async function POST(req: NextRequest) {
         name: result.name,
         username: result.username,
         avatar: result.avatarUrl ?? null,
+        birthday: result.birthday,
+        weddingAnniversary: result.weddingAnniversary,
+        deathDay: result.deathDay,
       },
       message: invitation ? `Welcome to ${invitation.family.name}!` : "Registration successful!",
     });

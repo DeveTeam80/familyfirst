@@ -54,10 +54,10 @@ export default function EditProfileDialog({
   const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    
+
     // Store the file for upload
     setSelectedFile(f);
-    
+
     // Create blob URL for preview
     const url = URL.createObjectURL(f);
     setAvatar(url);
@@ -92,7 +92,7 @@ export default function EditProfileDialog({
       const formData = new FormData();
       formData.append("file", compressedFile);
       formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "");
-      formData.append("folder", "avatars");
+      formData.append("folder", "firstfamily/avatars");
 
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
@@ -147,10 +147,10 @@ export default function EditProfileDialog({
   const previewSrc = avatar === null ? undefined : (avatar ?? currentAvatar) || undefined;
 
   return (
-    <Dialog 
-      open={open} 
-      onClose={onClose} 
-      fullWidth 
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
       maxWidth="sm"
       PaperProps={{
         sx: {
@@ -158,10 +158,8 @@ export default function EditProfileDialog({
         }
       }}
     >
-      <DialogTitle>
-        <Typography variant="h6" fontWeight={600}>
-          Edit Profile
-        </Typography>
+      <DialogTitle sx={{ fontWeight: 600 }}>
+        Edit Profile
       </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
@@ -175,9 +173,9 @@ export default function EditProfileDialog({
               {name?.[0]}
             </Avatar>
             <Stack direction="row" spacing={1}>
-              <Button 
-                variant="outlined" 
-                onClick={triggerFile} 
+              <Button
+                variant="outlined"
+                onClick={triggerFile}
                 disabled={uploading}
                 size="small"
                 sx={{ borderRadius: 2 }}
@@ -243,8 +241,8 @@ export default function EditProfileDialog({
         </Stack>
       </DialogContent>
       <DialogActions sx={{ p: 2.5 }}>
-        <Button 
-          onClick={onClose} 
+        <Button
+          onClick={onClose}
           disabled={uploading}
           sx={{
             borderRadius: 2,

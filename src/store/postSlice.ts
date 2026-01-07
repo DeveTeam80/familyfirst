@@ -23,6 +23,7 @@ export interface Post {
   tags: string[];
   image?: string | null;
   images?: string[];
+  photos?: Array<{ id: string; url: string }>; 
   eventDate?: string;
   likes: number;
   likedBy: string[];

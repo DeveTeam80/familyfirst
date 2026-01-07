@@ -21,6 +21,8 @@ import {
   Snackbar,
   Alert,
 } from "@mui/material";
+import AddToAlbumDialog from "@/components/dialogs/AddToAlbumDialog";
+import { PhotoLibrary } from "@mui/icons-material";
 import { KeyboardArrowUp, Refresh as RefreshIcon } from "@mui/icons-material";
 import PullToRefresh from 'react-simple-pull-to-refresh';
 import { useSearchParams, useRouter } from "next/navigation";
@@ -115,6 +117,8 @@ function mapPostToCardData(post: Post): PostCardData {
     content: post.content,
     image: post.image ?? undefined,
     images: post.images,
+    photos: post.photos, 
+    photoIds: post.photos?.map((p: { id: string; url: string }) => p.id) || [],
     tags: post.tags || [],
     date: post.date || post.createdAt || new Date().toISOString(),
     likes: post.likes || 0,
@@ -201,7 +205,13 @@ export default function Feed() {
   const currentUserName = currentUser?.name || "User";
   const currentUserId = currentUser?.id || "";
   const currentAvatar = currentUser?.avatar || undefined;
+  // Add state variables (around line 100, with other state)
+  const [saveToAlbumOpen, setSaveToAlbumOpen] = React.useState(false);
+  const [photosToSave, setPhotosToSave] = React.useState<string[]>([]);
 
+
+  //event
+  const [selectedEvent, setSelectedEvent] = React.useState<{ id: string; title: string } | null>(null);
   /* ---------------- Data loading + handlers ---------------- */
 
   const loadInitialPosts = React.useCallback(async () => {
@@ -250,6 +260,17 @@ export default function Feed() {
     }
   }, [dispatch]);
 
+  const handleSaveToAlbum = (photoIds: string[]) => {
+    if (!photoIds || photoIds.length === 0) {
+      console.warn("No photo IDs provided");
+      return;
+    }
+
+    console.log("📸 Saving photos to album:", photoIds);
+    setPhotosToSave(photoIds);
+    setSaveToAlbumOpen(true);
+  };
+
   // Handle notification click from URL or callback
   const handleNotificationPostOpen = React.useCallback((postId: string) => {
     const post = postsArr.find(p => p.id === postId);
@@ -280,6 +301,7 @@ export default function Feed() {
       setModalPostId(postId);
     }
   }, [postsArr, theme.palette.primary.main]);
+
 
   // Check URL for postId param on mount
   React.useEffect(() => {
@@ -369,6 +391,7 @@ export default function Feed() {
           const formData = new FormData();
           formData.append("file", fileToUpload);
           formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!);
+          formData.append("folder", "firstfamily/posts");
 
           const response = await fetch(
             `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
@@ -392,6 +415,8 @@ export default function Feed() {
       setContent("");
       setSelectedTags([]);
       setSelectedImages([]);
+      setSelectedEvent(null);
+
     } catch (error) {
       console.error("❌ Error creating post:", error);
       alert(`Failed to create post: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -458,6 +483,8 @@ export default function Feed() {
           const formData = new FormData();
           formData.append("file", fileToUpload);
           formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!);
+
+          formData.append("folder", "firstfamily/posts");
 
           const response = await fetch(
             `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
@@ -788,6 +815,8 @@ export default function Feed() {
               setSelectedImages={setSelectedImages}
               selectedTags={selectedTags}
               setSelectedTags={setSelectedTags}
+              selectedEvent={selectedEvent}
+              setSelectedEvent={setSelectedEvent}
               onOpenEvent={() => setOpenEventDialog(true)}
               onPost={handlePost}
             />
@@ -873,6 +902,8 @@ export default function Feed() {
                         onImageClick={(index) => handleImageClick(post.id, index)}
                         canEdit={post.userId === currentUserId}
                         commentsOpen={activeCommentPost === post.id}
+                        onSaveToAlbum={handleSaveToAlbum}
+
                         commentSection={
                           <CommentBox
                             openForPostId={activeCommentPost}
@@ -1016,6 +1047,14 @@ export default function Feed() {
         setTags={setEditTags}
         images={editImages}
         setImages={setEditImages}
+      />
+      <AddToAlbumDialog
+        open={saveToAlbumOpen}
+        onClose={() => {
+          setSaveToAlbumOpen(false);
+          setPhotosToSave([]);
+        }}
+        photoIds={photosToSave}
       />
     </Container>
   );
