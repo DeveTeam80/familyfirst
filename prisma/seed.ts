@@ -19,14 +19,14 @@ async function main() {
     
     // Update ensuring the email is correct/fixed if it exists
     update: {
-      email: "admin@familyfirst.com", // FIXED: familyfirst (not firstfamily)
+      email: "admin@firstfamily.com", // FIXED: firstfamily (not firstfamily)
       passwordHash: await hashPassword("admin123"),
       emailVerified: new Date(),
     },
     
     create: {
       id: "demo-admin",
-      email: "admin@familyfirst.com", // FIXED: familyfirst
+      email: "admin@firstfamily.com", // FIXED: firstfamily
       name: "Admin User",
       passwordHash: await hashPassword("admin123"),
       emailVerified: new Date(),

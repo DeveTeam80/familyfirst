@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/nextauth.config";
 import { prisma } from "@/lib/prisma";
 
 // ⭐ CRITICAL: Users are considered offline if no heartbeat for 2 minutes
-const OFFLINE_THRESHOLD_MS = 2 * 60 * 1000; 
+const OFFLINE_THRESHOLD_MS = 2 * 60 * 1000;
 
 export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions);
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
-        const { content, tags, imageUrls, eventDate, familyId } = body;
+        const { content, tags, imageUrls, eventDate, familyId, calendarEventId } = body;
 
         const userFamily =
             familyId ||
@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
                 familyId: userFamily,
                 tags: tags || [],
                 eventDate: eventDate ? new Date(eventDate) : null,
+                calendarEventId: calendarEventId || null,
 
                 photos: imageUrls && Array.isArray(imageUrls) && imageUrls.length > 0
                     ? {
@@ -55,13 +56,28 @@ export async function POST(request: NextRequest) {
                         id: true,
                         name: true,
                         avatarUrl: true,
+                        isOnline: true,
+                        lastSeenAt: true,
                     },
                 },
-                photos: true,
+                photos: {
+                    select: {
+                        id: true,
+                        url: true,
+                    },
+                },
                 reactions: {
                     select: {
                         userId: true,
                         type: true,
+                    },
+                },
+                calendarEvent: {
+                    select: {
+                        id: true,
+                        title: true,
+                        startTime: true,
+                        eventType: true,
                     },
                 },
                 comments: {
@@ -100,17 +116,28 @@ export async function POST(request: NextRequest) {
             },
         });
 
+        // ⭐ CALCULATE THRESHOLD
+        const threshold = new Date(Date.now() - OFFLINE_THRESHOLD_MS);
+        const isActuallyOnline =
+            post.author?.isOnline &&
+            post.author?.lastSeenAt &&
+            post.author.lastSeenAt >= threshold;
+
+        // ✅ CLEAN RESPONSE FORMAT
         return NextResponse.json({
             id: post.id,
             userId: post.author?.id || "",
             user: post.author?.name || "User",
             username: post.author?.name?.toLowerCase().replace(/\s+/g, "") || "user",
             avatar: post.author?.avatarUrl || null,
+            isOnline: !!isActuallyOnline,
             content: post.content,
             tags: post.tags,
-            images: post.photos.map(p => p.url),
-            image: post.photos?.[0]?.url || null,
+            photos: post.photos.map(p => ({ id: p.id, url: p.url })), // ✅ Structured format
             eventDate: post.eventDate?.toISOString(),
+            visibility: post.visibility,
+            calendarEventId: post.calendarEventId,
+            calendarEvent: post.calendarEvent,
             likes: post.reactions.filter(r => r.type === "LIKE").length,
             likedBy: post.reactions.filter(r => r.type === "LIKE").map(r => r.userId),
             comments: post.comments.map((c) => ({
@@ -146,6 +173,7 @@ export async function POST(request: NextRequest) {
     }
 }
 
+
 export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
 
@@ -157,6 +185,7 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const page = parseInt(searchParams.get('page') || '1');
         const limit = parseInt(searchParams.get('limit') || '5');
+        const userId = searchParams.get("userId");
         const skip = (page - 1) * limit;
 
         const userFamilies = await prisma.familyMember.findMany({
@@ -166,28 +195,37 @@ export async function GET(request: NextRequest) {
 
         const familyIds = userFamilies.map((f) => f.familyId);
 
+        // ⭐ Dynamic WHERE clause
+        const whereClause: any = {
+            familyId: { in: familyIds },
+        };
+
+        if (userId) {
+            whereClause.authorId = userId;
+        }
+
         const totalPosts = await prisma.post.count({
-            where: {
-                familyId: { in: familyIds },
-            },
+            where: whereClause,
         });
 
         const posts = await prisma.post.findMany({
-            where: {
-                familyId: { in: familyIds },
-            },
+            where: whereClause,
             include: {
                 author: {
                     select: {
                         id: true,
                         name: true,
                         avatarUrl: true,
-                        // ⭐ ADDED: Fetch online status fields
                         isOnline: true,
                         lastSeenAt: true,
                     },
                 },
-                photos: true,
+                photos: {
+                    select: {
+                        id: true,
+                        url: true,
+                    },
+                },
                 reactions: {
                     select: {
                         userId: true,
@@ -227,6 +265,14 @@ export async function GET(request: NextRequest) {
                         createdAt: "asc",
                     },
                 },
+                calendarEvent: {
+                    select: {
+                        id: true,
+                        title: true,
+                        startTime: true,
+                        eventType: true,
+                    },
+                },
             },
             orderBy: {
                 createdAt: "desc",
@@ -239,11 +285,19 @@ export async function GET(request: NextRequest) {
         const threshold = new Date(Date.now() - OFFLINE_THRESHOLD_MS);
 
         const formattedPosts = posts.map((post) => {
-            // ⭐ CALCULATE ACTUAL STATUS
             const isActuallyOnline =
                 post.author?.isOnline &&
                 post.author?.lastSeenAt &&
                 post.author.lastSeenAt >= threshold;
+
+            // ⭐ FIX: Proper type annotation for photosArray
+            let photosArray: Array<{ id: string; url: string }> = [];
+            
+            if (post.photos && post.photos.length > 0) {
+                // New format: photos relation exists
+                photosArray = post.photos.map(p => ({ id: p.id, url: p.url }));
+            }
+            // ⭐ REMOVED: No fallback to post.image since it doesn't exist in schema
 
             return {
                 id: post.id,
@@ -251,16 +305,16 @@ export async function GET(request: NextRequest) {
                 user: post.author?.name || "Deleted User",
                 username: post.author?.name?.toLowerCase().replace(/\s+/g, "") || "deleted",
                 avatar: post.author?.avatarUrl || null,
-                // ⭐ ADDED: Return calculated status
                 isOnline: !!isActuallyOnline,
                 content: post.content,
                 tags: post.tags,
-                images: post.photos.map(p => p.url),
-                image: post.photos?.[0]?.url || null,
+                photos: photosArray, // ✅ Now properly typed
                 eventDate: post.eventDate?.toISOString(),
                 visibility: post.visibility,
                 likes: post.reactions.filter(r => r.type === "LIKE").length,
                 likedBy: post.reactions.filter(r => r.type === "LIKE").map(r => r.userId),
+                calendarEventId: post.calendarEventId,
+                calendarEvent: post.calendarEvent,
                 comments: post.comments.map((c) => ({
                     id: c.id,
                     user: c.user?.name || "Deleted User",

@@ -20,8 +20,21 @@ export async function createPost(data: {
 }
 
 // ⭐ Updated with pagination parameters
-export async function fetchPosts(page: number = 1, limit: number = 5) {
-  const response = await fetch(`/api/posts?page=${page}&limit=${limit}`, {
+// src/lib/api-posts.ts
+
+// 👇 Add userId as an optional 3rd argument
+export async function fetchPosts(page: number = 1, limit: number = 5, userId?: string) {
+  // Construct URL with query params
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+  });
+  
+  if (userId) {
+    params.append("userId", userId);
+  }
+
+  const response = await fetch(`/api/posts?${params.toString()}`, {
     credentials: "include",
   });
 

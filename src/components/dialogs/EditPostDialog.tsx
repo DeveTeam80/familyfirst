@@ -1,22 +1,25 @@
 "use client";
 import * as React from "react";
-import { 
-  Dialog, 
-  DialogTitle, 
-  DialogContent, 
-  DialogActions, 
-  TextField, 
-  Button, 
-  Box, 
-  Stack, 
-  Chip, 
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Button,
+  Box,
+  Stack,
+  Chip,
   Typography,
   IconButton,
   alpha,
   useTheme,
+  CircularProgress,
+  useMediaQuery, 
 } from "@mui/material";
 import { Close, PhotoLibrary } from "@mui/icons-material";
 import Image from "next/image";
+import imageCompression from "browser-image-compression";
 
 export default function EditPostDialog({
   open,
@@ -24,8 +27,8 @@ export default function EditPostDialog({
   setContent,
   tags,
   setTags,
-  images,  // Changed from image
-  setImages,  // Changed from setImage
+  images,
+  setImages,
   onCancel,
   onSave,
 }: {
@@ -34,28 +37,73 @@ export default function EditPostDialog({
   setContent: (v: string) => void;
   tags: string[];
   setTags: (v: string[]) => void;
-  images: string[];  // Changed from image: string | null | undefined
-  setImages: (v: string[]) => void;  // Changed from setImage
+  images: string[];
+  setImages: (v: string[]) => void;
   onCancel: () => void;
   onSave: () => void;
 }) {
   const theme = useTheme();
+  const [compressing, setCompressing] = React.useState(false);
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ⭐ NEW: Helper to upload single file to Cloudinary
+  const uploadToCloudinary = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "");
+    // ⭐ Organize into the correct folder
+    formData.append("folder", "firstfamily/posts");
+
+    const res = await fetch(
+      `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+      { method: "POST", body: formData }
+    );
+
+    if (!res.ok) throw new Error("Failed to upload image");
+    const data = await res.json();
+    return data.secure_url;
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
+      setCompressing(true);
       const filesArray = Array.from(e.target.files);
       const newImages: string[] = [];
-      
-      filesArray.forEach((file) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          newImages.push(reader.result as string);
-          if (newImages.length === filesArray.length) {
-            setImages([...images, ...newImages]);
-          }
+
+      try {
+        const options = {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1920,
+          useWebWorker: true,
+          fileType: "image/jpeg" as const,
         };
-        reader.readAsDataURL(file);
-      });
+
+        for (const file of filesArray) {
+          try {
+            console.log(`🔄 Compressing ${file.name}...`);
+            const compressedFile = await imageCompression(file, options);
+
+            console.log(`☁️ Uploading ${file.name} to Cloudinary...`);
+            // ⭐ CHANGED: Upload to Cloudinary instead of reading as Base64
+            const url = await uploadToCloudinary(compressedFile);
+
+            console.log(`✅ Uploaded: ${url}`);
+            newImages.push(url);
+          } catch (error) {
+            console.error(`❌ Error processing ${file.name}:`, error);
+            // Optional: Show an error toast here
+          }
+        }
+
+        setImages([...images, ...newImages]);
+      } catch (error) {
+        console.error("❌ Error processing images:", error);
+        alert("Failed to process images. Please try again.");
+      } finally {
+        setCompressing(false);
+        // Clear input so same file can be selected again if needed
+        e.target.value = "";
+      }
     }
   };
 
@@ -66,10 +114,11 @@ export default function EditPostDialog({
   const availableTags = ["Family", "Memories", "Celebration", "Update", "Question", "Event", "Announcement"];
 
   return (
-    <Dialog 
-      open={open} 
-      onClose={onCancel} 
-      fullWidth 
+    <Dialog
+      open={open}
+      onClose={onCancel}
+      fullWidth
+      fullScreen={isMobile} 
       maxWidth="sm"
       PaperProps={{
         sx: {
@@ -77,10 +126,8 @@ export default function EditPostDialog({
         }
       }}
     >
-      <DialogTitle>
-        <Typography variant="h6" fontWeight={600}>
-          Edit Post
-        </Typography>
+      <DialogTitle sx={{ fontWeight: 600 }}>
+        Edit Post
       </DialogTitle>
 
       <DialogContent dividers>
@@ -93,6 +140,7 @@ export default function EditPostDialog({
           margin="dense"
           value={content}
           onChange={(e) => setContent(e.target.value)}
+          disabled={compressing}
           sx={{
             '& .MuiOutlinedInput-root': {
               borderRadius: 2,
@@ -108,10 +156,11 @@ export default function EditPostDialog({
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
             {/* Selected Tags */}
             {tags.map((t) => (
-              <Chip 
-                key={t} 
-                label={t} 
+              <Chip
+                key={t}
+                label={t}
                 onDelete={() => setTags(tags.filter((x) => x !== t))}
+                disabled={compressing}
                 size="small"
                 sx={{
                   borderRadius: 2,
@@ -123,7 +172,7 @@ export default function EditPostDialog({
                 }}
               />
             ))}
-            
+
             {/* Available Tags to Add */}
             {availableTags
               .filter(t => !tags.includes(t))
@@ -134,6 +183,7 @@ export default function EditPostDialog({
                   variant="outlined"
                   size="small"
                   onClick={() => setTags([...tags, t])}
+                  disabled={compressing}
                   sx={{
                     borderRadius: 2,
                     cursor: 'pointer',
@@ -152,7 +202,7 @@ export default function EditPostDialog({
           <Typography variant="subtitle2" gutterBottom fontWeight={600}>
             Images
           </Typography>
-          
+
           {/* Hidden File Input */}
           <input
             accept="image/*"
@@ -161,14 +211,16 @@ export default function EditPostDialog({
             multiple
             style={{ display: "none" }}
             onChange={handleImageUpload}
+            disabled={compressing}
           />
-          
+
           {/* Upload Button */}
           <Button
             variant="outlined"
-            startIcon={<PhotoLibrary />}
+            startIcon={compressing ? <CircularProgress size={20} /> : <PhotoLibrary />}
             onClick={() => document.getElementById("edit-photo-upload")?.click()}
             fullWidth
+            disabled={compressing}
             sx={{
               borderRadius: 2,
               textTransform: 'none',
@@ -183,7 +235,12 @@ export default function EditPostDialog({
               },
             }}
           >
-            {images.length > 0 ? `Add More Photos (${images.length} selected)` : 'Add Photos'}
+            {compressing
+              ? 'Uploading images...'
+              : images.length > 0
+                ? `Add More Photos (${images.length} selected)`
+                : 'Add Photos'
+            }
           </Button>
 
           {/* Remove All Button */}
@@ -193,6 +250,7 @@ export default function EditPostDialog({
               color="error"
               onClick={() => setImages([])}
               fullWidth
+              disabled={compressing}
               sx={{
                 borderRadius: 2,
                 textTransform: 'none',
@@ -210,10 +268,10 @@ export default function EditPostDialog({
               <Typography variant="caption" color="text.secondary" gutterBottom display="block">
                 Preview ({images.length} image{images.length !== 1 ? 's' : ''})
               </Typography>
-              <Stack 
-                direction="row" 
-                spacing={1} 
-                flexWrap="wrap" 
+              <Stack
+                direction="row"
+                spacing={1}
+                flexWrap="wrap"
                 useFlexGap
                 sx={{
                   maxHeight: 300,
@@ -240,18 +298,18 @@ export default function EditPostDialog({
                       borderColor: 'divider',
                     }}
                   >
-                    
                     <Image
                       src={imageUrl}
                       alt={`Preview ${index + 1}`}
+                      fill
                       style={{
-                        width: "100%",
-                        height: "100%",
                         objectFit: "cover",
                       }}
+                      unoptimized // Since we are using Cloudinary URLs now
                     />
                     <IconButton
                       onClick={() => handleRemoveImage(index)}
+                      disabled={compressing}
                       sx={{
                         position: 'absolute',
                         top: 4,
@@ -276,8 +334,9 @@ export default function EditPostDialog({
       </DialogContent>
 
       <DialogActions sx={{ p: 2.5 }}>
-        <Button 
+        <Button
           onClick={onCancel}
+          disabled={compressing}
           sx={{
             borderRadius: 2,
             textTransform: 'none',
@@ -286,10 +345,10 @@ export default function EditPostDialog({
         >
           Cancel
         </Button>
-        <Button 
-          variant="contained" 
+        <Button
+          variant="contained"
           onClick={onSave}
-          disabled={!content.trim() && images.length === 0}
+          disabled={(!content.trim() && images.length === 0) || compressing}
           sx={{
             borderRadius: 2,
             textTransform: 'none',
@@ -297,7 +356,7 @@ export default function EditPostDialog({
             px: 3,
           }}
         >
-          Save Changes
+          {compressing ? 'Processing...' : 'Save Changes'}
         </Button>
       </DialogActions>
     </Dialog>

@@ -13,13 +13,13 @@ const prisma = new PrismaClient();
     console.log('');
 
     const user = await prisma.user.upsert({
-      where: { email: 'admin@familyfirst.com' },
+      where: { email: 'admin@firstfamily.com' },
       update: {
         passwordHash: hash,
         name: 'Admin User'
       },
       create: {
-        email: 'admin@familyfirst.com',
+        email: 'admin@firstfamily.com',
         name: 'Admin User',
         passwordHash: hash,
       },

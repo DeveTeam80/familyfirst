@@ -28,6 +28,8 @@ type Props = {
   setSelectedImages: (v: string[]) => void; // Changed
   selectedTags: string[];
   setSelectedTags: (tags: string[]) => void;
+  selectedEvent?: { id: string; title: string } | null;
+  setSelectedEvent?: (event: { id: string; title: string } | null) => void;
   onOpenEvent: () => void;
   onPost: () => void;
 };
@@ -41,6 +43,8 @@ export default function PostComposer({
   setSelectedTags,
   onOpenEvent,
   onPost,
+  selectedEvent,
+  setSelectedEvent,
 }: Props) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -133,21 +137,21 @@ export default function PostComposer({
       {/* Main Input Area */}
       <Box display="flex" gap={isMobile ? 1 : 2} mb={2}>
         <Avatar
-  alt="User"
-  src={
-    userAvatar ||
-    (session?.user?.image as string | undefined) ||
-    undefined
-  }
-  sx={{
-    width: isMobile ? 36 : 48,
-    height: isMobile ? 36 : 48,
-    border: "2px solid",
-    borderColor: "divider",
-  }}
->
-  {!userAvatar && !session?.user?.image && session?.user?.name?.[0]}
-</Avatar>
+          alt="User"
+          src={
+            userAvatar ||
+            (session?.user?.image as string | undefined) ||
+            undefined
+          }
+          sx={{
+            width: isMobile ? 36 : 48,
+            height: isMobile ? 36 : 48,
+            border: "2px solid",
+            borderColor: "divider",
+          }}
+        >
+          {!userAvatar && !session?.user?.image && session?.user?.name?.[0]}
+        </Avatar>
 
         <TextField
           fullWidth
@@ -281,6 +285,17 @@ export default function PostComposer({
             />
           ))}
         </Stack>
+      )}
+
+      {selectedEvent && (
+        <Box sx={{ mb: 2 }}>
+          <Chip
+            label={`📅 ${selectedEvent.title}`}
+            onDelete={() => setSelectedEvent?.(null)}
+            color="primary"
+            variant="outlined"
+          />
+        </Box>
       )}
 
       {/* Action Buttons */}

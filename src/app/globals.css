@@ -858,3 +858,10 @@ a {
 .f3 div.card-inner {
   border-radius: 16px !important;
 }
+.f3-form-cont {
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+  }
+

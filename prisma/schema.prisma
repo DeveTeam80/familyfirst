@@ -14,7 +14,6 @@ datasource db {
 // USERS & AUTHENTICATION
 // ============================================
 
-// Update User model - add these fields
 model User {
   id            String    @id @default(uuid())
   email         String    @unique
@@ -26,7 +25,12 @@ model User {
   bio           String?   @db.Text
   location      String?
   
-  // ⭐ NEW: Online status tracking
+  // ⭐ NEW: Important dates synced from FamilyTreeNode
+  birthday           DateTime? @db.Date
+  weddingAnniversary DateTime? @map("wedding_anniversary") @db.Date
+  deathDay           DateTime? @map("death_day") @db.Date
+  
+  // Online status tracking
   isOnline      Boolean   @default(false) @map("is_online")
   lastSeenAt    DateTime? @map("last_seen_at")
   
@@ -53,7 +57,8 @@ model User {
   createdTreeNodes  FamilyTreeNode[] @relation("TreeNodeCreator")
   emailChanges      EmailChange[]
   passwordResets    PasswordReset[]
-  notifications     Notification[]   // ⭐ NEW: Add this relation
+  notifications     Notification[]
+  createdAlbums     Album[]          @relation("CreatedAlbums") // ⭐ NEW
 
   @@map("users")
 }
@@ -69,11 +74,11 @@ model Family {
   avatarUrl   String? @map("avatar_url")
 
   // Invitation system
-  inviteCode String @unique @map("invite_code") // Unique code for joining
+  inviteCode String @unique @map("invite_code")
 
   // creator/owner
   createdBy String   @map("created_by")
-  ownerId   String?  @map("owner_id") // NEW: explicit owner pointer
+  ownerId   String?  @map("owner_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -88,6 +93,7 @@ model Family {
   treeNodes      FamilyTreeNode[]
   invitations    Invitation[]
   inviteCodes    FamilyInviteCode[]
+  albums         Album[] // ⭐ NEW
 
   @@map("families")
 }
@@ -106,12 +112,10 @@ model FamilyMember {
   familyId String     @map("family_id")
   role     FamilyRole @default(MEMBER)
 
-  // Status (for approval workflows)
   status MemberStatus @default(ACTIVE)
 
   joinedAt DateTime @default(now()) @map("joined_at")
 
-  // Relations
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
 
@@ -120,9 +124,9 @@ model FamilyMember {
 }
 
 enum MemberStatus {
-  PENDING // Waiting for admin approval
-  ACTIVE // Active member
-  BLOCKED // Blocked by admin
+  PENDING
+  ACTIVE
+  BLOCKED
 
   @@map("member_status")
 }
@@ -135,22 +139,18 @@ model Invitation {
   id       String @id @default(uuid())
   familyId String @map("family_id")
 
-  // Who's being invited
   email      String
-  treeNodeId String? @map("tree_node_id") // Link to tree node (optional)
+  treeNodeId String? @map("tree_node_id")
 
-  // Invite details
-  inviteCode String @unique @map("invite_code") // e.g., "FAM-XY7K9A"
+  inviteCode String @unique @map("invite_code")
   invitedBy  String @map("invited_by")
 
-  // Status
   status     InvitationStatus @default(PENDING)
   expiresAt  DateTime         @map("expires_at")
   acceptedAt DateTime?        @map("accepted_at")
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  // Relations
   family   Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
   inviter  User            @relation("InvitationSender", fields: [invitedBy], references: [id], onDelete: Cascade)
   treeNode FamilyTreeNode? @relation(fields: [treeNodeId], references: [id], onDelete: SetNull)
@@ -169,7 +169,6 @@ enum InvitationStatus {
   @@map("invitation_status")
 }
 
-// Family-wide invite codes (anyone can join)
 model FamilyInviteCode {
   id       String @id @default(uuid())
   familyId String @map("family_id")
@@ -178,15 +177,13 @@ model FamilyInviteCode {
   createdBy String    @map("created_by")
   expiresAt DateTime? @map("expires_at")
 
-  // Usage limits
-  maxUses   Int? @map("max_uses") // NULL = unlimited
+  maxUses   Int? @map("max_uses")
   timesUsed Int  @default(0) @map("times_used")
 
   isActive Boolean @default(true) @map("is_active")
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  // Relations
   family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
 
   @@map("family_invite_codes")
@@ -200,7 +197,6 @@ model FamilyTreeNode {
   id       String @id @default(uuid())
   familyId String @map("family_id")
 
-  // Basic info
   firstName String    @map("first_name")
   lastName  String?   @map("last_name")
   birthDate DateTime? @map("birth_date") @db.Date
@@ -208,22 +204,19 @@ model FamilyTreeNode {
   gender    String?
   photoUrl  String?   @map("photo_url")
   bio       String?   @db.Text
+  weddingAnniversary DateTime? @map("wedding_anniversary") @db.Date
 
-  // Link to user account (if they have one)
   userId          String? @unique @map("user_id")
   isAccountHolder Boolean @default(false) @map("is_account_holder")
 
-  // Metadata
   createdBy String   @map("created_by")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Relations
   family  Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
   user    User?  @relation("UserTreeNode", fields: [userId], references: [id], onDelete: SetNull)
   creator User   @relation("TreeNodeCreator", fields: [createdBy], references: [id], onDelete: Cascade)
 
-  // Self-relations for family tree
   relationshipsFrom FamilyRelationship[] @relation("Person1")
   relationshipsTo   FamilyRelationship[] @relation("Person2")
 
@@ -231,6 +224,7 @@ model FamilyTreeNode {
 
   @@index([familyId])
   @@index([userId])
+  @@index([familyId, createdAt])
   @@map("family_tree_nodes")
 }
 
@@ -243,11 +237,12 @@ model FamilyRelationship {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  // Relations
   person1 FamilyTreeNode @relation("Person1", fields: [person1Id], references: [id], onDelete: Cascade)
   person2 FamilyTreeNode @relation("Person2", fields: [person2Id], references: [id], onDelete: Cascade)
 
   @@unique([person1Id, person2Id, relationshipType])
+  @@index([person1Id])
+  @@index([person2Id])
   @@map("family_relationships")
 }
 
@@ -277,29 +272,33 @@ model Post {
   content  String? @db.Text
   location String?
 
-  // Removed imageUrl field - using photos relation instead
   tags      String[]  @default([])
   eventDate DateTime? @map("event_date") @db.Date
+  
+  // ⭐ NEW: Link to calendar event
+  calendarEventId String? @map("calendar_event_id")
 
   visibility Visibility @default(FAMILY)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  family    Family     @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  author    User?      @relation(fields: [authorId], references: [id], onDelete: SetNull)
-  photos    Photo[]
-  comments  Comment[]
-  reactions Reaction[]
+  family        Family         @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  author        User?          @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  calendarEvent CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: SetNull) // ⭐ NEW
+  photos        Photo[]
+  comments      Comment[]
+  reactions     Reaction[]
 
   @@index([familyId, createdAt(sort: Desc)])
+  @@index([calendarEventId]) // ⭐ NEW
   @@map("posts")
 }
 
 enum Visibility {
-  FAMILY // All family members
-  PRIVATE // Only author
-  CUSTOM // Custom list (future feature)
+  FAMILY
+  PRIVATE
+  CUSTOM
   PUBLIC
 
   @@map("visibility")
@@ -311,12 +310,10 @@ model Photo {
   familyId   String  @map("family_id")
   uploadedBy String? @map("uploaded_by")
 
-  // Cloudinary data
   cloudinaryId String  @map("cloudinary_id")
   url          String
   thumbnailUrl String? @map("thumbnail_url")
 
-  // Metadata
   caption   String? @db.Text
   sizeBytes Int?    @map("size_bytes")
   width     Int?
@@ -324,30 +321,27 @@ model Photo {
 
   uploadedAt DateTime @default(now()) @map("uploaded_at")
 
-  // Relations
-  post     Post?      @relation(fields: [postId], references: [id], onDelete: Cascade)
-  family   Family     @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  uploader User?      @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+  post     Post?         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  family   Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  uploader User?         @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
   tags     PhotoTag[]
+  albums   AlbumPhoto[]  // ⭐ NEW: Can belong to multiple albums
 
   @@index([familyId])
   @@index([postId])
   @@map("photos")
 }
 
-// Tag people in photos
 model PhotoTag {
   id         String @id @default(uuid())
   photoId    String @map("photo_id")
   treeNodeId String @map("tree_node_id")
 
-  // Position on photo (for future feature)
-  x Float? // Percentage: 0-100
-  y Float? // Percentage: 0-100
+  x Float?
+  y Float?
 
   taggedAt DateTime @default(now()) @map("tagged_at")
 
-  // Relations
   photo Photo @relation(fields: [photoId], references: [id], onDelete: Cascade)
 
   @@unique([photoId, treeNodeId])
@@ -361,7 +355,6 @@ model Comment {
 
   content String @db.Text
 
-  // Reply support
   parentId String?   @map("parent_id")
   parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies  Comment[] @relation("CommentReplies")
@@ -369,7 +362,6 @@ model Comment {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Relations
   post  Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
   user  User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
   likes CommentLike[]
@@ -379,7 +371,6 @@ model Comment {
   @@map("comments")
 }
 
-// New model for comment likes
 model CommentLike {
   id        String @id @default(uuid())
   commentId String @map("comment_id")
@@ -387,9 +378,8 @@ model CommentLike {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  // Relations
   comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade) // ⭐ Add this line
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([commentId, userId])
   @@map("comment_likes")
@@ -404,9 +394,8 @@ model Reaction {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  // Relations
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade) // ⭐ Add this line
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([postId, userId])
   @@map("reactions")
@@ -423,6 +412,56 @@ enum ReactionType {
 }
 
 // ============================================
+// ALBUMS & GALLERY (⭐ NEW)
+// ============================================
+
+model Album {
+  id          String   @id @default(uuid())
+  familyId    String   @map("family_id")
+  title       String
+  description String?  @db.Text
+  coverImage  String?  @map("cover_image")
+  tags        String[] @default([])
+  
+  // Link to calendar event
+  calendarEventId String? @unique @map("calendar_event_id")
+  
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  family        Family         @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  creator       User           @relation("CreatedAlbums", fields: [createdBy], references: [id], onDelete: Cascade)
+  calendarEvent CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: SetNull)
+  photos        AlbumPhoto[]
+  
+  @@index([familyId])
+  @@index([calendarEventId])
+  @@map("albums")
+}
+
+model AlbumPhoto {
+  id       String @id @default(uuid())
+  albumId  String @map("album_id")
+  photoId  String @map("photo_id")
+  
+  // Additional metadata for photo in album context
+  caption  String? @db.Text
+  order    Int     @default(0) // For sorting photos in album
+  
+  addedBy  String? @map("added_by")
+  addedAt  DateTime @default(now()) @map("added_at")
+  
+  album Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  photo Photo @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  
+  @@unique([albumId, photoId])
+  @@index([albumId, order]) // For sorted retrieval
+  @@map("album_photos")
+}
+
+// ============================================
 // RECIPES
 // ============================================
 
@@ -434,22 +473,19 @@ model Recipe {
   title       String
   description String? @db.Text
 
-  // Recipe data (stored as JSON)
-  ingredients  Json // Array of {item: string, quantity: string}
+  ingredients  Json
   instructions String @db.Text
 
-  // Metadata
-  prepTime Int?    @map("prep_time") // minutes
-  cookTime Int?    @map("cook_time") // minutes
+  prepTime Int?    @map("prep_time")
+  cookTime Int?    @map("cook_time")
   servings Int?
-  category String? // Dessert, Main Course, etc.
+  category String?
 
   photoUrl String? @map("photo_url")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Relations
   family   Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
   author   User?           @relation(fields: [authorId], references: [id], onDelete: SetNull)
   comments RecipeComment[]
@@ -464,12 +500,11 @@ model RecipeComment {
   userId   String? @map("user_id")
 
   content String @db.Text
-  rating  Int? // 1-5 stars (optional)
+  rating  Int?
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Relations
   recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
   user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
 
@@ -478,7 +513,7 @@ model RecipeComment {
 }
 
 // ============================================
-// CALENDAR & EVENTS
+// CALENDAR & EVENTS (⭐ UPDATED)
 // ============================================
 
 model CalendarEvent {
@@ -493,12 +528,23 @@ model CalendarEvent {
   // Timing
   startTime DateTime  @map("start_time")
   endTime   DateTime? @map("end_time")
-  timezone  String    @default("UTC") // IANA timezone: "America/New_York"
+  timezone  String    @default("UTC")
   allDay    Boolean   @default(false) @map("all_day")
 
-  // Recurrence (future feature)
+  // Recurrence
   isRecurring    Boolean @default(false) @map("is_recurring")
-  recurrenceRule String? @map("recurrence_rule") // iCal RRULE format
+  recurrenceRule String? @map("recurrence_rule")
+  
+  // ⭐ NEW: Event metadata for better organization
+  eventType  String?  @map("event_type") // Birthday, Anniversary, Wedding, Reunion, Holiday, etc.
+  coverImage String?  @map("cover_image")
+  color      String?  // For calendar display (hex color)
+  tags       String[] @default([])
+  
+  // ⭐ NEW: Google Calendar integration
+  googleEventId    String? @unique @map("google_event_id")
+  googleCalendarId String? @map("google_calendar_id")
+  lastSyncedAt     DateTime? @map("last_synced_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -507,8 +553,12 @@ model CalendarEvent {
   family    Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
   creator   User?           @relation(fields: [creatorId], references: [id], onDelete: SetNull)
   attendees EventAttendee[]
+  album     Album?          // ⭐ NEW: One-to-one with album
+  posts     Post[]          // ⭐ NEW: Multiple posts can reference same event
 
   @@index([familyId, startTime])
+  @@index([googleEventId])
+  @@index([eventType])
   @@map("calendar_events")
 }
 
@@ -519,7 +569,6 @@ model EventAttendee {
   status      RsvpStatus @default(NO_RESPONSE)
   respondedAt DateTime?  @map("responded_at")
 
-  // Relations
   event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -537,10 +586,9 @@ enum RsvpStatus {
 }
 
 // ============================================
-// NOTIFICATIONS (Future feature)
+// NOTIFICATIONS
 // ============================================
 
-// Update Notification model - add actor fields
 model Notification {
   id     String @id @default(uuid())
   userId String @map("user_id")
@@ -549,11 +597,9 @@ model Notification {
   title   String
   message String           @db.Text
 
-  // Link to related entity
   relatedId   String? @map("related_id")
   relatedType String? @map("related_type")
   
-  // ⭐ NEW: Actor info (who triggered the notification)
   actorId     String? @map("actor_id")
   actorName   String? @map("actor_name")
   actorAvatar String? @map("actor_avatar")
@@ -562,14 +608,12 @@ model Notification {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  // ⭐ NEW: Add relation
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])
   @@index([createdAt])
   @@map("notifications")
 }
-
 
 enum NotificationType {
   NEW_POST
@@ -580,6 +624,8 @@ enum NotificationType {
   FAMILY_INVITATION
   MEMBER_JOINED
   RECIPE_ADDED
+  BIRTHDAY_REMINDER      // ⭐ NEW
+  ANNIVERSARY_REMINDER   // ⭐ NEW
 
   @@map("notification_type")
 }

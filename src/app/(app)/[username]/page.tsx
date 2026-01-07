@@ -156,13 +156,19 @@ export default function UserProfilePage() {
 
   // ---- load posts -------------------------------------------------
   const loadPosts = React.useCallback(async () => {
+    // Don't load until we know WHOSE profile we are looking at
+    if (!profile?.id) return;
+
     try {
-      const postsData = await fetchPosts(); // returns { posts, pagination }
+      // 👇 PASS THE PROFILE ID HERE
+      // fetchPosts(page, limit, userId)
+      const postsData = await fetchPosts(1, 10, profile.id);
+
       dispatch(setPosts(postsData));
     } catch (error) {
       console.error("Error loading posts:", error);
     }
-  }, [dispatch]);
+  }, [dispatch, profile?.id]); // 👈 Add profile?.id as dependency
 
   React.useEffect(() => {
     loadPosts();
@@ -177,13 +183,18 @@ export default function UserProfilePage() {
   const userPosts = React.useMemo(
     () =>
       allPosts.filter((p: ReduxPost) => {
-        // try multiple heuristics: p.username or p.user
         if (!p) return false;
+
+        // ✅ FIX: Check ID first (This is the robust fix)
+        if (profile?.id && p.userId === profile.id) return true;
+
+        // Fallbacks (keep these just in case)
         if (typeof p.username === "string" && p.username === username) return true;
         if (profile?.name && p.user === profile.name) return true;
+
         return false;
       }),
-    [allPosts, username, profile?.name]
+    [allPosts, username, profile?.name, profile?.id] // ⭐ Add profile?.id dependency
   );
 
   // Comments
@@ -439,7 +450,7 @@ export default function UserProfilePage() {
 
   const handleReplyComment = async (commentId: string, text: string) => {
     try {
-      const post = allPosts.find((p: ReduxPost) => 
+      const post = allPosts.find((p: ReduxPost) =>
         p.comments.some((c) => c.id === commentId)
       );
       if (!post) return;
@@ -488,7 +499,15 @@ export default function UserProfilePage() {
         }}
       >
         <Box sx={{ display: "grid", placeItems: "center" }}>
-          <Avatar src={profile.avatar || undefined} alt={profile.name} sx={{ width: 140, height: 140 }} />
+          <Avatar
+            src={profile.avatar || undefined}
+            alt={profile.name}
+            sx={{
+              // 👇 Responsive size
+              width: { xs: 100, sm: 140 },
+              height: { xs: 100, sm: 140 }
+            }}
+          />
         </Box>
 
         <Box>
@@ -504,7 +523,12 @@ export default function UserProfilePage() {
 
             {isOwner ? (
               <Stack direction="row" spacing={1}>
-                <Button variant="outlined" size="small" onClick={openEditProfile}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={openEditProfile}
+                  sx={{ width: { xs: "100%", sm: "auto" } }}
+                >
                   Edit Profile
                 </Button>
               </Stack>
@@ -576,13 +600,13 @@ export default function UserProfilePage() {
       </Stack>
 
       {/* Dialogs */}
-      <ShareDialog 
-        open={shareOpen} 
-        onClose={() => setShareOpen(false)} 
-        user={sharePost?.user as string | undefined} 
-        content={sharePost?.content as string | undefined} 
-        tags={sharePost?.tags} 
-        postId={sharePost?.id} 
+      <ShareDialog
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        user={sharePost?.user as string | undefined}
+        content={sharePost?.content as string | undefined}
+        tags={sharePost?.tags}
+        postId={sharePost?.id}
       />
 
       <EditPostDialog

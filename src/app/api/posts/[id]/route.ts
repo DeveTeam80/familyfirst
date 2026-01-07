@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/nextauth.config";
 import { prisma } from "@/lib/prisma";
+import cloudinary from "@/lib/cloudinary"; // Import the helper
 
 // Type for session user
 interface SessionUser {
@@ -279,35 +280,40 @@ export async function PATCH(
   }
 }
 
+// DELETE
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> } // ⭐ Changed to Promise
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
-  const sessionUser = session?.user as SessionUser | undefined;
-
-  if (!sessionUser?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const { id } = await params; // ⭐ Await params
+    const { id } = await params;
 
+    // 1. Fetch the post and its photos BEFORE deleting
     const existingPost = await prisma.post.findUnique({
       where: { id },
+      include: { photos: true }, // Include photos to get IDs
     });
 
-    if (!existingPost) {
-      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    if (!existingPost) return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    if (existingPost.authorId !== session.user.id) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    // 2. Delete images from Cloudinary
+    if (existingPost.photos && existingPost.photos.length > 0) {
+      const deletePromises = existingPost.photos.map((photo) => {
+        // Use stored cloudinaryId if valid, otherwise try to ignore
+        if (photo.cloudinaryId && photo.cloudinaryId !== "uploaded" && photo.cloudinaryId !== "manual-update") {
+           return cloudinary.uploader.destroy(photo.cloudinaryId);
+        }
+      });
+      // We don't await this blocking the DB delete, but good to catch errors
+      Promise.allSettled(deletePromises).catch(err => console.error("Cloudinary cleanup error", err));
     }
 
-    if (existingPost.authorId !== sessionUser.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    await prisma.post.delete({
-      where: { id },
-    });
+    // 3. Delete from Database
+    await prisma.post.delete({ where: { id } });
 
     return NextResponse.json({ success: true });
   } catch (error) {
