@@ -1,6 +1,10 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
+// 👇 Redux Imports
+import { useSelector } from "react-redux";
+import { selectCurrentUser, selectIsAdmin } from "@/store/userSlice";
+
 import {
   Box,
   Typography,
@@ -66,6 +70,7 @@ interface Album {
   coverImage: string | null;
   tags: string[];
   createdAt: string;
+  createdBy: string; 
   creator: {
     id: string;
     name: string | null;
@@ -89,6 +94,10 @@ export default function GalleryPage() {
   const router = useRouter();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isTablet = useMediaQuery(theme.breakpoints.down("md"));
+
+  // 👇 Redux State
+  const currentUser = useSelector(selectCurrentUser);
+  const isAdmin = useSelector(selectIsAdmin);
 
   const [albums, setAlbums] = useState<Album[]>([]);
   const [loading, setLoading] = useState(true);
@@ -148,6 +157,7 @@ export default function GalleryPage() {
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, album: Album) => {
     event.stopPropagation();
+    event.preventDefault(); 
     setAnchorEl(event.currentTarget);
     setMenuAlbum(album);
   };
@@ -195,6 +205,25 @@ export default function GalleryPage() {
     setSearchQuery("");
     setSelectedTag(null);
   };
+
+  // 👇 PERMISSION CHECK (With Debugging)
+  const isMenuAlbumCreator = Boolean(
+    menuAlbum && currentUser && (
+      menuAlbum.createdBy === currentUser.id || // Reliable ID check
+      menuAlbum.creator?.id === currentUser.id  // Fallback
+    )
+  );
+
+  const canEditMenuAlbum = isAdmin || isMenuAlbumCreator;
+  const canDeleteMenuAlbum = isAdmin || isMenuAlbumCreator;
+
+  // Debugging logs (Check your browser console F12 if buttons don't show)
+  // console.log("DEBUG PERMISSIONS:", { 
+  //   isAdmin, 
+  //   userId: currentUser?.id, 
+  //   albumCreator: menuAlbum?.createdBy,
+  //   canDelete: canDeleteMenuAlbum 
+  // });
 
   const hasActiveFilters = searchQuery !== "" || selectedTag !== null;
   const activeFilterCount = (searchQuery ? 1 : 0) + (selectedTag ? 1 : 0);
@@ -737,24 +766,34 @@ export default function GalleryPage() {
 
       {/* Album Context Menu */}
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+        
+        {/* Everyone can upload */}
         <MenuItem onClick={() => menuAlbum && handleUploadToAlbum(menuAlbum.id)}>
           <ListItemIcon>
             <Upload fontSize="small" />
           </ListItemIcon>
           <ListItemText>Upload Images</ListItemText>
         </MenuItem>
-        <MenuItem onClick={handleMenuClose}>
-          <ListItemIcon>
-            <Edit fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Edit Album</ListItemText>
-        </MenuItem>
-        <MenuItem onClick={handleDeleteAlbum}>
-          <ListItemIcon>
-            <Delete fontSize="small" color="error" />
-          </ListItemIcon>
-          <ListItemText sx={{ color: "error.main" }}>Delete Album</ListItemText>
-        </MenuItem>
+
+        {/* Edit: Only Creator or Admin */}
+        {canEditMenuAlbum && (
+          <MenuItem onClick={handleMenuClose}>
+            <ListItemIcon>
+              <Edit fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Edit Album</ListItemText>
+          </MenuItem>
+        )}
+
+        {/* Delete: Only Creator or Admin */}
+        {canDeleteMenuAlbum && (
+          <MenuItem onClick={handleDeleteAlbum}>
+            <ListItemIcon>
+              <Delete fontSize="small" color="error" />
+            </ListItemIcon>
+            <ListItemText sx={{ color: "error.main" }}>Delete Album</ListItemText>
+          </MenuItem>
+        )}
       </Menu>
 
       {/* Mobile FAB */}

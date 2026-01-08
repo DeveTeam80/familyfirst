@@ -19,7 +19,14 @@ import imageCompression from "browser-image-compression";
 type Props = {
   open: boolean;
   onClose: () => void;
-  onSave: (changes: { name?: string; bio?: string; avatar?: string | null; location?: string }) => void;
+  onSave: (changes: { 
+    name?: string; 
+    bio?: string; 
+    avatar?: string | null; 
+    location?: string;
+    birthday?: string | null; // ✅ Added
+    anniversary?: string | null; // ✅ Added
+  }) => void;
   name: string;
   setName: (v: string) => void;
   bio: string;
@@ -27,6 +34,15 @@ type Props = {
   avatar?: string | null;
   setAvatar: (v: string | null) => void;
   currentAvatar?: string | null;
+  birthday?: string | null; // ✅ Added
+  setBirthday?: (v: string | null) => void; // ✅ Added
+  anniversary?: string | null; // ✅ Added
+  setAnniversary?: (v: string | null) => void; // ✅ Added
+};
+
+const formatDateForInput = (dateString?: string | null) => {
+  if (!dateString) return "";
+  return dateString.split("T")[0]; 
 };
 
 export default function EditProfileDialog({
@@ -40,6 +56,10 @@ export default function EditProfileDialog({
   avatar,
   setAvatar,
   currentAvatar,
+  birthday,
+  setBirthday,
+  anniversary,
+  setAnniversary,
 }: Props) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = React.useState(false);
@@ -127,11 +147,13 @@ export default function EditProfileDialog({
         finalAvatarUrl = await uploadToCloudinary(selectedFile);
       }
 
-      // Call onSave with the Cloudinary URL (or null if removed)
+      // Call onSave with all fields
       onSave({
         name: name.trim(),
         bio: bio.trim(),
         avatar: finalAvatarUrl,
+        birthday: birthday || null, // ✅ Include birthday
+        anniversary: anniversary || null, // ✅ Include anniversary
       });
 
       // Clean up
@@ -143,7 +165,8 @@ export default function EditProfileDialog({
       setUploading(false);
     }
   };
-
+console.log("Birthday input value:", formatDateForInput(birthday));
+console.log("Anniversary input value:", formatDateForInput(anniversary));
   const previewSrc = avatar === null ? undefined : (avatar ?? currentAvatar) || undefined;
 
   return (
@@ -162,7 +185,7 @@ export default function EditProfileDialog({
         Edit Profile
       </DialogTitle>
       <DialogContent dividers>
-        <Stack spacing={2}>
+        <Stack spacing={2.5}>
           {/* Avatar section */}
           <Stack direction="row" spacing={2} alignItems="center">
             <Avatar
@@ -211,6 +234,7 @@ export default function EditProfileDialog({
             </Box>
           )}
 
+          {/* Name */}
           <TextField
             label="Name"
             fullWidth
@@ -224,6 +248,7 @@ export default function EditProfileDialog({
             }}
           />
 
+          {/* Bio */}
           <TextField
             label="Bio"
             fullWidth
@@ -237,6 +262,35 @@ export default function EditProfileDialog({
                 borderRadius: 2,
               }
             }}
+          />
+
+          {/* ✅ Birthday Field */}
+          <TextField
+            label="Birthday"
+            type="date"
+            fullWidth
+            // ⭐ Use helper here!
+            value={formatDateForInput(birthday)} 
+            onChange={(e) => setBirthday?.(e.target.value || null)}
+            disabled={uploading}
+            InputLabelProps={{ shrink: true }}
+            helperText="Your birthday"
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+          />
+          
+
+          {/* ✅ FIXED ANNIVERSARY FIELD */}
+          <TextField
+            label="Anniversary"
+            type="date"
+            fullWidth
+            // ⭐ Use helper here!
+            value={formatDateForInput(anniversary)} 
+            onChange={(e) => setAnniversary?.(e.target.value || null)}
+            disabled={uploading}
+            InputLabelProps={{ shrink: true }}
+            helperText="Your anniversary"
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
           />
         </Stack>
       </DialogContent>
@@ -255,7 +309,7 @@ export default function EditProfileDialog({
         <Button
           variant="contained"
           onClick={handleSave}
-          disabled={(!name.trim() && !bio.trim() && avatar === undefined) || uploading}
+          disabled={(!name.trim() && !bio.trim() && avatar === undefined && !birthday && !anniversary) || uploading}
           sx={{
             borderRadius: 2,
             textTransform: 'none',

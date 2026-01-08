@@ -31,6 +31,7 @@ export interface Post {
   date: string;
   createdAt: string;
   updatedAt: string;
+  isOnline: boolean;
   visibility: "FAMILY" | "PUBLIC" | "PRIVATE" | undefined;
 }
 

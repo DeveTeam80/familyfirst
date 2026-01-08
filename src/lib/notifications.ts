@@ -257,3 +257,187 @@ export async function notifyMemberJoined({
     console.error("Error notifying member joined:", error);
   }
 }
+
+// ✅ 1. Notify for New Albums
+export async function notifyNewAlbum({
+  albumId,
+  familyId,
+  creatorId,
+  creatorName,
+  albumTitle,
+}: {
+  albumId: string;
+  familyId: string;
+  creatorId: string;
+  creatorName: string;
+  albumTitle: string;
+}) {
+  try {
+    // Fetch all family members EXCEPT the creator
+    const membersToNotify = await prisma.familyMember.findMany({
+      where: {
+        familyId,
+        userId: { not: creatorId }, // 👈 This handles the exclusion
+      },
+      select: { userId: true },
+    });
+
+    // Bulk create notifications
+    const notifications = membersToNotify.map((member) =>
+      createNotification({
+        userId: member.userId,
+        type: "NEW_ALBUM",
+        title: "New Album",
+        message: `${creatorName} created "${albumTitle}"`,
+        relatedId: albumId,
+        relatedType: "album",
+        actorId: creatorId,
+        actorName: creatorName,
+      })
+    );
+
+    await Promise.all(notifications);
+  } catch (error) {
+    console.error("Error sending album notifications:", error);
+  }
+}
+
+// ✅ 2. Daily Cron: Check Birthdays
+export async function checkDailyBirthdays() {
+  const today = new Date();
+  const month = today.getMonth() + 1; // JS months are 0-indexed
+  const day = today.getDate();
+
+  try {
+    // Find all tree nodes with birthday today
+    // Note: This requires raw query or filtering in JS because Prisma doesn't do date parts easily across DBs
+    // Ideally, you'd store birthMonth and birthDay as Ints for speed, but filtering logic works too:
+    const allNodes = await prisma.familyTreeNode.findMany({
+      where: { birthDate: { not: null } },
+      select: { id: true, firstName: true, lastName: true, birthDate: true, familyId: true, userId: true },
+    });
+
+    const birthdayNodes = allNodes.filter(node => {
+        if(!node.birthDate) return false;
+        const d = new Date(node.birthDate);
+        return d.getUTCDate() === day && (d.getUTCMonth() + 1) === month;
+    });
+
+    for (const person of birthdayNodes) {
+      const fullName = `${person.firstName} ${person.lastName || ""}`.trim();
+      
+      // Get everyone in that family
+      const members = await prisma.familyMember.findMany({
+        where: { familyId: person.familyId },
+      });
+
+      for (const member of members) {
+        // Message is different if it's YOUR birthday
+        const isMe = member.userId === person.userId;
+        const message = isMe 
+          ? "Happy Birthday! 🎂 We hope you have a great day!" 
+          : `It's ${fullName}'s birthday today! 🎂`;
+
+        await createNotification({
+          userId: member.userId,
+          type: "BIRTHDAY_REMINDER",
+          title: "Birthday Reminder",
+          message,
+          relatedId: person.id,
+          relatedType: "treenode",
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Error checking birthdays:", error);
+  }
+}
+
+
+export async function checkDailyAnniversaries() {
+  const today = new Date();
+  const month = today.getMonth() + 1;
+  const day = today.getDate();
+
+  try {
+    const allNodes = await prisma.familyTreeNode.findMany({
+      where: { weddingAnniversary: { not: null } },
+      include: {
+        // Relationships where 'person' is stored as person1 (so spouse is person2)
+        relationshipsFrom: {
+          where: { relationshipType: "SPOUSE" },
+          include: { person2: true } 
+        },
+        // Relationships where 'person' is stored as person2 (so spouse is person1)
+        relationshipsTo: {
+          where: { relationshipType: "SPOUSE" },
+          include: { person1: true }
+        }
+      }
+    });
+
+    // Filter by date match
+    const anniversaryNodes = allNodes.filter(node => {
+      if (!node.weddingAnniversary) return false;
+      const d = new Date(node.weddingAnniversary);
+      return d.getUTCDate() === day && (d.getUTCMonth() + 1) === month;
+    });
+
+    const processedCoupleIds = new Set<string>();
+
+    for (const person of anniversaryNodes) {
+      // 🛠️ FIX: Explicitly check which array has data to avoid TS errors
+      let spouse = null;
+      
+      if (person.relationshipsFrom.length > 0) {
+        // If in 'relationshipsFrom', I am person1, spouse is person2
+        spouse = person.relationshipsFrom[0].person2;
+      } else if (person.relationshipsTo.length > 0) {
+        // If in 'relationshipsTo', I am person2, spouse is person1
+        spouse = person.relationshipsTo[0].person1;
+      }
+
+      // Create a unique key to prevent duplicate notifications for the same couple
+      const ids = [person.id, spouse?.id || "single"].sort();
+      const coupleKey = ids.join("-");
+
+      if (processedCoupleIds.has(coupleKey)) continue;
+      processedCoupleIds.add(coupleKey);
+
+      const personName = person.firstName;
+      const spouseName = spouse ? spouse.firstName : "Spouse";
+      
+      const familyMembers = await prisma.familyMember.findMany({
+        where: { familyId: person.familyId },
+      });
+
+      for (const member of familyMembers) {
+        let message = "";
+        
+        const isPerson = member.userId === person.userId;
+        const isSpouse = spouse && member.userId === spouse.userId;
+
+        if (isPerson) {
+          message = `Happy Anniversary to you and ${spouseName}! 🥂`;
+        } else if (isSpouse) {
+          message = `Happy Anniversary to you and ${personName}! 🥂`;
+        } else {
+          message = spouse 
+            ? `It's ${personName} & ${spouseName}'s Anniversary today! 🥂`
+            : `It's ${personName}'s Anniversary today! 🥂`;
+        }
+
+        await createNotification({
+          userId: member.userId,
+          type: "ANNIVERSARY_REMINDER",
+          title: "Anniversary Reminder",
+          message,
+          relatedId: person.id,
+          relatedType: "treenode",
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Error checking anniversaries:", error);
+  }
+}

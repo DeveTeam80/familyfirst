@@ -4,10 +4,22 @@
 import { useParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store";
-import { setPosts, Post as ReduxPost } from "@/store/postSlice"; // ⭐ Import Redux Post type
+import { setPosts, Post as ReduxPost } from "@/store/postSlice"; 
 import { updateProfile, setCurrentUser, UserProfile } from "@/store/userSlice";
 
-import { Avatar, Box, Button, Stack, Typography, CircularProgress } from "@mui/material";
+// ✅ FIXED IMPORTS: Added Paper, alpha, and Theme
+import { 
+  Avatar, 
+  Box, 
+  Button, 
+  Stack, 
+  Typography, 
+  CircularProgress,
+  Paper,   // 👈 Added
+  alpha,   // 👈 Added
+  Theme    // 👈 Added for type safety
+} from "@mui/material";
+
 import * as React from "react";
 
 import PostCard from "@/components/feed/PostCard";
@@ -23,6 +35,7 @@ import {
   updatePostApi,
   deletePostApi,
 } from "@/lib/api-posts";
+import { Cake, Favorite } from "@mui/icons-material";
 
 // Types for API responses
 interface ApiUser {
@@ -34,6 +47,8 @@ interface ApiUser {
   avatarUrl?: string | null;
   bio?: string;
   location?: string;
+  birthday?: string | null;
+  anniversary?: string | null;
 }
 
 // ⭐ Remove local Post and Comment types - use Redux types instead
@@ -78,21 +93,34 @@ export default function UserProfilePage() {
     // If we have initial profile, not loading, else will fetch
     return profile ? false : true;
   });
+  
 
   React.useEffect(() => {
     let mounted = true;
 
     async function loadProfile() {
-      // If viewing own profile - use currentUser (ensure freshest)
-      if (currentUser?.username === username) {
+      // 1. Is this MY profile?
+      const isMe = currentUser?.username === username;
+
+      // 2. If it is me, use Redux ONLY IF it has data.
+      // This prevents overwriting a full profile with a partial "session refresh" object
+      if (isMe) {
         if (mounted) {
-          setProfile(currentUser);
+          // Merge current profile with new session data to prevent data loss
+          setProfile(prev => ({
+            ...prev, // Keep existing fields (like bio/location) if missing in refresh
+            ...currentUser, // Overwrite with fresh auth data
+            // Ensure critical fields exist
+            bio: currentUser.bio || prev?.bio || "",
+            location: currentUser.location || prev?.location || "",
+          } as UserProfile));
+
           setLoadingProfile(false);
         }
         return;
       }
 
-      // If profile present in Redux cache, use it
+      // 3. Not me? Check Redux "profiles" cache
       if (profiles && profiles[username]) {
         if (mounted) {
           setProfile(profiles[username]);
@@ -101,14 +129,15 @@ export default function UserProfilePage() {
         return;
       }
 
-      // Otherwise fetch from server
+      // 4. Not in cache? Fetch from API
       try {
         if (mounted) setLoadingProfile(true);
         const res = await fetch(`/api/users/${encodeURIComponent(username)}`);
+
         if (res.ok) {
           const data = await res.json();
-          // Expect { user: { id, username, name, email, avatar, bio, location } }
           const user = data.user as ApiUser | null;
+
           if (mounted && user) {
             const userProfile: UserProfile = {
               id: user.id,
@@ -118,33 +147,27 @@ export default function UserProfilePage() {
               avatar: user.avatar ?? user.avatarUrl ?? null,
               bio: user.bio,
               location: user.location,
+              // Map dates safely
+              birthday: user.birthday,
+              anniversary: user.anniversary,
             };
+
             setProfile(userProfile);
-            setLoadingProfile(false);
-            // Optionally populate Redux profiles map so other pages can reuse:
-            dispatch(
-              updateProfile({
-                username: user.username,
-                changes: userProfile,
-              })
-            );
-          } else if (mounted) {
-            setProfile(null);
-            setLoadingProfile(false);
+
+            // Cache it in Redux for next time
+            dispatch(updateProfile({
+              username: user.username,
+              changes: userProfile
+            }));
           }
         } else {
-          // not found or error
-          if (mounted) {
-            setProfile(null);
-            setLoadingProfile(false);
-          }
+          // Handle 404 silently or set null
+          if (mounted) setProfile(null);
         }
       } catch (err) {
         console.error("Error fetching profile:", err);
-        if (mounted) {
-          setProfile(null);
-          setLoadingProfile(false);
-        }
+      } finally {
+        if (mounted) setLoadingProfile(false);
       }
     }
 
@@ -223,11 +246,18 @@ export default function UserProfilePage() {
   const [bio, setBio] = React.useState("");
   const [avatar, setAvatar] = React.useState<string | null | undefined>(undefined);
 
+
+  // Add state for birthday and anniversary
+  const [birthday, setBirthday] = React.useState<string | null>(null);
+  const [anniversary, setAnniversary] = React.useState<string | null>(null);
+
   // sync name/bio when profile changes
   React.useEffect(() => {
     if (profile) {
       setName(profile.name || "");
       setBio(profile.bio || "");
+      setBirthday(profile.birthday || null);
+      setAnniversary(profile.anniversary || null);
     }
   }, [profile]);
 
@@ -332,7 +362,10 @@ export default function UserProfilePage() {
     setName(profile.name || "");
     setBio(profile.bio || "");
     setAvatar(undefined);
+    setBirthday(profile.birthday || null);
+    setAnniversary(profile.anniversary || null);
     setEditProfileOpen(true);
+
   };
 
   // 🔹 Save profile (patch user in backend + update Redux)
@@ -341,6 +374,8 @@ export default function UserProfilePage() {
     bio?: string;
     avatar?: string | null;
     location?: string;
+    birthday?: string | null;
+    anniversary?: string | null;
   }) => {
     try {
       const res = await fetch("/api/auth/me", {
@@ -354,6 +389,8 @@ export default function UserProfilePage() {
           bio: changes.bio,
           location: changes.location,
           avatarUrl: changes.avatar ?? undefined,
+          birthday: changes.birthday,
+          anniversary: changes.anniversary,
         }),
       });
 
@@ -465,6 +502,15 @@ export default function UserProfilePage() {
       console.error("Error replying to comment:", error);
     }
   };
+  const formatDate = (dateString?: string | null) => {
+  if (!dateString) return null;
+  return new Date(dateString).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
 
   // ---- render -----------------------------------------------------
 
@@ -486,99 +532,179 @@ export default function UserProfilePage() {
       </Box>
     );
   }
+  
+const formattedBirthday = formatDate(profile.birthday);
+const formattedAnniversary = formatDate(profile.anniversary);
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1100, mx: "auto" }}>
+  <Box sx={{ p: 3, maxWidth: 1100, mx: "auto" }}>
+    <Paper
+      elevation={0}
+      sx={{
+        p: 3,
+        mb: 3,
+        borderRadius: 4,
+        background: (theme) => alpha(theme.palette.background.paper, 0.8),
+        backdropFilter: "blur(10px)",
+        border: "1px solid",
+        borderColor: "divider",
+      }}
+    >
       <Box
         sx={{
           display: "grid",
           gridTemplateColumns: { xs: "1fr", sm: "160px 1fr" },
           gap: 3,
-          alignItems: "center",
-          mb: 3,
+          alignItems: "start", // Changed to start for better text alignment
         }}
       >
+        {/* Avatar Column */}
         <Box sx={{ display: "grid", placeItems: "center" }}>
           <Avatar
             src={profile.avatar || undefined}
             alt={profile.name}
             sx={{
-              // 👇 Responsive size
-              width: { xs: 100, sm: 140 },
-              height: { xs: 100, sm: 140 }
+              width: { xs: 120, sm: 160 },
+              height: { xs: 120, sm: 160 },
+              border: "4px solid",
+              borderColor: "background.paper",
+              boxShadow: 3,
             }}
-          />
+          >
+            {profile.name?.[0]}
+          </Avatar>
         </Box>
 
+        {/* Info Column */}
         <Box>
           <Stack
             direction={{ xs: "column", sm: "row" }}
             spacing={2}
-            alignItems={{ xs: "flex-start", sm: "center" }}
-            sx={{ mb: 1 }}
+            alignItems={{ xs: "center", sm: "center" }} // Center on mobile, left on desktop
+            justifyContent="space-between"
+            sx={{ mb: 1, textAlign: { xs: "center", sm: "left" } }}
           >
-            <Typography variant="h5" sx={{ fontWeight: 600 }}>
-              @{profile.username}
-            </Typography>
+            <Box>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
+                {profile.name}
+              </Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
+                @{profile.username}
+              </Typography>
+            </Box>
 
-            {isOwner ? (
-              <Stack direction="row" spacing={1}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={openEditProfile}
-                  sx={{ width: { xs: "100%", sm: "auto" } }}
-                >
-                  Edit Profile
-                </Button>
-              </Stack>
-            ) : (
-              <Stack direction="row" spacing={1}>
-                <Button variant="outlined" size="small">
-                  Message
-                </Button>
-              </Stack>
+            {isOwner && (
+              <Button
+                variant="outlined"
+                onClick={openEditProfile}
+                sx={{ borderRadius: 20, textTransform: "none", fontWeight: 600 }}
+              >
+                Edit Profile
+              </Button>
             )}
           </Stack>
 
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            {profile.name}
-          </Typography>
-          {profile.location && (
-            <Typography variant="body2" color="text.secondary">
-              {profile.location}
-            </Typography>
-          )}
+          {/* 📝 Bio Section */}
           {profile.bio && (
-            <Typography variant="body2" sx={{ mt: 1 }}>
+            <Typography 
+              variant="body1" 
+              sx={{ 
+                mb: 2, 
+                whiteSpace: "pre-wrap", 
+                textAlign: { xs: "center", sm: "left" },
+                color: "text.primary"
+              }}
+            >
               {profile.bio}
             </Typography>
           )}
+
+          {/* 📅 Details Grid (Location, Bday, Anniversary) */}
+          <Stack
+            direction="row"
+            spacing={2}
+            flexWrap="wrap"
+            justifyContent={{ xs: "center", sm: "flex-start" }}
+            sx={{ mt: 2, gap: 2 }} // gap handles wrapping spacing better
+          >
+            {/* Location */}
+            {profile.location && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, color: "text.secondary" }}>
+                <Typography variant="body2">📍 {profile.location}</Typography>
+              </Box>
+            )}
+
+            {/* Birthday */}
+            {formattedBirthday && (
+              <Box 
+                sx={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: 1, 
+                  color: "text.secondary",
+                  bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: 2
+                }}
+              >
+                <Cake sx={{ fontSize: 18, color: "primary.main" }} />
+                <Typography variant="body2" fontWeight={500}>
+                  {formattedBirthday}
+                </Typography>
+              </Box>
+            )}
+
+            {/* Anniversary */}
+            {formattedAnniversary && (
+              <Box 
+                sx={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: 1, 
+                  color: "text.secondary",
+                  bgcolor: (theme) => alpha(theme.palette.secondary.main, 0.08),
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: 2
+                }}
+              >
+                <Favorite sx={{ fontSize: 18, color: "secondary.main" }} />
+                <Typography variant="body2" fontWeight={500}>
+                  {formattedAnniversary}
+                </Typography>
+              </Box>
+            )}
+          </Stack>
         </Box>
       </Box>
+    </Paper>
 
-      {/* Posts Tab */}
-      <Stack spacing={2}>
-        {userPosts.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            No posts yet.
-          </Typography>
-        ) : (
-          userPosts.map((post: ReduxPost) => (
-            <React.Fragment key={post.id}>
-              <PostCard
-                currentUserId={currentUser?.id ?? ""}
-                post={post}
-                currentUserName={currentUserName}
-                onLike={onLike}
-                onCommentClick={onCommentClick}
-                onEdit={startEditFor}
-                onDelete={askDeleteFor}
-                onShare={onShare}
-                canEdit={isOwner}
-                commentsOpen={activeCommentPost === post.id}
-                commentSection={
-                  <CommentBox
+    {/* Posts Tab / Content */}
+    <Stack spacing={2}>
+      {/* ... existing posts map ... */}
+      {userPosts.length === 0 ? (
+        <Typography variant="body2" color="text.secondary" textAlign="center" py={4}>
+          No posts yet.
+        </Typography>
+      ) : (
+        userPosts.map((post: ReduxPost) => (
+           <React.Fragment key={post.id}>
+             <PostCard 
+               // ... keep your existing props ...
+               currentUserId={currentUser?.id ?? ""}
+               post={post}
+               currentUserName={currentUserName}
+               onLike={onLike}
+               onCommentClick={onCommentClick}
+               onEdit={startEditFor}
+               onDelete={askDeleteFor}
+               onShare={onShare}
+               canEdit={isOwner}
+               commentsOpen={activeCommentPost === post.id}
+               commentSection={
+                 // ... keep existing comment box logic ...
+                 <CommentBox
                     openForPostId={activeCommentPost}
                     postId={post.id}
                     comments={post.comments}
@@ -591,13 +717,13 @@ export default function UserProfilePage() {
                     onEditComment={handleEditComment}
                     onDeleteComment={handleDeleteComment}
                     onReplyComment={handleReplyComment}
-                  />
-                }
-              />
-            </React.Fragment>
-          ))
-        )}
-      </Stack>
+                 />
+               }
+             />
+           </React.Fragment>
+        ))
+      )}
+    </Stack>
 
       {/* Dialogs */}
       <ShareDialog
@@ -640,6 +766,10 @@ export default function UserProfilePage() {
         avatar={avatar}
         setAvatar={setAvatar}
         currentAvatar={profile.avatar}
+        birthday={birthday}
+        setBirthday={setBirthday}
+        anniversary={anniversary}
+        setAnniversary={setAnniversary}
       />
     </Box>
   );

@@ -618,6 +618,7 @@ model Notification {
 enum NotificationType {
   NEW_POST
   NEW_COMMENT
+  NEW_ALBUM
   NEW_REACTION
   EVENT_REMINDER
   EVENT_INVITATION

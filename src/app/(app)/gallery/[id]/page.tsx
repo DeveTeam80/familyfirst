@@ -2,6 +2,10 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+// 👇 Redux Imports
+import { useSelector } from "react-redux";
+import { selectCurrentUser, selectIsAdmin } from "@/store/userSlice";
+
 import {
   Box,
   Typography,
@@ -54,14 +58,16 @@ import {
 import Image from "next/image";
 import BulkUploadDialog from "@/components/gallery/BulkUploadDialog";
 
-// ✅ Define proper type for photo items from API
+// ✅ Updated Interface to include IDs for permissions
 interface PhotoItem {
   photo: {
     id: string;
     url: string;
     caption?: string | null;
     tags?: string[];
+    uploadedBy: string; // 👈 Needed for permission check
     uploader?: {
+      id: string;
       name: string | null;
       username: string | null;
     };
@@ -77,7 +83,9 @@ interface AlbumImage {
   description: string | null;
   tags: string[];
   createdAt: string;
+  uploadedBy: string; // 👈 Mapped from API
   user: {
+    id: string;
     name: string | null;
     username: string | null;
   };
@@ -91,6 +99,7 @@ interface AlbumDetails {
   occasion: string | null;
   date: string | null;
   tags: string[];
+  createdBy: string; // 👈 Needed for permission check
   creator: {
     name: string | null;
     username: string | null;
@@ -104,6 +113,10 @@ export default function AlbumDetailPage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isTablet = useMediaQuery(theme.breakpoints.down("md"));
+
+  // 🔒 Redux State
+  const currentUser = useSelector(selectCurrentUser);
+  const isAdmin = useSelector(selectIsAdmin);
 
   const [album, setAlbum] = useState<AlbumDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,12 +138,12 @@ export default function AlbumDetailPage() {
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [snackbarMsg, setSnackbarMsg] = useState<string | null>(null);
 
-  // ✅ Use useCallback to prevent dependency warnings
   const fetchAlbum = useCallback(async () => {
     try {
       const response = await fetch(`/api/albums/${params.id}`);
       if (response.ok) {
         const data = await response.json();
+        
         const formattedAlbum: AlbumDetails = {
           id: data.id,
           title: data.title,
@@ -139,15 +152,17 @@ export default function AlbumDetailPage() {
           occasion: null,
           date: data.calendarEvent?.startTime || data.createdAt,
           tags: data.tags || [],
+          createdBy: data.createdBy, // 👈 Store creator ID
           creator: data.creator,
-          images: (data.photos || []).map((item: PhotoItem) => ({ // ✅ Proper typing instead of any
+          images: (data.photos || []).map((item: PhotoItem) => ({
             id: item.photo.id,
             url: item.photo.url,
             title: item.caption,
             description: item.photo.caption,
             tags: item.photo.tags || [],
             createdAt: item.addedAt,
-            user: item.photo.uploader || { name: "Unknown", username: "unknown" },
+            uploadedBy: item.photo.uploader?.id || item.photo.uploadedBy || "", // 👈 Store uploader ID
+            user: item.photo.uploader || { id: "", name: "Unknown", username: "unknown" },
           })),
         };
         setAlbum(formattedAlbum);
@@ -164,14 +179,13 @@ export default function AlbumDetailPage() {
 
   useEffect(() => {
     fetchAlbum();
-  }, [fetchAlbum]); // ✅ Now includes fetchAlbum
+  }, [fetchAlbum]);
 
   // ⭐ Get Unique Uploaders with Photo Counts
   const uploaderStats = useMemo(() => {
     if (!album) return [];
     const stats = new Map<string, { name: string; count: number }>();
     
-    // ✅ Removed any type - TypeScript infers from album.images
     album.images.forEach((img) => {
       const name = img.user.name || img.user.username || "Unknown";
       if (stats.has(name)) {
@@ -188,7 +202,6 @@ export default function AlbumDetailPage() {
   const filteredImages = useMemo(() => {
     if (!album) return [];
 
-    // ✅ Changed let to const
     const result = album.images.filter((img) => {
       // Search filter
       const searchLower = searchQuery.toLowerCase();
@@ -228,14 +241,17 @@ export default function AlbumDetailPage() {
 
   const handleDeleteImage = async () => {
     if (!selectedImageId || !album) return;
+    
+    // We don't need a confirm here if the logic is safe, but it's good UX
     if (!confirm("Remove this photo from the album?")) return;
 
     const originalImages = [...album.images];
     const newImages = album.images.filter((img) => img.id !== selectedImageId);
-    setAlbum({ ...album, images: newImages });
+    setAlbum({ ...album, images: newImages }); // Optimistic Update
     handleCloseMenu();
 
     try {
+      // Calls the Smart Delete API
       const response = await fetch(`/api/albums/${album.id}/images/${selectedImageId}`, {
         method: "DELETE",
       });
@@ -243,7 +259,7 @@ export default function AlbumDetailPage() {
       setSnackbarMsg("Photo removed from album");
     } catch (error) {
       console.error("Delete failed", error);
-      setAlbum({ ...album, images: originalImages });
+      setAlbum({ ...album, images: originalImages }); // Revert
       setSnackbarMsg("Failed to remove photo");
     }
   };
@@ -316,9 +332,24 @@ export default function AlbumDetailPage() {
     setSelectedUploader(null);
   };
 
+  // 👇 Permission Check Helpers
+  const canManageAlbum = album ? (isAdmin || album.createdBy === currentUser?.id) : false;
+  
+  const getSelectedPhoto = () => {
+    if (lightboxOpen) return filteredImages[lightboxIndex];
+    if (selectedImageId) return album?.images.find(i => i.id === selectedImageId);
+    return null;
+  };
+
+  const selectedPhoto = getSelectedPhoto();
+  const canDeleteCurrentPhoto = selectedPhoto ? (
+    isAdmin || 
+    album?.createdBy === currentUser?.id || 
+    selectedPhoto.uploadedBy === currentUser?.id
+  ) : false;
+
   const hasActiveFilters = searchQuery !== "" || selectedUploader !== null;
 
-  // ✅ Fixed dependencies
   useEffect(() => {
     if (!lightboxOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -594,9 +625,6 @@ export default function AlbumDetailPage() {
               <Typography variant="h6" color="text.secondary" gutterBottom>
                 No photos match your filters
               </Typography>
-              <Typography variant="body2" color="text.secondary" mb={2}>
-                Try adjusting your search or filters
-              </Typography>
               <Button variant="outlined" onClick={handleClearFilters} startIcon={<CloseIcon />}>
                 Clear All Filters
               </Button>
@@ -732,25 +760,35 @@ export default function AlbumDetailPage() {
           sx: { minWidth: 200 },
         }}
       >
-        <MenuItem onClick={handleSetCover}>
-          <ListItemIcon>
-            <PhotoAlbum fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Set as Album Cover</ListItemText>
-        </MenuItem>
+        {/* Set Cover: Only Admin or Owner */}
+        {canManageAlbum && (
+          <MenuItem onClick={handleSetCover}>
+            <ListItemIcon>
+              <PhotoAlbum fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Set as Album Cover</ListItemText>
+          </MenuItem>
+        )}
+        
+        {/* Copy Link: Everyone */}
         <MenuItem onClick={handleCopyLink}>
           <ListItemIcon>
             <ContentCopy fontSize="small" />
           </ListItemIcon>
           <ListItemText>Copy Link</ListItemText>
         </MenuItem>
+        
         <Divider />
-        <MenuItem onClick={handleDeleteImage} sx={{ color: "error.main" }}>
-          <ListItemIcon>
-            <Delete fontSize="small" color="error" />
-          </ListItemIcon>
-          <ListItemText>Remove Photo</ListItemText>
-        </MenuItem>
+        
+        {/* Delete: Admin, Owner, or Uploader */}
+        {canDeleteCurrentPhoto && (
+          <MenuItem onClick={handleDeleteImage} sx={{ color: "error.main" }}>
+            <ListItemIcon>
+              <Delete fontSize="small" color="error" />
+            </ListItemIcon>
+            <ListItemText>Remove Photo</ListItemText>
+          </MenuItem>
+        )}
       </Menu>
 
       {/* Lightbox Dialog */}

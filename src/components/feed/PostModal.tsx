@@ -9,20 +9,19 @@ import {
   IconButton,
   useTheme,
   alpha,
-  
   useMediaQuery,
   Slide,
   Fade,
 } from "@mui/material";
 import { Close as CloseIcon } from "@mui/icons-material";
 import { TransitionProps } from "@mui/material/transitions";
-import PostCard, { PostCardData } from "./PostCard"; // Removed unused 'Comment as PostComment'
+import PostCard, { PostCardData } from "./PostCard";
 import CommentBox from "./CommentBox";
 
 // Slide up transition for mobile
 const SlideTransition = React.forwardRef(function Transition(
   props: TransitionProps & {
-    children: React.ReactElement; // Removed <any, any> to fix ESLint error
+    children: React.ReactElement;
   },
   ref: React.Ref<unknown>
 ) {
@@ -36,6 +35,7 @@ interface PostModalProps {
   currentUserName: string;
   currentUserId: string;
   currentAvatar?: string;
+  isAdmin?: boolean; // ✅ Added
   onLike: (postId: string) => void;
   onEdit: (postId: string) => void;
   onDelete: (postId: string) => void;
@@ -46,6 +46,7 @@ interface PostModalProps {
   onEditComment: (commentId: string, text: string) => void;
   onDeleteComment: (commentId: string) => void;
   onReplyComment: (commentId: string, text: string) => void;
+  onSaveToAlbum?: (photoIds: string[]) => void; // ✅ Added (optional, if you want save in modal)
 }
 
 export default function PostModal({
@@ -55,6 +56,7 @@ export default function PostModal({
   currentUserName,
   currentUserId,
   currentAvatar,
+  isAdmin = false, // ✅ Added with default
   onLike,
   onEdit,
   onDelete,
@@ -65,11 +67,12 @@ export default function PostModal({
   onEditComment,
   onDeleteComment,
   onReplyComment,
+  onSaveToAlbum, // ✅ Added (optional)
 }: PostModalProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [commentText, setCommentText] = React.useState("");
-  const [commentsOpen, setCommentsOpen] = React.useState(true); // Always open in modal
+  const [commentsOpen, setCommentsOpen] = React.useState(true);
 
   if (!post) return null;
 
@@ -156,12 +159,14 @@ export default function PostModal({
             post={post}
             currentUserName={currentUserName}
             currentUserId={currentUserId}
+            isAdmin={isAdmin} // ✅ Pass isAdmin to PostCard
             onLike={onLike}
             onCommentClick={() => setCommentsOpen(!commentsOpen)}
             onEdit={onEdit}
             onDelete={onDelete}
             onShare={onShare}
             onImageClick={onImageClick}
+            onSaveToAlbum={onSaveToAlbum} // ✅ Pass save handler if provided
             canEdit={post.userId === currentUserId}
             commentsOpen={commentsOpen}
             commentSection={
