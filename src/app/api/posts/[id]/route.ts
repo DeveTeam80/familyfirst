@@ -285,34 +285,70 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   try {
-    const { id } = await params;
-
-    // 1. Fetch the post and its photos BEFORE deleting
-    const existingPost = await prisma.post.findUnique({
+    // 1. Fetch Post + Photos + Check Album Usage
+    const post = await prisma.post.findUnique({
       where: { id },
-      include: { photos: true }, // Include photos to get IDs
+      include: { 
+        photos: {
+          include: { 
+            _count: { select: { albums: true } } // 👈 Vital: Check if used in albums
+          }
+        } 
+      }, 
     });
 
-    if (!existingPost) return NextResponse.json({ error: "Post not found" }, { status: 404 });
-    if (existingPost.authorId !== session.user.id) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-    // 2. Delete images from Cloudinary
-    if (existingPost.photos && existingPost.photos.length > 0) {
-      const deletePromises = existingPost.photos.map((photo) => {
-        // Use stored cloudinaryId if valid, otherwise try to ignore
-        if (photo.cloudinaryId && photo.cloudinaryId !== "uploaded" && photo.cloudinaryId !== "manual-update") {
-           return cloudinary.uploader.destroy(photo.cloudinaryId);
-        }
-      });
-      // We don't await this blocking the DB delete, but good to catch errors
-      Promise.allSettled(deletePromises).catch(err => console.error("Cloudinary cleanup error", err));
+    if (!post) {
+      return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
-    // 3. Delete from Database
+    // 2. Permission Check: Author OR Admin/Owner
+    const isAuthor = post.authorId === session.user.id;
+    
+    const membership = await prisma.familyMember.findFirst({
+        where: { userId: session.user.id, familyId: post.familyId },
+        select: { role: true }
+    });
+    const isAdmin = membership?.role === 'ADMIN' || membership?.role === 'OWNER';
+
+    if (!isAuthor && !isAdmin) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // 3. Smart Photo Cleanup
+    if (post.photos && post.photos.length > 0) {
+      for (const photo of post.photos) {
+        if (photo._count.albums > 0) {
+          // ✅ Case A: Photo IS in an album -> SAVE IT
+          // We detach it from the post so it stays in the gallery
+          console.log(`🛡️ Preserving photo ${photo.id} (used in ${photo._count.albums} albums)`);
+          await prisma.photo.update({
+            where: { id: photo.id },
+            data: { postId: null } // Detach from post
+          });
+        } else {
+          // ❌ Case B: Photo is NOT in an album -> DESTROY IT
+          console.log(`🗑️ Deleting photo ${photo.id} (unused)`);
+          
+          // Delete from Cloudinary
+          if (photo.cloudinaryId && !["uploaded", "manual-update"].includes(photo.cloudinaryId)) {
+             await cloudinary.api.delete_resources([photo.cloudinaryId]);
+          }
+          
+          // Delete from Database (Explicitly, to be safe)
+          await prisma.photo.delete({ where: { id: photo.id } });
+        }
+      }
+    }
+
+    // 4. Finally, Delete the Post
     await prisma.post.delete({ where: { id } });
 
     return NextResponse.json({ success: true });

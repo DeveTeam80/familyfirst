@@ -92,16 +92,24 @@ export default function AddToAlbumDialog({ open, onClose, photoIds }: AddToAlbum
             }
 
             const result = await res.json();
-            console.log(`✅ Saved ${result.count} photos to "${album.title}"`);
+            const added = result.count;
+            const requested = result.totalRequested || photoIds.length;
+            const duplicates = requested - added;
 
+            let msg = `Saved to "${album.title}"!`;
+            if (duplicates > 0) {
+                msg = `Added ${added} new photo${added !== 1 ? 's' : ''}. (${duplicates} already existed)`;
+            }
             setSuccess(true);
+            console.log(msg);
+
             setTimeout(() => {
                 setSuccess(false);
                 onClose();
-            }, 1500);
+            }, 2000);
         } catch (err) {
             console.error("Save to album error:", err);
-            setError(err instanceof Error ? err.message : "Failed to save photos to album");
+            setError(err instanceof Error ? err.message : "Failed to save photos");
         } finally {
             setImporting(null);
         }

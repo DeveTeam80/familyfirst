@@ -1,4 +1,3 @@
-// src/app/(app)/layout.tsx
 "use client";
 
 import * as React from "react";
@@ -10,6 +9,7 @@ import { useDispatch, useSelector } from "react-redux";
 // Components & Providers
 import Header from "@/components/Header";
 import Providers from "../providers";
+import SessionRefresher from "@/components/auth/SessionRefresher"; 
 
 // Hooks & Store
 import { useAuthSync } from "@/hooks/useAuthSync";
@@ -160,6 +160,9 @@ function AppLayoutContent({ children }: LayoutProps) {
   // --- Render Header with Notification Handler ---
   return (
     <Header onNotificationClick={handleNotificationClick}>
+      {/* 👇 Add the Session Refresher here */}
+      <SessionRefresher />
+      
       {children}
     </Header>
   );

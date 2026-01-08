@@ -37,10 +37,11 @@ import {
   Lock,
   Group,
   PhotoLibrary,
-
 } from "@mui/icons-material";
 import Image from "next/image";
 import ImageCarousel from "./ImageCarousel";
+import { useRouter } from "next/navigation";
+
 
 /* -----------------------
    Type Definitions
@@ -65,7 +66,7 @@ export type PostCardData = {
   username?: string;
   avatar?: string;
   content?: string;
-  photos?: Array<{ id: string; url: string }>; // ✅ Primary source
+  photos?: Array<{ id: string; url: string }>;
   image?: string | null;
   images?: string[];
   photoIds?: string[];
@@ -90,6 +91,7 @@ type Props = {
   onImageClick?: (index: number) => void;
   currentUserName: string;
   currentUserId: string;
+  isAdmin?: boolean; // ✅ Added: Admin flag
   canEdit?: boolean;
   commentsOpen?: boolean;
   commentSection?: React.ReactNode;
@@ -125,7 +127,6 @@ const DesktopImageGrid = ({
     border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
   };
 
-  // ⭐ PREMIUM: Parallax effect (no transition - handled by parent)
   const getParallaxTransform = (index: number) => ({
     transform: `translateY(${scrollY * (0.02 + index * 0.01)}px)`,
   });
@@ -274,7 +275,6 @@ const DesktopImageGrid = ({
   );
 };
 
-
 /* -----------------------
    💎 Main Component
    ----------------------- */
@@ -287,14 +287,16 @@ export default function PostCard({
   onShare,
   onImageClick,
   currentUserId,
+  isAdmin = false, // ✅ Added: Destructure isAdmin with default
   canEdit = true,
   commentsOpen = false,
   commentSection,
   onSaveToAlbum,
-
 }: Props) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const router = useRouter();
+
 
   // State
   const [menuAnchor, setMenuAnchor] = React.useState<null | HTMLElement>(null);
@@ -303,15 +305,17 @@ export default function PostCard({
   const [heartParticles, setHeartParticles] = React.useState<number[]>([]);
   const [scrollY, setScrollY] = React.useState(0);
   const [showDoubleTapHeart, setShowDoubleTapHeart] = React.useState(false);
-
-  // ⭐ PREMIUM: Mobile double-tap
   const [lastTap, setLastTap] = React.useState(0);
 
   // Refs
   const isLiked = post.likedBy.includes(currentUserId);
   const isOwnPost = post.userId === currentUserId;
 
-  // In PostCard.tsx, replace the postImages useMemo:
+  // ✅ Permission checks
+  // Allow Admin OR the Post Owner to save
+  const canDeletePost = isAdmin || isOwnPost; // Admin can delete any post, users can delete own
+  const canEditPost = canEdit && isOwnPost; // Only author can edit
+
   const postImages = React.useMemo(() => {
     if (post.photos && post.photos.length > 0) {
       return post.photos.map(p => p.url);
@@ -327,22 +331,74 @@ export default function PostCard({
 
     return [];
   }, [post.photos, post.images, post.image]);
+  const canSaveToAlbum = (isAdmin || isOwnPost) && postImages.length > 0 && onSaveToAlbum;
 
-  // ⭐ PREMIUM: Parallax scroll effect
+const handleNavigateToProfile = async () => {
+  try {
+    // First, try to get the user's account info to generate proper slug
+    const res = await fetch(`/api/users/${post.userId}`);
+    
+    if (res.ok) {
+      const data = await res.json();
+      const username = data.username || data.name || post.userId;
+      
+      const slug = typeof username === "string"
+        ? encodeURIComponent(
+            username
+              .toString()
+              .trim()
+              .toLowerCase()
+              .replace(/\s+/g, "-")
+              .replace(/[^a-z0-9\-._~]/g, "")
+          )
+        : post.userId;
+      
+      router.push(`/${slug}`);
+    } else {
+      // Fallback: use what we have from post data
+      const username = post.username || post.user || post.userId;
+      const slug = typeof username === "string"
+        ? encodeURIComponent(
+            username
+              .toString()
+              .trim()
+              .toLowerCase()
+              .replace(/\s+/g, "-")
+              .replace(/[^a-z0-9\-._~]/g, "")
+          )
+        : post.userId;
+      
+      router.push(`/${slug}`);
+    }
+  } catch (error) {
+    console.error("Error navigating to profile:", error);
+    // Fallback navigation
+    const username = post.username || post.user || post.userId;
+    const slug = typeof username === "string"
+      ? encodeURIComponent(
+          username
+            .toString()
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, "-")
+            .replace(/[^a-z0-9\-._~]/g, "")
+        )
+      : post.userId;
+    
+    router.push(`/${slug}`);
+  }
+};
   React.useEffect(() => {
-    if (isMobile) return; // Only on desktop
-
+    if (isMobile) return;
     const handleScroll = () => setScrollY(window.scrollY);
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, [isMobile]);
 
-  // ⭐ PREMIUM: Heart burst animation on like
   const handleLikeClick = () => {
     setIsLikeAnimating(true);
     onLike(post.id);
 
-    // Create heart burst effect
     if (!isLiked) {
       setHeartParticles([1, 2, 3, 4, 5, 6]);
       setTimeout(() => setHeartParticles([]), 1000);
@@ -351,11 +407,9 @@ export default function PostCard({
     setTimeout(() => setIsLikeAnimating(false), 600);
   };
 
-  // ⭐ PREMIUM: Double-tap to like (mobile)
   const handleDoubleTap = (e: React.TouchEvent) => {
     if (!isMobile) return;
 
-    // Prevent if tapping buttons
     const target = e.target as HTMLElement;
     if (target.closest('button') || target.closest('a')) return;
 
@@ -364,15 +418,9 @@ export default function PostCard({
 
     if (now - lastTap < DOUBLE_TAP_DELAY && now - lastTap > 0) {
       e.preventDefault();
-
-      // Show big heart animation
       setShowDoubleTapHeart(true);
       setTimeout(() => setShowDoubleTapHeart(false), 1000);
-
-      // Like the post
       handleLikeClick();
-
-      // Haptic feedback
       if (navigator.vibrate) navigator.vibrate(50);
     }
     setLastTap(now);
@@ -405,13 +453,6 @@ export default function PostCard({
   const visibilityConfig = getVisibilityConfig();
   const topLikers = post.likedBy.slice(0, 3);
 
-  console.log('🃏 PostCard received:', {
-    hasPhotos: post.photos?.length || 0,
-    hasImages: post.images?.length || 0,
-    hasImage: !!post.image,
-    photoIds: post.photoIds,
-  });
-
   return (
     <Grow in={true} timeout={400}>
       <Paper
@@ -438,7 +479,6 @@ export default function PostCard({
           }),
         }}
       >
-        {/* ⭐ PREMIUM: Top gradient bar on hover */}
         <Box
           sx={{
             height: 3,
@@ -448,7 +488,6 @@ export default function PostCard({
           }}
         />
 
-        {/* ⭐ PREMIUM: Double-Tap Heart Animation */}
         <Fade in={showDoubleTapHeart}>
           <Box
             sx={{
@@ -460,22 +499,10 @@ export default function PostCard({
               pointerEvents: 'none',
               animation: 'doubleTapHeart 1s ease-out',
               '@keyframes doubleTapHeart': {
-                '0%': {
-                  opacity: 0,
-                  transform: 'translate(-50%, -50%) scale(0.5)',
-                },
-                '15%': {
-                  opacity: 1,
-                  transform: 'translate(-50%, -50%) scale(1.3)',
-                },
-                '30%': {
-                  opacity: 1,
-                  transform: 'translate(-50%, -50%) scale(1.1)',
-                },
-                '100%': {
-                  opacity: 0,
-                  transform: 'translate(-50%, -50%) scale(1.5)',
-                },
+                '0%': { opacity: 0, transform: 'translate(-50%, -50%) scale(0.5)' },
+                '15%': { opacity: 1, transform: 'translate(-50%, -50%) scale(1.3)' },
+                '30%': { opacity: 1, transform: 'translate(-50%, -50%) scale(1.1)' },
+                '100%': { opacity: 0, transform: 'translate(-50%, -50%) scale(1.5)' },
               },
             }}
           >
@@ -492,18 +519,12 @@ export default function PostCard({
         <Box sx={{ p: isMobile ? 2 : 3, pb: 1 }}>
           {/* Header */}
           <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-            <Box
-              display="flex"
-              alignItems="center"
-              gap={1.5}
-            >
-              {/* ⭐ PREMIUM: Avatar with online status ring */}
+            <Box display="flex" alignItems="center" gap={1.5}>
               <Badge
                 overlap="circular"
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 badgeContent={
                   <>
-                    {/* Online status indicator with pulse */}
                     {post.isOnline && (
                       <Box
                         sx={{
@@ -515,17 +536,12 @@ export default function PostCard({
                           boxShadow: `0 0 12px ${alpha(theme.palette.success.main, 0.6)}`,
                           animation: 'pulse 2s infinite',
                           '@keyframes pulse': {
-                            '0%, 100%': {
-                              boxShadow: `0 0 12px ${alpha(theme.palette.success.main, 0.6)}`,
-                            },
-                            '50%': {
-                              boxShadow: `0 0 20px ${alpha(theme.palette.success.main, 0.9)}`,
-                            },
+                            '0%, 100%': { boxShadow: `0 0 12px ${alpha(theme.palette.success.main, 0.6)}` },
+                            '50%': { boxShadow: `0 0 20px ${alpha(theme.palette.success.main, 0.9)}` },
                           },
                         }}
                       />
                     )}
-                    {/* Verified badge for own posts */}
                     {isOwnPost && !post.isOnline && (
                       <VerifiedUser
                         sx={{
@@ -543,6 +559,8 @@ export default function PostCard({
               >
                 <Avatar
                   src={post.avatar}
+                  onClick={handleNavigateToProfile}
+
                   sx={{
                     width: 46,
                     height: 46,
@@ -560,12 +578,14 @@ export default function PostCard({
               </Badge>
 
               <Box>
-                {/* ⭐ PREMIUM: Gradient text for username */}
                 <Typography
                   variant="subtitle1"
+                  onClick={handleNavigateToProfile}
+
                   sx={{
                     fontWeight: 700,
                     lineHeight: 1.2,
+
                     fontSize: '0.95rem',
                     background: theme.palette.mode === 'dark'
                       ? 'linear-gradient(135deg, #D4C5F9 0%, #B794F6 100%)'
@@ -579,7 +599,6 @@ export default function PostCard({
                   {post.user}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.2 }}>
-                  {/* ⭐ PREMIUM: Gradient timestamp */}
                   <Typography
                     variant="caption"
                     sx={{
@@ -621,8 +640,10 @@ export default function PostCard({
                 </Box>
               </Box>
             </Box>
+
+            {/* ✅ Menu button - show if admin or own post */}
             <Stack direction="row" spacing={0.5}>
-              {canEdit && isOwnPost && (
+              {(canSaveToAlbum || canEditPost || canDeletePost) && (
                 <IconButton
                   onClick={(e) => setMenuAnchor(e.currentTarget)}
                   size="small"
@@ -641,7 +662,6 @@ export default function PostCard({
             </Stack>
           </Box>
 
-
           {/* Menu */}
           <Menu
             anchorEl={menuAnchor}
@@ -658,19 +678,19 @@ export default function PostCard({
               }
             }}
           >
-            {/* Conditionally render Save to Album - NO FRAGMENT */}
-            {postImages.length > 0 && onSaveToAlbum && (
+            {/* ✅ Save to Album - Only for Admins */}
+            {canSaveToAlbum && (
               <MenuItem
                 onClick={() => {
                   setMenuAnchor(null);
                   const validPhotoIds = (post.photoIds || []).filter(id => id && id !== '');
 
                   if (validPhotoIds.length === 0) {
-                    alert('⚠️ This post uses the old format and cannot be saved to albums. Only new posts can be saved.');
+                    alert('⚠️ This post uses the old format and cannot be saved to albums.');
                     return;
                   }
 
-                  onSaveToAlbum(validPhotoIds);
+                  onSaveToAlbum!(validPhotoIds);
                 }}
                 sx={{
                   fontSize: '0.9rem',
@@ -685,19 +705,19 @@ export default function PostCard({
               >
                 <PhotoLibrary fontSize="small" sx={{ mr: 1.5, color: 'info.main' }} />
                 Save to Album
-                {post.photoIds && post.photoIds.some(id => !id || id === '') && (
+                {isAdmin && (
                   <Chip
-                    label="Legacy"
+                    label="Admin"
                     size="small"
                     sx={{ ml: 1, height: 18, fontSize: '0.65rem' }}
-                    color="warning"
+                    color="primary"
                   />
                 )}
               </MenuItem>
             )}
 
-            {/* Edit MenuItem */}
-            {canEdit && isOwnPost && (
+            {/* ✅ Edit - Only for author */}
+            {canEditPost && (
               <MenuItem
                 onClick={() => { setMenuAnchor(null); onEdit(post.id); }}
                 sx={{
@@ -716,8 +736,8 @@ export default function PostCard({
               </MenuItem>
             )}
 
-            {/* Delete MenuItem */}
-            {canEdit && isOwnPost && (
+            {/* ✅ Delete - Admin can delete any post, users can delete own */}
+            {canDeletePost && (
               <MenuItem
                 onClick={() => { setMenuAnchor(null); onDelete(post.id); }}
                 sx={{
@@ -734,6 +754,14 @@ export default function PostCard({
               >
                 <Delete fontSize="small" sx={{ mr: 1.5 }} />
                 Delete
+                {isAdmin && !isOwnPost && (
+                  <Chip
+                    label="Admin"
+                    size="small"
+                    sx={{ ml: 1, height: 18, fontSize: '0.65rem' }}
+                    color="error"
+                  />
+                )}
               </MenuItem>
             )}
           </Menu>
@@ -786,7 +814,7 @@ export default function PostCard({
             </Stack>
           )}
 
-          {/* Images - Carousel on mobile, Grid on desktop with parallax */}
+          {/* Images */}
           {postImages.length > 0 && (
             <Box onTouchEnd={handleDoubleTap}>
               {isMobile ? (
@@ -878,7 +906,6 @@ export default function PostCard({
 
           {/* Action Buttons */}
           <Stack direction="row" spacing={1} justifyContent="space-around">
-            {/* ⭐ PREMIUM: Like Button with Heart Burst */}
             <Button
               onClick={handleLikeClick}
               startIcon={isLiked ? <Favorite /> : <FavoriteBorder />}
@@ -903,8 +930,6 @@ export default function PostCard({
               }}
             >
               Like
-
-              {/* Heart particle burst */}
               {heartParticles.map((particle, i) => (
                 <Box
                   key={particle}
@@ -916,12 +941,8 @@ export default function PostCard({
                     animation: `heartBurst${i} 1s ease-out forwards`,
                     pointerEvents: 'none',
                     zIndex: 10,
-
                     [`@keyframes heartBurst${i}`]: {
-                      '0%': {
-                        opacity: 1,
-                        transform: `translate(-50%, -50%) scale(0.5) rotate(0deg)`,
-                      },
+                      '0%': { opacity: 1, transform: `translate(-50%, -50%) scale(0.5) rotate(0deg)` },
                       '50%': {
                         opacity: 1,
                         transform: `translate(
@@ -944,7 +965,6 @@ export default function PostCard({
               ))}
             </Button>
 
-            {/* Comment Button */}
             <Button
               onClick={() => onCommentClick(post.id)}
               startIcon={<CommentIcon />}
@@ -962,14 +982,12 @@ export default function PostCard({
                   bgcolor: alpha(theme.palette.primary.main, 0.15),
                   color: 'primary.main',
                   transform: 'translateY(-2px)',
-                  padding: '5px 32px'
                 },
               }}
             >
               Comment
             </Button>
 
-            {/* Share Button */}
             <Button
               onClick={() => onShare(post.id)}
               startIcon={<ShareIcon />}

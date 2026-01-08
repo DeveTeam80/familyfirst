@@ -1,6 +1,10 @@
 ﻿"use client";
 
 import React, { useRef, useState, useCallback, useEffect } from "react";
+// 👇 Import Redux hooks and selectors
+import { useSelector } from "react-redux";
+import { selectIsAdmin, selectCurrentUser } from "@/store/userSlice";
+
 import {
   Box,
   IconButton,
@@ -15,7 +19,6 @@ import { RxCross2 } from "react-icons/rx";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { useRouter } from "next/navigation";
-import { FamilyRole } from "@prisma/client";
 import {
   TreeSkeleton,
   FamilyTreeChart,
@@ -41,14 +44,14 @@ export default function FamilyTreePage() {
   // Refs
   const chartRef = useRef<FamilyTreeChartHandle>(null);
 
+  // ⭐ OPTIMIZED: Get Auth Data from Redux Instantly
+  const isAdmin = useSelector(selectIsAdmin);
+  const currentUser = useSelector(selectCurrentUser);
+  const loggedInUserId = currentUser?.id || null;
+
   // Tree Data State
   const [treeData, setTreeData] = useState<FamilyTreeNode[]>([]);
   const [treeLoading, setTreeLoading] = useState(true);
-
-  // Auth State
-  const [loggedInUserId, setLoggedInUserId] = useState<string | null>(null);
-  const [role, setRole] = useState<FamilyRole>("VIEWER");
-  const isAdmin = role === "OWNER" || role === "ADMIN";
 
   // Selection States
   const [quickActionNode, setQuickActionNode] = useState<FamilyTreeNode | null>(null);
@@ -65,33 +68,8 @@ export default function FamilyTreePage() {
   const [isAddMode, setIsAddMode] = useState(false);
   const [isAtDefaultView, setIsAtDefaultView] = useState(true);
 
-  // Fetch Auth
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/me", {
-          credentials: "include",
-        });
-        if (!res.ok) return;
-
-        const json = await res.json();
-        setLoggedInUserId(json.user.id);
-        const familyRole = json?.memberships[0].role as FamilyRole | undefined;
-        if (
-          familyRole === "OWNER" ||
-          familyRole === "ADMIN" ||
-          familyRole === "MEMBER" ||
-          familyRole === "VIEWER"
-        ) {
-          setRole(familyRole);
-        }
-      } catch {
-        setRole("VIEWER");
-      }
-    })();
-  }, []);
-
   // Fetch Tree Data
+  // (Helper function to get avatars)
   const fetchUsersMap = async () => {
     const res = await fetch(`/api/users?familyId=${familyId}`, {
       credentials: "include",
@@ -111,7 +89,9 @@ export default function FamilyTreePage() {
   };
 
   const fetchTreeData = useCallback(async () => {
+    // Wait for Redux to populate the user ID before fetching
     if (!loggedInUserId) return;
+    
     try {
       setTreeLoading(true);
 
@@ -168,7 +148,7 @@ export default function FamilyTreePage() {
       const freshNode = treeData.find((n) => n.id === node.id) || node;
       setQuickActionNode(freshNode);
       setInspectorNode(null);
-      setIsAtDefaultView(false); // User has navigated away from default view
+      setIsAtDefaultView(false); 
     },
     [treeData]
   );
@@ -193,7 +173,7 @@ export default function FamilyTreePage() {
       chartRef.current.resetView();
     }
     setIsAddMode(false);
-    setIsAtDefaultView(true); // Back to default view
+    setIsAtDefaultView(true);
   };
 
   const handleExitEditMode = () => {
@@ -365,14 +345,7 @@ export default function FamilyTreePage() {
         )}
 
         {/* Back Button */}
-        <Box
-          sx={{
-            position: "absolute",
-            top: 20,
-            left: 20,
-            zIndex: 100,
-          }}
-        >
+        <Box sx={{ position: "absolute", top: 20, left: 20, zIndex: 100 }}>
           <Tooltip title={isBackButtonDisabled ? "" : "Go Back"}>
             <span>
               <IconButton
@@ -402,14 +375,7 @@ export default function FamilyTreePage() {
 
         {/* Exit Edit Mode Button */}
         <Fade in={isAddMode}>
-          <Box
-            sx={{
-              position: "absolute",
-              top: 20,
-              right: 20,
-              zIndex: 100,
-            }}
-          >
+          <Box sx={{ position: "absolute", top: 20, right: 20, zIndex: 100 }}>
             <Tooltip title="Cancel Adding">
               <IconButton
                 onClick={handleExitEditMode}

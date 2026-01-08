@@ -3,7 +3,9 @@
 
 import { useDispatch, useSelector } from "react-redux";
 import { addPost, setPosts, appendPosts, likePost, Post as StorePost, addCommentAsync, addCommentOptimistic } from "@/store/postSlice";
-import { RootState, AppDispatch } from "@/store";
+import { AppDispatch, RootState } from "@/store";
+import { selectCurrentUser, selectIsAdmin } from "@/store/userSlice"; // 👈 Import Selectors
+
 import * as React from "react";
 import {
   Container,
@@ -116,7 +118,7 @@ function mapPostToCardData(post: Post): PostCardData {
     content: post.content,
     image: post.image ?? undefined,
     images: post.images,
-    photos: post.photos, 
+    photos: post.photos,
     photoIds: post.photos?.map((p: { id: string; url: string }) => p.id) || [],
     tags: post.tags || [],
     date: post.date || post.createdAt || new Date().toISOString(),
@@ -126,6 +128,7 @@ function mapPostToCardData(post: Post): PostCardData {
     eventDate: post.eventDate,
     createdAt: post.createdAt,
     visibility: post.visibility || "FAMILY",
+    isOnline: post.isOnline,
   };
 }
 
@@ -137,9 +140,10 @@ export default function Feed() {
   const searchParams = useSearchParams();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  const currentUser = useSelector((s: RootState) => s.user.currentUser);
+  // ⭐ REDUX: Using Selectors for optimized updates
+  const currentUser = useSelector(selectCurrentUser);
+  const isAdmin = useSelector(selectIsAdmin); // 👈 Gets 'true' if ADMIN or OWNER
   const postsFromStore = useSelector((s: RootState) => s.posts.items);
-
   // Normalize posts state to always be an array.
   const postsArr = React.useMemo<Post[]>(() => {
     if (!postsFromStore) return [];
@@ -204,13 +208,14 @@ export default function Feed() {
   const currentUserName = currentUser?.name || "User";
   const currentUserId = currentUser?.id || "";
   const currentAvatar = currentUser?.avatar || undefined;
-  // Add state variables (around line 100, with other state)
+
+  // Add state variables
   const [saveToAlbumOpen, setSaveToAlbumOpen] = React.useState(false);
   const [photosToSave, setPhotosToSave] = React.useState<string[]>([]);
 
-
-  //event
+  // Event
   const [selectedEvent, setSelectedEvent] = React.useState<{ id: string; title: string } | null>(null);
+
   /* ---------------- Data loading + handlers ---------------- */
 
   const loadInitialPosts = React.useCallback(async () => {
@@ -265,7 +270,7 @@ export default function Feed() {
       return;
     }
 
-    console.log("📸 Saving photos to album:", photoIds);
+    console.log(" Saving photos to album:", photoIds);
     setPhotosToSave(photoIds);
     setSaveToAlbumOpen(true);
   };
@@ -275,14 +280,10 @@ export default function Feed() {
     const post = postsArr.find(p => p.id === postId);
 
     if (post) {
-      // Post found in feed - check if it's visible on screen
       const postElement = postRefs.current.get(postId);
 
       if (postElement) {
-        // Scroll to the post smoothly
         postElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-        // Highlight the post briefly
         postElement.style.transition = 'all 0.3s';
         postElement.style.transform = 'scale(1.02)';
         postElement.style.boxShadow = `0 0 0 3px ${alpha(theme.palette.primary.main, 0.3)}`;
@@ -292,11 +293,9 @@ export default function Feed() {
           postElement.style.boxShadow = '';
         }, 2000);
       } else {
-        // Post exists but not rendered - open modal
         setModalPostId(postId);
       }
     } else {
-      // Post not found in current feed - open modal (will try to load)
       setModalPostId(postId);
     }
   }, [postsArr, theme.palette.primary.main]);
@@ -307,17 +306,15 @@ export default function Feed() {
     const postIdFromUrl = searchParams.get('postId');
     if (postIdFromUrl && !isLoadingPosts) {
       handleNotificationPostOpen(postIdFromUrl);
-      // Clean up URL
       router.replace('/feed', { scroll: false });
     }
   }, [searchParams, isLoadingPosts, handleNotificationPostOpen, router]);
 
   React.useEffect(() => {
     const unsubscribe = notificationEmitter.subscribe((postId: string) => {
-      console.log("🎯 Feed received notification for post:", postId);
+      console.log(" Feed received notification for post:", postId);
       handleNotificationPostOpen(postId);
     });
-    // RIGHT: Wrap it in a proper cleanup function
     return () => {
       unsubscribe();
     };
@@ -325,8 +322,7 @@ export default function Feed() {
 
   React.useEffect(() => {
     loadInitialPosts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Intersection Observer for infinite scroll
   React.useEffect(() => {
@@ -444,7 +440,11 @@ export default function Feed() {
 
   const startEditFor = (postId: string) => {
     const post = postsArr.find((x) => x.id === postId);
-    if (!post || post.userId !== currentUserId) return;
+    if (!post) return;
+    // Note: Admin check is handled in PostCard via props, but for starting edit:
+    // Only author can EDIT text. Admin can DELETE. 
+    // So logic remains: must be user's own post to edit content.
+    if (post.userId !== currentUserId) return;
 
     setEditTargetId(postId);
     setEditContent(post.content ?? "");
@@ -519,7 +519,10 @@ export default function Feed() {
 
   const askDeleteFor = (postId: string) => {
     const post = postsArr.find((p) => p.id === postId);
-    if (!post || post.userId !== currentUserId) return;
+    if (!post) return;
+
+    // Logic: Admin can delete ANY post. User can delete OWN post.
+    if (!isAdmin && post.userId !== currentUserId) return;
 
     setDeleteTargetId(postId);
     setDeleteOpen(true);
@@ -893,6 +896,7 @@ export default function Feed() {
                         post={postCardData}
                         currentUserName={currentUserName}
                         currentUserId={currentUserId}
+                        isAdmin={isAdmin} // 👈 Added: Pass admin status to Card
                         onLike={handleLike}
                         onCommentClick={handleCommentClick}
                         onEdit={startEditFor}
@@ -983,6 +987,7 @@ export default function Feed() {
         currentUserName={currentUserName}
         currentUserId={currentUserId}
         currentAvatar={currentAvatar}
+        isAdmin={isAdmin} // 👈 Added: Pass to modal too if it supports it
         onLike={handleLike}
         onEdit={startEditFor}
         onDelete={askDeleteFor}
