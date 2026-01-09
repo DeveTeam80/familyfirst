@@ -1,168 +1,168 @@
-// prisma/seed.ts
-import { PrismaClient } from "@prisma/client";
-import { hashPassword, generateInviteCode } from "../src/lib/auth"; 
-import { familyTreeData } from "../src/data/familyTree";
+import { PrismaClient, RelationshipType } from "@prisma/client";
+import * as fs from 'fs';
+import * as path from 'path';
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
+const FAMILY_NAME = "Isaac-Gomez-Hale Family";
+
+// ------------------------------------------
+// HELPER: Hash Password (Inline to avoid import errors)
+// ------------------------------------------
+async function hashPassword(password: string) {
+  const saltRounds = 10;
+  return await bcrypt.hash(password, saltRounds);
+}
+
+// ------------------------------------------
+// HELPER: Split Name
+// ------------------------------------------
+const splitName = (fullName: string) => {
+  const parts = fullName.trim().split(" ");
+  return {
+    firstName: parts[0] || "",
+    lastName: parts.slice(1).join(" ") || ""
+  };
+};
 
 async function main() {
-  console.log("🌱 Starting database seed...\n");
+  console.log("🌱 Starting JSON Database Seed...\n");
 
-// ============================================
-  // 1. CREATE ADMIN USER
   // ============================================
-  console.log("👤 Creating admin user...");
+  // 1. SETUP ADMIN USER (Securely Hashed)
+  // ============================================
+  const adminEmail = "maxbrutin@gmail.com";
+  const plainTextPassword = "admin123"; 
+
+  console.log(`👤 Setting up admin: ${adminEmail}...`);
   
+  // Hash the password right here
+  const securePasswordHash = await hashPassword(plainTextPassword);
+
   const adminUser = await prisma.user.upsert({
-    // FIX: Look for the ID, not the email
-    where: { id: "demo-admin" }, 
-    
-    // Update ensuring the email is correct/fixed if it exists
+    where: { email: adminEmail },
     update: {
-      email: "admin@firstfamily.com", // FIXED: firstfamily (not firstfamily)
-      passwordHash: await hashPassword("admin123"),
-      emailVerified: new Date(),
+      passwordHash: securePasswordHash, // Update password if user exists
     },
-    
     create: {
-      id: "demo-admin",
-      email: "admin@firstfamily.com", // FIXED: firstfamily
-      name: "Admin User",
-      passwordHash: await hashPassword("admin123"),
+      email: adminEmail,
+      name: "Keith Issac",
+      passwordHash: securePasswordHash,
       emailVerified: new Date(),
     },
   });
 
-  // 2. CREATE FAMILY
-  console.log("👨‍👩‍👧‍👦 Creating family...");
-
-  const family = await prisma.family.upsert({
-    where: { id: "demo-family" },
-    update: {},
-    create: {
-      id: "demo-family",
-      name: "Isaac Family",
-      description: "A wonderful family tree spanning multiple generations",
-      inviteCode: generateInviteCode(),
+  // ============================================
+  // 2. SETUP FAMILY
+  // ============================================
+  const family = await prisma.family.create({
+    data: {
+      name: FAMILY_NAME,
       createdBy: adminUser.id,
-    },
-  });
-
-  console.log(`✅ Family created: ${family.name}`);
-
-  // 3. ADD ADMIN TO FAMILY
-  await prisma.familyMember.upsert({
-    where: {
-      userId_familyId: { userId: adminUser.id, familyId: family.id },
-    },
-    update: {},
-    create: {
-      userId: adminUser.id,
-      familyId: family.id,
-      role: "ADMIN",
-      status: "ACTIVE",
-    },
-  });
-
-  // 4. CREATE NODES
-  console.log("🌳 Creating family tree nodes...");
-  let createdCount = 0;
-
-  for (const node of familyTreeData) {
-    try {
-      // Handle date parsing safely
-      let birthDate = null;
-      if (node.data.birthday) {
-         const bday = node.data.birthday;
-         // if format is just "1980", add month/day. If "1980-05-01", use as is.
-         birthDate = new Date(bday.length === 4 ? `${bday}-01-01` : bday);
-      }
-
-      await prisma.familyTreeNode.upsert({
-        where: { id: node.id },
-        update: {},
-        create: {
-          id: node.id,
-          familyId: family.id,
-          firstName: node.data["first name"],
-          lastName: node.data["last name"] || null,
-          birthDate: birthDate,
-          gender: node.data.gender || null,
-          photoUrl: node.data.avatar || null,
-          createdBy: adminUser.id,
-        },
-      });
-      createdCount++;
-    } catch (error) {
-      console.error(`Skipped node ${node.id}:`, error);
+      inviteCode: `IMPORT_${Date.now()}` // Simple unique code
     }
-  }
-  console.log(`✅ Created ${createdCount} nodes`);
+  });
 
-  // 5. RELATIONSHIPS
-  console.log("🔗 Creating relationships...");
+  // ============================================
+  // 3. READ JSON DATA
+  // ============================================
+  const jsonPath = path.join(__dirname, 'familyData.json');
+  console.log(`📂 Reading data from ${jsonPath}...`);
   
-  for (const node of familyTreeData) {
-    // A. Spouses
-    if (node.rels?.spouses) {
-      for (const spouseId of node.rels.spouses) {
-        // Check existence first to avoid foreign key errors
-        const p1 = await prisma.familyTreeNode.findUnique({ where: { id: node.id }});
-        const p2 = await prisma.familyTreeNode.findUnique({ where: { id: spouseId }});
+  if (!fs.existsSync(jsonPath)) {
+      throw new Error(`JSON file not found at ${jsonPath}. Please create familyData.json inside the prisma folder.`);
+  }
 
-        if (p1 && p2) {
-          // We use upsert to avoid crashing if we run seed twice
-          await prisma.familyRelationship.upsert({
-            where: {
-              person1Id_person2Id_relationshipType: {
-                person1Id: node.id,
-                person2Id: spouseId,
-                relationshipType: "SPOUSE",
-              }
-            },
-            update: {},
-            create: {
-              person1Id: node.id,
-              person2Id: spouseId,
-              relationshipType: "SPOUSE",
-            },
+  const rawData = fs.readFileSync(jsonPath, 'utf-8');
+  const familyUnits = JSON.parse(rawData);
+
+  // ============================================
+  // 4. CREATE PEOPLE NODES
+  // ============================================
+  console.log("🌳 Creating people...");
+  const nameToIdMap = new Map<string, string>();
+
+  const ensurePerson = async (fullName: string) => {
+    const cleanName = fullName.trim();
+    if (!cleanName) return null;
+    
+    // Check memory map first
+    if (nameToIdMap.has(cleanName)) return nameToIdMap.get(cleanName);
+
+    const { firstName, lastName } = splitName(cleanName);
+    
+    // Create in Database
+    const node = await prisma.familyTreeNode.create({
+      data: {
+        familyId: family.id,
+        firstName,
+        lastName,
+        createdBy: adminUser.id
+      }
+    });
+
+    nameToIdMap.set(cleanName, node.id);
+    return node.id;
+  };
+
+  // Pre-scan to create everyone
+  for (const unit of familyUnits) {
+    for (const p of unit.parents) await ensurePerson(p);
+    for (const c of unit.children) await ensurePerson(c);
+  }
+
+  // ============================================
+  // 5. LINK RELATIONSHIPS
+  // ============================================
+  console.log("🔗 Linking relationships...");
+  let relCount = 0;
+
+  for (const unit of familyUnits) {
+    const parentIds = await Promise.all(unit.parents.map((p: string) => ensurePerson(p)));
+    const childIds = await Promise.all(unit.children.map((c: string) => ensurePerson(c)));
+
+    const validParentIds = parentIds.filter((id): id is string => !!id);
+    const validChildIds = childIds.filter((id): id is string => !!id);
+
+    // A. Parents -> Children
+    for (const pId of validParentIds) {
+      for (const cId of validChildIds) {
+        // Prevent duplicates
+        const exists = await prisma.familyRelationship.findFirst({
+          where: { person1Id: pId, person2Id: cId, relationshipType: RelationshipType.PARENT }
+        });
+
+        if (!exists) {
+          await prisma.familyRelationship.create({
+            data: { person1Id: pId, person2Id: cId, relationshipType: RelationshipType.PARENT }
           });
+          relCount++;
         }
       }
     }
 
-    // B. Parents (Fixed Logic)
-    const parents = [
-        { id: node.rels?.father, role: 'father' }, 
-        { id: node.rels?.mother, role: 'mother' }
-    ];
-
-    for (const parent of parents) {
-        if (parent.id) {
-            const parentNode = await prisma.familyTreeNode.findUnique({ where: { id: parent.id }});
-            const childNode = await prisma.familyTreeNode.findUnique({ where: { id: node.id }});
-
-            if (parentNode && childNode) {
-                await prisma.familyRelationship.upsert({
-                    where: {
-                        person1Id_person2Id_relationshipType: {
-                            person1Id: parent.id,  // The Parent
-                            person2Id: node.id,    // The Child
-                            relationshipType: "PARENT", // <--- CORRECTED LOGIC
-                        }
-                    },
-                    update: {},
-                    create: {
-                        person1Id: parent.id,
-                        person2Id: node.id,
-                        relationshipType: "PARENT",
-                    }
-                });
-            }
+    // B. Spouse -> Spouse (if exactly 2 parents)
+    if (validParentIds.length === 2) {
+      const [p1, p2] = validParentIds;
+      const exists = await prisma.familyRelationship.findFirst({
+        where: {
+          OR: [
+            { person1Id: p1, person2Id: p2, relationshipType: RelationshipType.SPOUSE },
+            { person1Id: p2, person2Id: p1, relationshipType: RelationshipType.SPOUSE }
+          ]
         }
+      });
+
+      if (!exists) {
+        await prisma.familyRelationship.create({
+          data: { person1Id: p1, person2Id: p2, relationshipType: RelationshipType.SPOUSE }
+        });
+        relCount++;
+      }
     }
   }
-  console.log("✅ Relationships created");
+
+  console.log(`✅ Success! Created ${nameToIdMap.size} people and ${relCount} relationships.`);
 }
 
 main()

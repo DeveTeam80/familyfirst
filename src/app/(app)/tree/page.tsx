@@ -39,7 +39,7 @@ export default function FamilyTreePage() {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const router = useRouter();
 
-  const familyId = "demo-family";
+  const familyId = "8e7b8fc3-95b7-4d33-8ede-71b5dbda0318";
 
   // Refs
   const chartRef = useRef<FamilyTreeChartHandle>(null);
@@ -431,7 +431,7 @@ export default function FamilyTreePage() {
               onClose={() => setInspectorNode(null)}
               isAdmin={isAdmin}
               familyId={familyId}
-              adminId="demo-admin"
+              adminId="7f3ad037-77ab-49d4-8d34-3650eb178de0"
               onEdit={() => setEditOpen(true)}
               onAddMemberClick={handleTriggerAddFromInspector}
             />

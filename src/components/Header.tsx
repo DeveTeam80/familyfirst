@@ -579,16 +579,17 @@ export default function Header({ children, onNotificationClick }: HeaderProps) {
             }}
           >
             <Image
-              src="/assets/ff-logo.png"
-              alt="First Family Logo"
-              width={isMobile ? 110 : 150}
-              height={isMobile ? 34 : 46}
-              style={{
-                objectFit: "contain",
-                cursor: "pointer",
-              }}
-              onClick={() => router.push("/feed")}
-            />
+  src="/assets/ff-logo.png"
+  alt="First Family Logo"
+  width={isMobile ? 110 : 150}
+  height={isMobile ? 34 : 46}
+  unoptimized
+  style={{
+    objectFit: "contain",
+    cursor: "pointer",
+  }}
+  onClick={() => router.push("/feed")}
+/>
           </Box>
 
           {/* Right side: Notifications + User menu */}
