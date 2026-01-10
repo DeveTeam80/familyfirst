@@ -55,7 +55,7 @@ interface LocalImage {
 }
 
 const MAX_IMAGES = 100;
-const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_MB = 100;
 
 export default function BulkUploadDialog({
   open,

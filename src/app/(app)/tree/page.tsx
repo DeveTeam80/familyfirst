@@ -3,8 +3,8 @@
 import React, { useRef, useState, useCallback, useEffect } from "react";
 // 👇 Import Redux hooks and selectors
 import { useSelector } from "react-redux";
-import { selectIsAdmin, selectCurrentUser } from "@/store/userSlice";
-
+import {  selectCurrentUser,selectUserLoading } from "@/store/userSlice";
+import { selectActiveFamilyId,selectIsAdminForActiveFamily } from "@/store/familySlice";
 import {
   Box,
   IconButton,
@@ -13,6 +13,8 @@ import {
   useTheme,
   useMediaQuery,
   alpha,
+  CircularProgress,
+  Typography,
 } from "@mui/material";
 import { MdOutlineArrowBack } from "react-icons/md";
 import { RxCross2 } from "react-icons/rx";
@@ -34,18 +36,32 @@ import {
   UserAvatarDTO,
 } from "@/components/familytree/types";
 
+// Define the new member data type
+interface NewMemberData {
+  firstName: string;
+  lastName?: string;
+  gender?: string;
+  birthday?: string;
+  avatar?: string;
+  deathDate?: string | null;
+  weddingAnniversary?: string | null;
+  relationType?: string;
+  targetNodeId?: string;
+  specificRole?: string;
+}
+
 export default function FamilyTreePage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const router = useRouter();
 
-  const familyId = "demo-family";
-
+  const familyId = useSelector(selectActiveFamilyId);
+  const isAuthLoading = useSelector(selectUserLoading);
   // Refs
   const chartRef = useRef<FamilyTreeChartHandle>(null);
 
   // ⭐ OPTIMIZED: Get Auth Data from Redux Instantly
-  const isAdmin = useSelector(selectIsAdmin);
+  const isAdmin = useSelector(selectIsAdminForActiveFamily);
   const currentUser = useSelector(selectCurrentUser);
   const loggedInUserId = currentUser?.id || null;
 
@@ -68,36 +84,33 @@ export default function FamilyTreePage() {
   const [isAddMode, setIsAddMode] = useState(false);
   const [isAtDefaultView, setIsAtDefaultView] = useState(true);
 
-  // Fetch Tree Data
-  // (Helper function to get avatars)
-  const fetchUsersMap = async () => {
-    const res = await fetch(`/api/users?familyId=${familyId}`, {
-      credentials: "include",
-    });
-    if (!res.ok) return new Map<string, string>();
-
-    const json = await res.json();
-    const map = new Map<string, string>();
-
-    json.users?.forEach((u: UserAvatarDTO) => {
-      if (u.id && u.avatarUrl) {
-        map.set(u.id, u.avatarUrl);
-      }
-    });
-
-    return map;
-  };
+  // 1. 🛡️ BLOCKING LOADER (Crucial Fix)
+  // If we don't have a family ID yet, DO NOT render the main UI.
+  // This prevents the Chart from crashing and prevents requests to "/null/"
+  const isNotReady = isAuthLoading || !familyId || !loggedInUserId;
 
   const fetchTreeData = useCallback(async () => {
-    // Wait for Redux to populate the user ID before fetching
-    if (!loggedInUserId) return;
-    
+    // Double check inside the function just in case
+    if (!familyId || !loggedInUserId) return;
+
     try {
       setTreeLoading(true);
 
+      // Helper defined inside to ensure it uses the current familyId
+      const fetchAvatars = async () => {
+        const res = await fetch(`/api/users?familyId=${familyId}`);
+        if (!res.ok) return new Map<string, string>();
+        const json = await res.json();
+        const map = new Map<string, string>();
+        json.users?.forEach((u: UserAvatarDTO) => {
+          if (u.id && u.avatarUrl) map.set(u.id, u.avatarUrl);
+        });
+        return map;
+      };
+
       const [treeRes, userAvatarMap] = await Promise.all([
         fetch(`/api/family/${familyId}/tree`, { credentials: "include" }),
-        fetchUsersMap(),
+        fetchAvatars(),
       ]);
 
       if (!treeRes.ok) throw new Error("Tree fetch failed");
@@ -139,19 +152,19 @@ export default function FamilyTreePage() {
   }, [familyId, loggedInUserId]);
 
   useEffect(() => {
-    fetchTreeData();
-  }, [fetchTreeData]);
+    if (!isNotReady) {
+      fetchTreeData();
+    }
+  }, [fetchTreeData, isNotReady]);
 
-  // Handlers
-  const handleNodeSelect = useCallback(
-    (node: FamilyTreeNode) => {
-      const freshNode = treeData.find((n) => n.id === node.id) || node;
-      setQuickActionNode(freshNode);
-      setInspectorNode(null);
-      setIsAtDefaultView(false); 
-    },
-    [treeData]
-  );
+
+  // Handlers (Collapsed for brevity - keep your existing ones)
+  const handleNodeSelect = useCallback((node: FamilyTreeNode) => {
+    const freshNode = treeData.find((n) => n.id === node.id) || node;
+    setQuickActionNode(freshNode);
+    setInspectorNode(null);
+    setIsAtDefaultView(false); 
+  }, [treeData]);
 
   const handleTriggerAddFromPill = () => {
     if (quickActionNode && chartRef.current) {
@@ -245,19 +258,14 @@ export default function FamilyTreePage() {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        throw new Error("Failed to update member in database");
-      }
-
-      setTreeData((prev) =>
-        prev.map((n) => (n.id === updatedNode.id ? updatedNode : n))
-      );
+      if (!res.ok) throw new Error("Failed");
+      
+      setTreeData((prev) => prev.map((n) => (n.id === updatedNode.id ? updatedNode : n)));
       setInspectorNode(updatedNode);
-
       await fetchTreeData();
     } catch (error) {
-      console.error("❌ Error saving edit:", error);
-      alert("Failed to save changes. Please try again.");
+      console.error("Edit failed", error);
+      alert("Failed to save.");
     }
   };
 
@@ -274,8 +282,7 @@ export default function FamilyTreePage() {
     [treeData]
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleAddMember = async (newMemberData: any) => {
+  const handleAddMember = async (newMemberData: NewMemberData) => {
     try {
       const res = await fetch(`/api/family/${familyId}/members`, {
         method: "POST",
@@ -312,6 +319,14 @@ export default function FamilyTreePage() {
     setAddSpecificRole(null);
     handleExitEditMode();
   };
+if (isNotReady) {
+    return (
+      <Box sx={{ height: "calc(100vh - 64px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", bgcolor: theme.palette.background.default }}>
+        <CircularProgress size={40} />
+        <Typography sx={{ mt: 2, color: 'text.secondary' }}>Loading Family Data...</Typography>
+      </Box>
+    );
+  }
 
   // Determine if back button should be disabled
   const isBackButtonDisabled = isAddMode || isAtDefaultView;
@@ -430,8 +445,8 @@ export default function FamilyTreePage() {
               node={inspectorNode}
               onClose={() => setInspectorNode(null)}
               isAdmin={isAdmin}
-              familyId={familyId}
-              adminId="demo-admin"
+              familyId={familyId || ""}
+              adminId={loggedInUserId || ""}
               onEdit={() => setEditOpen(true)}
               onAddMemberClick={handleTriggerAddFromInspector}
             />

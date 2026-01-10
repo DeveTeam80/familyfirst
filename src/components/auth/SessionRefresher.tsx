@@ -1,47 +1,59 @@
 "use client";
 
-import { useEffect } from "react";
-import { useDispatch } from "react-redux";
-import { setCurrentUser } from "@/store/userSlice";
+import { useEffect, useRef } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { setCurrentUser, selectCurrentUser } from "@/store/userSlice";
 
 export default function SessionRefresher() {
   const dispatch = useDispatch();
+  const currentUser = useSelector(selectCurrentUser);
+  const isFetching = useRef(false);
 
   useEffect(() => {
-    // The function that fetches the latest user data
     const revalidateUser = async () => {
+      if (isFetching.current) return;
+      isFetching.current = true;
+
       try {
-        // This hits your existing endpoint which queries the DB directly
         const res = await fetch("/api/auth/me");
         if (res.ok) {
           const data = await res.json();
-          // Force Redux to update with the fresh role/data from DB
-          // Adjust 'data.user' based on your actual API structure
           if (data.user) {
-             dispatch(setCurrentUser(data.user)); 
-             console.log("🔄 Session silently refreshed. Role:", data.user.role || data.memberships?.[0]?.role);
+            // 🔧 FIX: Merge memberships into the user object so selectors can find them
+            const fullUser = {
+              ...data.user,
+              memberships: data.memberships || [], 
+              familyMemberships: data.memberships || [] // Support both naming conventions
+            };
+
+            // Check if we actually need to update Redux (prevent loops)
+            const newId = fullUser.id;
+            const currentId = currentUser?.id;
+            const newRole = fullUser.role || fullUser.memberships?.[0]?.role;
+            const currentRole = currentUser?.role || currentUser?.memberships?.[0]?.role;
+
+            if (newId === currentId && newRole === currentRole) {
+               // Data is fresh, do nothing
+            } else {
+               dispatch(setCurrentUser(fullUser)); 
+               console.log("🔄 Session refreshed & Memberships merged. Role:", newRole);
+            }
           }
         }
       } catch (err) {
         console.error("Silent refresh failed", err);
+      } finally {
+        isFetching.current = false;
       }
     };
 
-    // 1. Check immediately on mount (fixes stale hydration)
     revalidateUser();
-
-    // 2. Check whenever user focuses the window (comes back to the tab)
+    
     const onFocus = () => revalidateUser();
     window.addEventListener("focus", onFocus);
 
-    // 3. Optional: Poll every 5 minutes (300000ms)
-    const interval = setInterval(revalidateUser, 5 * 60 * 1000);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [dispatch, currentUser?.id, currentUser?.role]); // Depend on ID/Role to re-run if they change
 
-    return () => {
-      window.removeEventListener("focus", onFocus);
-      clearInterval(interval);
-    };
-  }, [dispatch]);
-
-  return null; // This component renders nothing
+  return null;
 }

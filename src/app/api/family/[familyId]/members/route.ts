@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserIdFromRequest } from "@/lib/session";
-import { Prisma } from "@prisma/client"; // 1. Import Prisma types
+import { Prisma } from "@prisma/client";
 
 // ⭐ Add proper interface for family member with user
 interface FamilyMemberWithUser {
@@ -23,9 +23,9 @@ interface FamilyMemberWithUser {
 // GET: Fetch all members of a family
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ familyId: string }> } // ⭐ Fixed for Next.js 15
+  context: { params: Promise<{ familyId: string }> }
 ) {
-  const { familyId } = await context.params; // ⭐ Await params
+  const { familyId } = await context.params;
 
   try {
     const requesterId = await getUserIdFromRequest(req);
@@ -48,9 +48,8 @@ export async function GET(
             id: true,
             name: true,
             email: true,
-            // adjust name of avatar field to match your schema
             avatarUrl: true,
-            username: true, // if present
+            username: true,
           },
         },
       },
@@ -58,11 +57,10 @@ export async function GET(
     });
 
     // normalize to a safe shape for the client
-    // ⭐ Use typed members instead of any
     const payload = (members as unknown as FamilyMemberWithUser[]).map((m) => ({
       userId: m.userId,
       familyId: m.familyId,
-      role: m.role, // OWNER / ADMIN / MEMBER etc (server enum)
+      role: m.role,
       status: m.status,
       joinedAt: m.joinedAt,
       user: {
@@ -74,7 +72,11 @@ export async function GET(
       },
     }));
 
-    return NextResponse.json({ ok: true, family: { id: family.id, name: family.name }, members: payload });
+    return NextResponse.json({ 
+      ok: true, 
+      family: { id: family.id, name: family.name }, 
+      members: payload 
+    });
   } catch (err) {
     console.error("[GET /api/family/:id/members] error:", err);
     return NextResponse.json({ error: "Failed to load members" }, { status: 500 });
@@ -82,7 +84,7 @@ export async function GET(
 }
 
 // POST: Add a new member (Family Tree Node) to the family
-
+// POST: Add a new member (Family Tree Node) to the family
 export async function POST(
   req: NextRequest,
   context: { params: Promise<{ familyId: string }> }
@@ -91,47 +93,65 @@ export async function POST(
 
   try {
     const requesterId = await getUserIdFromRequest(req);
-    if (!requesterId) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    if (!requesterId) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
 
     const body = await req.json();
-    const { firstName, lastName, gender, birthday, avatar, relativeId, relationType } = body;
+    const {
+      firstName,
+      lastName,
+      gender,
+      birthday,
+      avatar,
+      deathDate,
+      weddingAnniversary,
+      relativeId,
+      relationType,
+    } = body;
 
     if (!firstName || !relativeId || !relationType) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+
+    const parseDate = (dateString: string | undefined | null) => {
+      if (!dateString) return null;
+      return new Date(dateString);
+    };
 
     const newNode = await prisma.$transaction(async (tx) => {
       // 1. Create the new Node
       const node = await tx.familyTreeNode.create({
         data: {
           firstName,
-          lastName,
-          gender,
-          photoUrl: avatar,
-          birthDate: birthday ? new Date(birthday) : null,
+          lastName: lastName || null,
+          gender: gender || "M",
+          photoUrl: avatar || null,
+          birthDate: parseDate(birthday),
+          deathDate: parseDate(deathDate),
+          weddingAnniversary: parseDate(weddingAnniversary),
           familyId,
           createdBy: requesterId,
         },
       });
 
       // 2. Prepare Relationships
-      // ⭐ FIX: Explicitly type the array using Prisma's input type
       const relationshipsToCreate: Prisma.FamilyRelationshipCreateManyInput[] = [];
 
+      // =========================================================
+      // SCENARIO A: Adding a CHILD to a parent
+      // =========================================================
       if (relationType === "children") {
-        // A. Link to the selected Parent (The one you clicked)
+        // 1. Link to the selected Parent
         relationshipsToCreate.push(
           { person1Id: relativeId, person2Id: node.id, relationshipType: "PARENT" },
           { person1Id: node.id, person2Id: relativeId, relationshipType: "CHILD" }
         );
 
-        // B. ⭐ FIX: Find if this parent has a SPOUSE and link them too
+        // 2. Auto-Link to the Spouse of the selected parent (The other parent)
         const spouses = await tx.familyRelationship.findMany({
-          where: {
-            person1Id: relativeId,
-            relationshipType: "SPOUSE",
-          },
-          select: { person2Id: true }, // Get the spouse's ID
+          where: { person1Id: relativeId, relationshipType: "SPOUSE" },
+          select: { person2Id: true },
         });
 
         for (const spouse of spouses) {
@@ -141,28 +161,90 @@ export async function POST(
           );
         }
       } 
+      
+      // =========================================================
+      // SCENARIO B: Adding a PARENT to a child
+      // =========================================================
       else if (relationType === "parents") {
-        // Link New Node (Parent) <-> Relative (Child)
+        // 1. Link New Node (Parent) <-> Relative (Child)
         relationshipsToCreate.push(
           { person1Id: node.id, person2Id: relativeId, relationshipType: "PARENT" },
           { person1Id: relativeId, person2Id: node.id, relationshipType: "CHILD" }
         );
-        // Note: We usually don't auto-link parents to spouses implicitly 
-        // because biological parents might not be the current spouses.
+
+        // 2. Find if there is already an existing parent
+        const existingParents = await tx.familyRelationship.findMany({
+          where: { person2Id: relativeId, relationshipType: "PARENT" },
+          select: { person1Id: true },
+        });
+
+        if (existingParents.length === 1) {
+          const existingParentId = existingParents[0].person1Id;
+          
+          // 3. Auto-link parents as SPOUSES
+          const existingSpouseLink = await tx.familyRelationship.findFirst({
+            where: { person1Id: node.id, person2Id: existingParentId, relationshipType: "SPOUSE" },
+          });
+
+          if (!existingSpouseLink) {
+            relationshipsToCreate.push(
+              { person1Id: node.id, person2Id: existingParentId, relationshipType: "SPOUSE" },
+              { person1Id: existingParentId, person2Id: node.id, relationshipType: "SPOUSE" }
+            );
+            console.log(`✅ Auto-linked parents as spouses: ${node.id} ↔ ${existingParentId}`);
+          }
+
+          // 4. ⭐ NEW: Auto-link new parent to ALL SIBLINGS
+          // Find all children of the *existing parent* (these are siblings of relativeId)
+          const siblings = await tx.familyRelationship.findMany({
+            where: { 
+              person1Id: existingParentId, 
+              relationshipType: "PARENT",
+              person2Id: { not: relativeId } // Exclude the child we already linked above
+            },
+            select: { person2Id: true }
+          });
+
+          for (const sibling of siblings) {
+            relationshipsToCreate.push(
+              { person1Id: node.id, person2Id: sibling.person2Id, relationshipType: "PARENT" }, // New Parent -> Sibling
+              { person1Id: sibling.person2Id, person2Id: node.id, relationshipType: "CHILD" }   // Sibling -> New Parent
+            );
+            console.log(`✅ Auto-linked new parent to sibling: ${sibling.person2Id}`);
+          }
+        }
       } 
+      
+      // =========================================================
+      // SCENARIO C: Adding a SPOUSE
+      // =========================================================
       else if (relationType === "spouses") {
-        // Link New Node <-> Relative
+        // 1. Create bidirectional spouse relationship
         relationshipsToCreate.push(
           { person1Id: relativeId, person2Id: node.id, relationshipType: "SPOUSE" },
           { person1Id: node.id, person2Id: relativeId, relationshipType: "SPOUSE" }
         );
+
+        // 2. ⭐ NEW: Auto-link new spouse to EXISTING CHILDREN
+        // Find all children of the existing partner (relativeId)
+        const existingChildren = await tx.familyRelationship.findMany({
+          where: { person1Id: relativeId, relationshipType: "PARENT" },
+          select: { person2Id: true }
+        });
+
+        for (const child of existingChildren) {
+          relationshipsToCreate.push(
+            { person1Id: node.id, person2Id: child.person2Id, relationshipType: "PARENT" }, // New Spouse -> Child
+            { person1Id: child.person2Id, person2Id: node.id, relationshipType: "CHILD" }   // Child -> New Spouse
+          );
+          console.log(`✅ Auto-linked new spouse to existing child: ${child.person2Id}`);
+        }
       }
 
       // 3. Create all links
       if (relationshipsToCreate.length > 0) {
-        // ⭐ FIX: Removed 'as any' cast. The array is now properly typed.
         await tx.familyRelationship.createMany({
-          data: relationshipsToCreate, 
+          data: relationshipsToCreate,
         });
       }
 

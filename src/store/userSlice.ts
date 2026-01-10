@@ -162,4 +162,24 @@ export const selectIsAdmin = createSelector(
   }
 );
 
+export const selectActiveFamilyId = createSelector(
+  [selectCurrentUser],
+  (user) => {
+    if (!user) return null;
+    
+    // Check 'memberships' (auth provider style)
+    if (user.memberships && user.memberships.length > 0) {
+      return user.memberships[0].familyId;
+    }
+
+    // Check 'familyMemberships' (Prisma style)
+    if (user.familyMemberships && user.familyMemberships.length > 0) {
+      return user.familyMemberships[0].familyId;
+    }
+
+    return null;
+  }
+);
+// 5. Loading State Selector
+export const selectUserLoading = (state: RootState) => state.user.isLoading;
 export default userSlice.reducer;

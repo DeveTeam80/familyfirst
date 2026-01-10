@@ -14,7 +14,12 @@ import {
   CircularProgress,
   FormControlLabel,
   Checkbox,
+  IconButton,
+  Tooltip,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
@@ -40,6 +45,8 @@ export function AddMemberDialog({
   specificRole,
   onAdd,
 }: AddMemberDialogProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -204,15 +211,24 @@ export function AddMemberDialog({
     return "Add Member";
   };
 
+  const isSpouseRelated = relationType === "spouses" || specificRole === "spouse";
+
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 3 } }}>
-      <DialogTitle sx={{ fontWeight: 700 }}>{getTitle()}</DialogTitle>
+    <Dialog 
+      open={open} 
+      onClose={onClose} 
+      fullWidth 
+      maxWidth="sm" 
+      fullScreen={isMobile}
+      PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3 } }}
+    >
+      <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>{getTitle()}</DialogTitle>
       <DialogContent>
         <LocalizationProvider dateAdapter={AdapterDayjs}>
-          <Stack spacing={3} sx={{ mt: 1 }}>
+          <Stack spacing={2.5} sx={{ mt: 1 }}>
             {/* Avatar Upload */}
             <Stack
-              direction="row"
+              direction={isMobile ? "column" : "row"}
               spacing={2}
               alignItems="center"
               justifyContent="center"
@@ -224,35 +240,36 @@ export function AddMemberDialog({
               >
                 {formData.firstName?.[0]}
               </Avatar>
-              <Stack direction="column" spacing={1}>
-                <Stack direction="row" spacing={1}>
-                  <Button
-                    variant="outlined"
-                    onClick={triggerFile}
-                    disabled={uploading}
-                    size="small"
-                  >
-                    Replace
-                  </Button>
-                  <Button
-                    variant="text"
-                    color="error"
-                    onClick={onRemoveAvatar}
-                    disabled={!formData.avatar || uploading}
-                    size="small"
-                  >
-                    Remove
-                  </Button>
-                </Stack>
-                <input
-                  ref={inputRef}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: "none" }}
-                  onChange={onPick}
-                />
+              <Stack direction={isMobile ? "row" : "column"} spacing={1}>
+                <Button
+                  variant="outlined"
+                  onClick={triggerFile}
+                  disabled={uploading}
+                  size="small"
+                  fullWidth={isMobile}
+                >
+                  Replace
+                </Button>
+                <Button
+                  variant="text"
+                  color="error"
+                  onClick={onRemoveAvatar}
+                  disabled={!formData.avatar || uploading}
+                  size="small"
+                  fullWidth={isMobile}
+                >
+                  Remove
+                </Button>
               </Stack>
             </Stack>
+
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={onPick}
+            />
 
             {uploading && (
               <Box
@@ -271,7 +288,7 @@ export function AddMemberDialog({
             )}
 
             {/* Names */}
-            <Stack direction="row" spacing={2}>
+            <Stack direction={isMobile ? "column" : "row"} spacing={2}>
               <TextField
                 fullWidth
                 label="First Name"
@@ -293,7 +310,7 @@ export function AddMemberDialog({
             </Stack>
 
             {/* Birthday & Gender */}
-            <Stack direction="row" spacing={2}>
+            <Stack direction={isMobile ? "column" : "row"} spacing={2}>
               <DatePicker
                 label="Birthday"
                 value={formData.birthday}
@@ -334,11 +351,11 @@ export function AddMemberDialog({
                 />
               }
               label="Deceased / Passed Away"
-              sx={{ mt: 1, color: "text.secondary" }}
+              sx={{ mt: 0.5, color: "text.secondary" }}
             />
 
             {/* Conditional Date Fields */}
-            <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+            <Stack direction={isMobile ? "column" : "row"} spacing={2}>
               {/* Death Date - Only show if deceased */}
               {formData.isDeceased && (
                 <DatePicker
@@ -353,30 +370,74 @@ export function AddMemberDialog({
                 />
               )}
 
-              {/* Anniversary - Show if spouse is involved */}
-              {(relationType === "spouses" || specificRole === "spouse") && (
-                <DatePicker
-                  label="Wedding Anniversary"
-                  value={formData.weddingAnniversary}
-                  onChange={(newValue) =>
-                    setFormData({ ...formData, weddingAnniversary: newValue })
-                  }
-                  slotProps={{ textField: { fullWidth: true } }}
-                  disabled={uploading}
-                />
+              {/* ⭐ Wedding Anniversary with Tooltip (Mobile-First) */}
+              {isSpouseRelated && (
+                <Box sx={{ position: "relative", width: "100%" }}>
+                  <DatePicker
+                    label="Wedding Anniversary"
+                    value={formData.weddingAnniversary}
+                    onChange={(newValue) =>
+                      setFormData({ ...formData, weddingAnniversary: newValue })
+                    }
+                    slotProps={{ 
+                      textField: { 
+                        fullWidth: true,
+                        helperText: isMobile ? "💍 Auto-synced for both spouses" : undefined,
+                      } 
+                    }}
+                    disabled={uploading}
+                  />
+                  
+                  {/* Info Icon - Only show on desktop */}
+                  {!isMobile && (
+                    <Tooltip 
+                      title="This date will be automatically updated for both spouses since wedding anniversaries are shared." 
+                      arrow
+                      placement="top"
+                    >
+                      <IconButton 
+                        size="small" 
+                        sx={{ 
+                          position: "absolute", 
+                          right: 8, 
+                          top: 8,
+                          color: "primary.main",
+                          opacity: 0.7,
+                          '&:hover': { opacity: 1 }
+                        }}
+                      >
+                        <InfoOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Box>
               )}
             </Stack>
           </Stack>
         </LocalizationProvider>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 3 }}>
-        <Button onClick={onClose} color="inherit" disabled={uploading}>
+      <DialogActions 
+        sx={{ 
+          px: isMobile ? 2 : 3, 
+          pb: isMobile ? 2 : 3,
+          pt: 2,
+          flexDirection: isMobile ? "column" : "row",
+          gap: isMobile ? 1 : 0,
+        }}
+      >
+        <Button 
+          onClick={onClose} 
+          color="inherit" 
+          disabled={uploading}
+          fullWidth={isMobile}
+        >
           Cancel
         </Button>
         <Button
           variant="contained"
           onClick={handleSave}
           disabled={!formData.firstName || uploading}
+          fullWidth={isMobile}
           sx={{
             borderRadius: 2,
             background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",

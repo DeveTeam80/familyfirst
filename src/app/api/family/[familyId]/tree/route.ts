@@ -31,11 +31,9 @@ export async function GET(
       );
     }
 
-    // ⭐ OPTIMIZED: Use select instead of include to fetch only needed fields
     const nodes = await prisma.familyTreeNode.findMany({
       where: { familyId },
       select: {
-        // Only fetch fields we actually use
         id: true,
         userId: true,
         firstName: true,
@@ -49,20 +47,26 @@ export async function GET(
           select: {
             relationshipType: true,
             person2Id: true,
-            // Don't fetch id, createdAt, person1Id - we don't need them
           },
         },
         relationshipsTo: {
           select: {
             relationshipType: true,
             person1Id: true,
-            // Don't fetch id, createdAt, person2Id - we don't need them
           },
         },
       },
     });
 
-    // Transform to family-chart format (same as before)
+    // ⭐ FIX: Format dates properly to preserve month and day
+    const formatDate = (date: Date | null) => {
+      if (!date) return undefined;
+      
+      // Return full ISO date string (YYYY-MM-DD)
+      return date.toISOString().split('T')[0];
+    };
+
+    // Transform to family-chart format
     const formatted = nodes.map((node) => {
       const parents = new Set<string>();
       const children = new Set<string>();
@@ -92,17 +96,13 @@ export async function GET(
         data: {
           "first name": node.firstName,
           "last name": node.lastName ?? undefined,
-          birthday: node.birthDate
-            ? node.birthDate.getFullYear().toString()
-            : undefined,
+          // ⭐ FIX: Send full date string in YYYY-MM-DD format
+          birthday: formatDate(node.birthDate),
+          photoUrl: node.photoUrl,
           avatar: node.photoUrl ?? undefined,
           gender: node.gender === "F" ? "F" : "M",
-          deathDate: node.deathDate 
-            ? node.deathDate.toISOString().split('T')[0] 
-            : undefined,
-          weddingAnniversary: node.weddingAnniversary 
-            ? node.weddingAnniversary.toISOString().split('T')[0] 
-            : undefined,
+          deathDate: formatDate(node.deathDate),
+          weddingAnniversary: formatDate(node.weddingAnniversary),
         },
         rels: {
           parents: parents.size ? [...parents] : undefined,
