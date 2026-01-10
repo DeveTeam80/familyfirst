@@ -237,9 +237,17 @@ export default function Header({ children, onNotificationClick }: HeaderProps) {
   const profileHref = `/${username}`;
 
   // Logout handler
-  const handleLogout = async () => {
-    await signOut({ redirect: false });
-    router.push("/login");
+ const handleLogout = async () => {
+    // 1. Fire and forget the offline status (don't await it blocking the UI)
+    fetch("/api/user/online-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isOnline: false }),
+      keepalive: true // 👈 Add this to ensure it finishes even if page unloads
+    }).catch(err => console.error("Offline status error", err));
+
+    // 2. Destroy session immediately
+    await signOut({ callbackUrl: "/login" });
   };
 
 

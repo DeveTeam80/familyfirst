@@ -1,15 +1,25 @@
+// src/app/api/albums/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/nextauth.config";
 import { prisma } from "@/lib/prisma";
-import cloudinary from "@/lib/cloudinary"; // 👈 Import Cloudinary
+import cloudinary from "@/lib/cloudinary";
+
+// Helper function to check if user is admin
+async function isUserAdmin(userId: string): Promise<boolean> {
+  const membership = await prisma.familyMember.findFirst({
+    where: { userId },
+    select: { role: true },
+  });
+  return membership?.role === "OWNER" || membership?.role === "ADMIN";
+}
 
 // GET single album with photos
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> } // ⭐ Fixed Type
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params; // ⭐ Await params
+  const { id } = await params;
 
   try {
     const session = await getServerSession(authOptions);
@@ -53,6 +63,9 @@ export async function GET(
             eventType: true,
           },
         },
+        _count: {
+          select: { photos: true },
+        },
       },
     });
 
@@ -70,12 +83,97 @@ export async function GET(
   }
 }
 
-// PATCH update album
+// PUT update album (ONLY fields from actual schema)
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const album = await prisma.album.findUnique({
+      where: { id },
+      select: { createdBy: true },
+    });
+
+    if (!album) {
+      return NextResponse.json({ error: "Album not found" }, { status: 404 });
+    }
+
+    // Check permissions: Creator OR Admin
+    const isCreator = album.createdBy === user.id;
+    const isAdmin = await isUserAdmin(user.id);
+
+    if (!isCreator && !isAdmin) {
+      return NextResponse.json(
+        { error: "You don't have permission to edit this album" },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json();
+    // ⭐ ONLY fields that exist in schema: title, description, tags
+    const { title, description, tags } = body;
+
+    // Validate required fields
+    if (!title || title.trim().length === 0) {
+      return NextResponse.json(
+        { error: "Title is required" },
+        { status: 400 }
+      );
+    }
+
+    const updated = await prisma.album.update({
+      where: { id },
+      data: {
+        title: title.trim(),
+        description: description?.trim() || null,
+        tags: tags || [],
+      },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            avatarUrl: true,
+          },
+        },
+        _count: {
+          select: { photos: true },
+        },
+      },
+    });
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error("Error updating album:", error);
+    return NextResponse.json(
+      { error: "Failed to update album" },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH update album (partial update - keep for backwards compatibility)
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> } // ⭐ Fixed Type
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params; // ⭐ Await params
+  const { id } = await params;
 
   try {
     const session = await getServerSession(authOptions);
@@ -99,8 +197,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Album not found" }, { status: 404 });
     }
 
-    // Allow Owner OR Admin to edit? (Currently just Owner)
-    if (album.createdBy !== user.id) {
+    // Check permissions: Creator OR Admin
+    const isCreator = album.createdBy === user.id;
+    const isAdmin = await isUserAdmin(user.id);
+
+    if (!isCreator && !isAdmin) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -143,9 +244,9 @@ export async function PATCH(
 // DELETE album
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> } // ⭐ Fixed Type
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params; // ⭐ Await params
+  const { id } = await params;
 
   try {
     const session = await getServerSession(authOptions);
@@ -169,26 +270,23 @@ export async function DELETE(
       return NextResponse.json({ error: "Album not found" }, { status: 404 });
     }
 
-    if (album.createdBy !== user.id) {
+    // Check permissions: Creator OR Admin
+    const isCreator = album.createdBy === user.id;
+    const isAdmin = await isUserAdmin(user.id);
+
+    if (!isCreator && !isAdmin) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // ⭐ NEW: Cloudinary Cleanup Logic
-    // We must delete the specific folder we created for this album
-    const folderPath = `firstfamily/albums/${id}`; 
+    // Cloudinary Cleanup
+    const folderPath = `firstfamily/albums/${id}`;
     
     try {
       console.log(`🗑️ Cleaning up Cloudinary folder: ${folderPath}`);
-      
-      // 1. Delete all images inside the folder
       await cloudinary.api.delete_resources_by_prefix(folderPath);
-      
-      // 2. Delete the folder itself
       await cloudinary.api.delete_folder(folderPath);
-      
     } catch (cleanupError) {
       console.error("Failed to cleanup Cloudinary folder:", cleanupError);
-      // We continue anyway to ensure the DB record is deleted
     }
 
     // Delete from DB

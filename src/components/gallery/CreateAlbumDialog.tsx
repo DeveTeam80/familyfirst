@@ -9,28 +9,11 @@ import {
   Button,
   TextField,
   Stack,
-  MenuItem,
   Chip,
   Box,
   IconButton,
 } from "@mui/material";
 import { Close } from "@mui/icons-material";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import { LocalizationProvider } from "@mui/x-date-pickers";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import dayjs, { Dayjs } from "dayjs";
-
-const EVENT_OPTIONS = [
-  "Wedding",
-  "Birthday",
-  "Anniversary",
-  "Reunion",
-  "Vacation",
-  "Holiday",
-  "Graduation",
-  "Baby Shower",
-  "Other",
-];
 
 const TAG_OPTIONS = [
   "Family",
@@ -41,12 +24,18 @@ const TAG_OPTIONS = [
   "Food",
   "Nature",
   "Sports",
+  "Birthday",
+  "Wedding",
+  "Anniversary",
+  "Reunion",
+  "Vacation",
+  "Holiday",
+  "Graduation",
 ];
 
 interface CreateAlbumDialogProps {
   open: boolean;
   onClose: () => void;
-  // 👇 UPDATED: Accepts the new album ID
   onSuccess: (newAlbumId: string) => void;
 }
 
@@ -59,9 +48,6 @@ export default function CreateAlbumDialog({
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    event: "",
-    occasion: "",
-    date: null as Dayjs | null,
     tags: [] as string[],
   });
 
@@ -77,17 +63,15 @@ export default function CreateAlbumDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...formData,
-          date: formData.date?.toISOString(),
+          title: formData.title,
+          description: formData.description,
+          tags: formData.tags,
         }),
       });
 
       if (!response.ok) throw new Error("Failed to create album");
 
-      // 👇 CAPTURE THE NEW ALBUM DATA
       const newAlbum = await response.json();
-
-      // 👇 PASS THE ID BACK TO PARENT
       onSuccess(newAlbum.id);
       
       handleReset();
@@ -104,9 +88,6 @@ export default function CreateAlbumDialog({
     setFormData({
       title: "",
       description: "",
-      event: "",
-      occasion: "",
-      date: null,
       tags: [],
     });
   };
@@ -147,53 +128,16 @@ export default function CreateAlbumDialog({
             label="Description"
             fullWidth
             multiline
-            rows={2}
+            rows={3}
             value={formData.description}
             onChange={(e) =>
               setFormData((prev) => ({ ...prev, description: e.target.value }))
             }
+            placeholder="Describe this album..."
           />
-
-          <TextField
-            select
-            label="Event Type"
-            fullWidth
-            value={formData.event}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, event: e.target.value }))
-            }
-          >
-            <MenuItem value="">None</MenuItem>
-            {EVENT_OPTIONS.map((event) => (
-              <MenuItem key={event} value={event}>
-                {event}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <TextField
-            label="Occasion (optional)"
-            fullWidth
-            placeholder="e.g., John's 50th Birthday"
-            value={formData.occasion}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, occasion: e.target.value }))
-            }
-          />
-
-          <LocalizationProvider dateAdapter={AdapterDayjs}>
-            <DatePicker
-              label="Event Date (optional)"
-              value={formData.date}
-              onChange={(newValue) =>
-                setFormData((prev) => ({ ...prev, date: newValue }))
-              }
-              slotProps={{ textField: { fullWidth: true } }}
-            />
-          </LocalizationProvider>
 
           <Box>
-            <Box sx={{ mb: 1 }}>Tags</Box>
+            <Box sx={{ mb: 1, fontWeight: 600 }}>Tags</Box>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               {TAG_OPTIONS.map((tag) => (
                 <Chip

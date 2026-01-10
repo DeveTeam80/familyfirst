@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // src/components/familytree/FamilyTreeChart.tsx
 import React, {
   useRef,
@@ -6,11 +7,10 @@ import React, {
   useImperativeHandle,
   forwardRef,
 } from "react";
-import { Theme } from "@mui/material/styles";
+import { Theme } from "@mui/material";
 import {
   FamilyTreeChartHandle,
   FamilyTreeNode,
-  F3CardData,
   RelationType,
 } from "./types";
 
@@ -45,104 +45,153 @@ export const FamilyTreeChart = forwardRef<
     ref
   ) => {
     const containerRef = useRef<HTMLDivElement>(null);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const f3ChartInstance = useRef<any>(null);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const f3EditTreeRef = useRef<any>(null);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const f3LibRef = useRef<any>(null);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const activeChartDataRef = useRef<any[]>([]);
     const onNodeSelectRef = useRef(onNodeSelect);
     const onAddRelativeRef = useRef(onAddRelative);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const prevTreeDataRef = useRef<any[]>([]);
 
     onNodeSelectRef.current = onNodeSelect;
     onAddRelativeRef.current = onAddRelative;
 
+    // ⭐ Responsive dimensions
+    const cardWidth = isMobile ? 70 : 240;
+    const cardHeight = isMobile ? 90 : 100;
+    const cardXSpacing = isMobile ? 80 : 260;
+    const cardYSpacing = isMobile ? 100 : 160;
+
     const createChart = useCallback(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (f3: any, dataProps: any[]) => {
         if (!containerRef.current) return;
 
         containerRef.current.innerHTML = "";
         const dataClone = JSON.parse(JSON.stringify(dataProps));
         activeChartDataRef.current = dataClone;
-        prevTreeDataRef.current = dataProps;
 
         const f3Chart = f3
           .createChart("#FamilyChart", dataClone)
-          .setTransitionTime(1000)
-          .setCardXSpacing(isMobile ? 200 : 260)
-          .setCardYSpacing(isMobile ? 120 : 160)
+          .setTransitionTime(800)
+          .setCardXSpacing(cardXSpacing)
+          .setCardYSpacing(cardYSpacing)
           .setShowSiblingsOfMain(true)
           .setOrientationVertical();
+
+        // Zoom control for mobile
+        if (isMobile && f3Chart.zoom) {
+          setTimeout(() => {
+            try {
+              f3Chart.zoom.scaleExtent([0.3, 3]);
+              f3Chart.zoom.scaleTo(f3Chart.svg, 0.9);
+            } catch (e) {
+              console.warn('Zoom control not available');
+            }
+          }, 100);
+        }
 
         const f3Card = f3Chart
           .setCardHtml()
           .setCardDim({
-            width: 240,
-            height: 100,
-            inner_width: 240,
-            inner_height: 100,
+            width: cardWidth,
+            height: cardHeight,
+            inner_width: cardWidth,
+            inner_height: cardHeight,
           })
           .setMiniTree(true)
           .setStyle("imageCircle")
           .setOnHoverPathToMain();
 
-        // -----------------------------------------------------------
-        // 🎨 CUSTOM CARD HTML CREATOR (FIXED)
-        // -----------------------------------------------------------
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // ⭐ CUSTOM HTML CREATOR
         f3Card.setCardInnerHtmlCreator((d: any) => {
-          // 1. HANDLE "ADD" BUTTONS (Virtual/Ghost Nodes)
+          // Handle add buttons
           if (d.data.to_add || d.data._new_rel_data) {
-            const label = d.data.label || d.data["first name"] || "Add Relative";
+            const label = d.data.label || d.data["first name"] || "Add";
+            
+            if (isMobile) {
+              return `
+                <div class="custom-card card-add-mobile">
+                  <div class="add-icon-mobile">
+                    <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  </div>
+                  <div class="add-label-mobile">${label}</div>
+                </div>
+              `;
+            }
+            
             return `
-               <div class="custom-card card-add">
-                 <div class="add-icon">+</div>
-                 <div class="add-label">${label}</div>
-               </div>
+              <div class="custom-card card-add">
+                <div class="add-icon">
+                   <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </div>
+                <div class="add-label">${label}</div>
+              </div>
             `;
           }
 
-          // 2. HANDLE REAL NODES
-          // IMPORTANT: The data is nested in d.data.data because d.data is the Node object
-          const node = d.data;     // The Node object { id, data: {...}, rels: ... }
-          const userData = node.data || {}; // The actual user data { "first name": ... }
-
-          const image = userData.avatar || userData.photoUrl || "https://i.pravatar.cc/150?img=12";
+          // Handle real person cards
+          const node = d.data;
+          const userData = node.data || {};
+          const defaultAvatar = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23999'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E`;
+          
+          const avatar = userData.avatar || userData.photoUrl || defaultAvatar;
           const firstName = userData["first name"] || "Unknown";
           const lastName = userData["last name"] || "";
+          const fullName = `${firstName} ${lastName}`;
+          
+          const formatYearOnly = (dateString: string | undefined) => {
+            if (!dateString) return "";
+            return new Date(dateString).getFullYear().toString();
+          };
 
-          // Dates
-          const birthYear = userData.birthday ? new Date(userData.birthday).getFullYear() : "";
-          const deathYear = userData.deathDate ? new Date(userData.deathDate).getFullYear() : "";
-          const dateString = deathYear ? `${birthYear} - ${deathYear}` : birthYear;
-
-          // Status Flags
           const isDeceased = !!userData.deathDate;
           const genderClass = userData.gender === "M" ? "male" : "female";
           const deceasedClass = isDeceased ? "card-deceased" : "";
 
+          if (isMobile) {
+            // Mobile: Circular design
+            let displayName = firstName;
+            if (firstName.length > 10) {
+              displayName = firstName.substring(0, 9) + '...';
+            }
+
+            return `
+              <div class="custom-card card-circle-wrapper ${genderClass} ${deceasedClass}">
+                <div class="card-circle">
+                  ${isDeceased ? '<div class="deceased-badge">†</div>' : ''}
+                  <img src="${avatar}" class="card-avatar-circle" alt="${fullName}">
+                </div>
+                <div class="card-name-mobile" title="${fullName}">${displayName}</div>
+              </div>
+            `;
+          }
+
+          // Desktop: Full card
+          const birthYear = formatYearOnly(userData.birthday);
+          const deathYear = formatYearOnly(userData.deathDate);
+          const dateStr = deathYear ? `${birthYear} - ${deathYear}` : birthYear;
+          
+          const formatDateForDisplay = (dateString: string | undefined) => {
+            if (!dateString) return "";
+            const date = new Date(dateString);
+            return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+          };
+          const anniversaryDisplay = userData.weddingAnniversary
+            ? formatDateForDisplay(userData.weddingAnniversary)
+            : "";
+
           return `
-             <div class="custom-card card-profile ${genderClass} ${deceasedClass}">
-                ${isDeceased ? '<div class="ribbon">In Memory</div>' : ''}
-                
-                <div class="card-image-wrapper">
-                  <img src="${image}" class="card-avatar" alt="avatar"/>
-                </div>
-                
-                <div class="card-details">
-                   <div class="card-name" title="${firstName} ${lastName}">
-                      ${firstName} ${lastName}
-                   </div>
-                   <div class="card-dates">${dateString}</div>
-                   ${userData.weddingAnniversary ? `<div class="card-anniversary">💍 ${new Date(userData.weddingAnniversary).getFullYear()}</div>` : ''}
-                </div>
-             </div>
-           `;
+            <div class="custom-card card-profile ${genderClass} ${deceasedClass}">
+              ${isDeceased ? '<div class="ribbon">In Memory</div>' : ''}
+              <div class="card-image-wrapper">
+                <img src="${avatar}" class="card-avatar" alt="${fullName}"/>
+              </div>
+              <div class="card-details">
+                <div class="card-name" title="${fullName}">${fullName}</div>
+                ${dateStr ? `<div class="card-dates">${dateStr}</div>` : ''}
+                ${anniversaryDisplay ? `<div class="card-anniversary" title="Wedding Anniversary: ${anniversaryDisplay}">💍 ${new Date(userData.weddingAnniversary).getFullYear()}</div>` : ''}
+              </div>
+            </div>
+          `;
         });
 
         if (isAdmin) {
@@ -154,15 +203,12 @@ export const FamilyTreeChart = forwardRef<
           f3EditTreeRef.current = editTree;
         }
 
-        // -----------------------------------------------------------
-        // ✅ CLICK HANDLER
-        // -----------------------------------------------------------
-        f3Card.setOnCardClick((e: MouseEvent, d: F3CardData) => {
+        // ⭐ CLICK HANDLER (Restored from your working version)
+        f3Card.setOnCardClick((e: MouseEvent, d: any) => {
           e.stopPropagation();
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const dataAny = d.data as any;
 
-          // GHOST NODE
+          // Handle ghost nodes
           if (dataAny._new_rel_data) {
             const handler = onAddRelativeRef.current;
             const relData = dataAny._new_rel_data;
@@ -181,7 +227,7 @@ export const FamilyTreeChart = forwardRef<
             return;
           }
 
-          // VIRTUAL NODE
+          // Handle virtual add nodes
           if (dataAny.to_add) {
             const childId = dataAny.rels?.children?.[0];
             const spouseId = dataAny.rels?.spouses?.[0];
@@ -191,7 +237,7 @@ export const FamilyTreeChart = forwardRef<
             if (name === "Add Mother") role = "mother";
             else if (name === "Add Father") role = "father";
             else if (spouseId) {
-              const spouse = activeChartDataRef.current.find((n) => n.id === spouseId);
+              const spouse = activeChartDataRef.current.find((n: any) => n.id === spouseId);
               if (spouse) role = spouse.data.gender === "M" ? "mother" : "father";
             }
 
@@ -205,13 +251,12 @@ export const FamilyTreeChart = forwardRef<
             return;
           }
 
-          // REAL NODE
-          const nodeData = activeChartDataRef.current.find((n) => n.id === d.data.id);
+          // Handle real person nodes
+          const nodeData = activeChartDataRef.current.find((n: any) => n.id === d.data.id);
           if (nodeData) {
             if (onNodeSelectRef.current) {
               onNodeSelectRef.current(nodeData);
             }
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const cardAny = f3Card as any;
             if (cardAny.onCardClickDefault) {
               cardAny.onCardClickDefault(e, d);
@@ -219,18 +264,17 @@ export const FamilyTreeChart = forwardRef<
           }
         });
 
-        // Ensure proper cursor styling
-        f3Card.setOnCardUpdate(function (this: HTMLElement, d: F3CardData) {
+        // Ensure cursor styling
+        f3Card.setOnCardUpdate(function (this: HTMLElement) {
           this.style.cursor = "pointer";
         });
 
         f3Chart.updateTree({ initial: true });
         f3ChartInstance.current = f3Chart;
       },
-      [isAdmin, isMobile]
+      [isAdmin, isMobile, cardWidth, cardHeight, cardXSpacing, cardYSpacing]
     );
 
-    // ... (Cleanup & Lifecycle) ...
     const performExitAddMode = useCallback(() => {
       try {
         if (f3EditTreeRef.current?.addRelativeInstance?.onCancel) {
@@ -246,7 +290,6 @@ export const FamilyTreeChart = forwardRef<
     }, [onAddModeChange]);
 
     useEffect(() => {
-      if (prevTreeDataRef.current === treeData) return;
       if (f3LibRef.current && treeData.length > 0) {
         createChart(f3LibRef.current, treeData);
       }
@@ -275,10 +318,7 @@ export const FamilyTreeChart = forwardRef<
       if (!container) return;
       const handleBgClick = (e: MouseEvent) => {
         const target = e.target as HTMLElement;
-        if (
-          target.classList.contains("f3-cont") ||
-          target.tagName === "svg"
-        ) {
+        if (target.classList.contains("f3-cont") || target.tagName === "svg") {
           performExitAddMode();
         }
       };
@@ -296,7 +336,7 @@ export const FamilyTreeChart = forwardRef<
       },
       triggerAddMode: (nodeId: string) => {
         if (f3ChartInstance.current && f3EditTreeRef.current) {
-          const node = activeChartDataRef.current.find((n) => n.id === nodeId);
+          const node = activeChartDataRef.current.find((n: any) => n.id === nodeId);
           if (node) {
             f3ChartInstance.current.updateTree({ main_id: nodeId });
             f3EditTreeRef.current.open(node);
@@ -319,54 +359,215 @@ export const FamilyTreeChart = forwardRef<
 
     return (
       <>
-        {/* DARK THEME + CARD STYLES */}
         <style jsx global>{`
           .f3-form-cont {
             display: none !important;
           }
+
+          /* Enable pointer events */
           .f3-card-edit, g.f3-card-edit {
             pointer-events: auto !important;
             cursor: pointer !important;
           }
 
-          /* --- CARD CONTAINER --- */
-          .custom-card {
-            width: 240px;
-            height: 100px;
-            display: flex;
-            align-items: center;
-            border-radius: 16px;
-            padding: 10px;
-            position: relative;
-            overflow: visible;
-            box-sizing: border-box;
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+          /* Disable mobile tap highlight */
+          .card_cont, .card, .custom-card, .card-circle, .card-avatar-circle {
+            -webkit-tap-highlight-color: transparent !important;
+            -webkit-touch-callout: none !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
           }
 
-          /* --- PROFILE CARD STYLE (Dark Theme) --- */
+          /* SVG path highlighting */
+          @media (hover: hover) and (pointer: fine) {
+            .card-circle:hover,
+            .card-profile:hover {
+              transform: scale(1.05);
+            }
+          }
+
+          .f3 .link-hover {
+            stroke: #a78bfa !important;
+            stroke-width: 3px !important;
+            opacity: 1 !important;
+          }
+
+          .f3 .link {
+            transition: stroke 0.3s ease, stroke-width 0.3s ease;
+          }
+
+          /* Card container base */
+          .custom-card {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: ${isMobile ? '0' : '16px'};
+            padding: ${isMobile ? '0' : '10px'};
+            position: relative;
+            box-sizing: border-box;
+            transition: all 0.2s ease;
+          }
+
+          /* ===== MOBILE CIRCULAR DESIGN ===== */
+          .card-circle-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            padding-top: ${isMobile ? '10px' : '10px'};
+            position: relative;
+            z-index: 2;  /* Avatar on top */
+          }
+
+          /* ⭐ FIX: Mini-tree tucks BEHIND the avatar circle */
+          ${isMobile ? `
+            .f3 .mini-tree {
+              position: absolute !important;
+              top: -2px !important;
+              left: 50% !important;
+              transform: translateX(-50%) scale(0.7) !important;
+              z-index: 0 !important;
+            }
+            .f3 .mini-tree svg {
+              width: 50px !important;
+              height: 16px !important;
+            }
+          ` : ''}
+
+          .card-circle {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            overflow: hidden;
+            position: relative;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            background: #1e1b2e;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
+            transition: all 0.2s ease;
+            z-index: 2; /* On top of mini-tree */
+          }
+
+          .card-circle:active {
+            transform: scale(0.92);
+          }
+
+          .card-circle-wrapper.male .card-circle {
+            border-color: #60a5fa;
+            box-shadow: 0 3px 12px rgba(96, 165, 250, 0.4);
+          }
+
+          .card-circle-wrapper.female .card-circle {
+            border-color: #f472b6;
+            box-shadow: 0 3px 12px rgba(244, 114, 182, 0.4);
+          }
+
+          .card-circle-wrapper.card-deceased .card-circle {
+            filter: grayscale(100%) brightness(0.7);
+            border-color: #666;
+          }
+
+          .card-avatar-circle {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+          }
+
+          .deceased-badge {
+            position: absolute;
+            top: -3px;
+            right: -3px;
+            background: #000;
+            color: #999;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            border: 2px solid #1e1b2e;
+            z-index: 10;
+          }
+
+          .card-name-mobile {
+            text-align: center;
+            font-size: 10px;
+            font-weight: 600;
+            color: #ececec;
+            margin-top: 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+            padding: 0 2px;
+          }
+
+          /* --- MOBILE ADD BUTTON (Ghost Style with Z-Index Fix) --- */
+          .card-add-mobile {
+            flex-direction: column;
+            gap: 4px;
+            padding-top: 10px;
+            position: relative;
+            z-index: 2; /* ⭐ Ensure clickable above svg lines */
+          }
+
+          .add-icon-mobile {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(30, 27, 46, 0.9);
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.7);
+            transition: all 0.2s ease;
+            pointer-events: auto;
+          }
+
+          .card-add-mobile:active .add-icon-mobile {
+            border-style: solid;
+            transform: scale(0.92);
+            background: rgba(45, 36, 56, 1);
+          }
+
+          .add-label-mobile {
+            font-size: 10px;
+            font-weight: 600;
+            color: #ececec;
+            margin-top: 6px;
+          }
+
+          /* --- DESKTOP PROFILE CARD STYLE (Dark Theme) --- */
           .card-profile {
-            background: linear-gradient(145deg, #2d2438, #1e1b2e); /* Deep Purple/Black */
+            background: linear-gradient(145deg, #2d2438, #1e1b2e);
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
             color: #fff;
+            padding: 10px;
           }
+
           .card-profile:hover {
             transform: translateY(-4px);
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
             border-color: rgba(255, 255, 255, 0.3);
           }
 
-          /* --- GENDER ACCENTS (Subtle Borders/Glows) --- */
           .card-profile.male .card-image-wrapper {
-            border-color: #60a5fa; /* Blue */
+            border-color: #60a5fa;
             box-shadow: 0 0 10px rgba(96, 165, 250, 0.2);
           }
+
           .card-profile.female .card-image-wrapper {
-            border-color: #f472b6; /* Pink */
+            border-color: #f472b6;
             box-shadow: 0 0 10px rgba(244, 114, 182, 0.2);
           }
 
-          /* --- AVATAR --- */
           .card-image-wrapper {
             width: 70px;
             height: 70px;
@@ -376,13 +577,13 @@ export const FamilyTreeChart = forwardRef<
             border: 2px solid #444;
             background: #000;
           }
+
           .card-avatar {
             width: 100%;
             height: 100%;
             object-fit: cover;
           }
 
-          /* --- TEXT DETAILS --- */
           .card-details {
             margin-left: 14px;
             display: flex;
@@ -391,6 +592,7 @@ export const FamilyTreeChart = forwardRef<
             overflow: hidden;
             flex: 1;
           }
+
           .card-name {
             font-weight: 600;
             font-size: 15px;
@@ -400,97 +602,138 @@ export const FamilyTreeChart = forwardRef<
             text-overflow: ellipsis;
             margin-bottom: 4px;
           }
+
           .card-dates {
             font-size: 12px;
-            color: #9ca3af; /* Grey text */
+            color: #9ca3af;
             font-family: monospace;
           }
+
           .card-anniversary {
             font-size: 11px;
-            color: #d8b4fe; /* Light Purple */
+            color: #d8b4fe;
             margin-top: 4px;
             display: flex;
             align-items: center;
             gap: 4px;
           }
 
-          /* --- ADD BUTTON STYLE --- */
-.card-add {
-  background: rgba(30, 27, 46, 0.95) !important; /* Increased opacity, matches dark theme */
-  border: 2px dashed rgba(255, 255, 255, 0.25) !important;
-  justify-content: center;
-  flex-direction: column;
-  gap: 10px;
-  color: rgba(255, 255, 255, 0.7);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important; /* Added subtle shadow */
-  backdrop-filter: blur(10px) !important; /* Blur effect for background */
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
-
-.card-add:hover {
-  background: rgba(45, 36, 56, 0.98) !important; /* Even more opaque on hover */
-  border-color: rgba(255, 255, 255, 0.5) !important;
-  border-style: solid !important; /* Change from dashed to solid on hover */
-  color: #fff;
-  transform: scale(1.05) !important; /* Slightly bigger scale */
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important; /* Stronger shadow on hover */
-}
-
-.add-icon {
-  font-size: 28px;
-  font-weight: 300;
-  line-height: 1;
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.05); /* Subtle background circle */
-  border-radius: 50%;
-  transition: all 0.3s ease;
-}
-
-.card-add:hover .add-icon {
-  background: rgba(255, 255, 255, 0.1);
-  transform: rotate(90deg); /* Rotate + icon on hover */
-}
-
-.add-label {
-  font-size: 12px;
-  font-weight: 600; /* Bolder */
-  text-transform: uppercase;
-  letter-spacing: 1px; /* More letter spacing */
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); /* Text shadow for readability */
-  transition: all 0.3s ease;
-}
-
-.card-add:hover .add-label {
-  letter-spacing: 1.5px; /* Expand on hover */
-}
-
-          /* --- DECEASED (HARRY POTTER) STYLE --- */
-          .card-profile.card-deceased {
-            background: #1a1a1a; /* Very dark grey */
-            border-color: #444;
-            filter: grayscale(100%) brightness(0.9);
-            transition: all 0.5s ease;
+          /* --- DESKTOP ADD BUTTON STYLE --- */
+          .card-add {
+            background: rgba(30, 27, 46, 0.95) !important;
+            border: 2px dashed rgba(255, 255, 255, 0.25) !important;
+            justify-content: center;
+            flex-direction: column;
+            gap: 10px;
+            color: rgba(255, 255, 255, 0.7);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+            backdrop-filter: blur(10px) !important;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
           }
-          .card-profile.card-deceased .card-name {
-            font-family: serif; /* Magic vibe */
-            letter-spacing: 0.5px;
-            color: #ccc;
+
+          .card-add:hover {
+            background: rgba(45, 36, 56, 0.98) !important;
+            border-color: rgba(255, 255, 255, 0.5) !important;
+            border-style: solid !important;
+            color: #fff;
+            transform: scale(1.05) !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
           }
+
+          .add-icon {
+            font-size: 28px;
+            font-weight: 300;
+            line-height: 1;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 50%;
+            transition: all 0.3s ease;
+          }
+
+          .card-add:hover .add-icon {
+            background: rgba(255, 255, 255, 0.1);
+            transform: rotate(90deg);
+          }
+
+          .add-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+          }
+
+          .card-add:hover .add-label {
+            letter-spacing: 1.5px;
+          }
+
+          /* --- LIBRARY DEFAULT NODE OVERRIDES (RESTORES FANCY CSS FOR DEFAULT NODES) --- */
+          /* If the library renders its own .card-inner nodes (ignoring our HTML), we style them here. */
           
-          /* Lumos Effect */
-          .card-profile.card-deceased:hover {
-            filter: grayscale(0%) brightness(1.1);
-            background: #252525;
-            box-shadow: 0 0 20px rgba(167, 139, 250, 0.4); /* Purple glow */
-            border-color: #a78bfa;
-            z-index: 10;
+          .card-inner {
+            background: rgba(30, 27, 46, 0.95) !important; 
+            border: 2px dashed rgba(255, 255, 255, 0.25) !important;
+            border-radius: 16px !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+            backdrop-filter: blur(10px) !important;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+            
+            /* Center Content */
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 10px !important;
           }
 
-          /* Ribbon */
+          /* Hover State */
+          .card-inner:hover {
+            background: rgba(45, 36, 56, 0.98) !important;
+            border-color: rgba(255, 255, 255, 0.5) !important;
+            border-style: solid !important;
+            transform: scale(1.05) !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
+            z-index: 10 !important;
+          }
+
+          /* Icon inside default library node */
+          .card-inner .person-icon {
+            width: 44px !important;
+            height: 44px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background: rgba(255, 255, 255, 0.05) !important;
+            border-radius: 50% !important;
+            transition: all 0.3s ease !important;
+          }
+
+          .card-inner:hover .person-icon {
+            background: rgba(255, 255, 255, 0.1) !important;
+            transform: rotate(90deg) !important;
+          }
+
+          /* Text inside default library node */
+          .card-inner .card-label {
+            color: rgba(255, 255, 255, 0.7) !important;
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 1px !important;
+            transition: all 0.3s ease !important;
+          }
+
+          .card-inner:hover .card-label {
+            color: #fff !important;
+            letter-spacing: 1.5px !important;
+          }
+
+          /* --- DECEASED / RIBBON --- */
           .ribbon {
             position: absolute;
             top: -8px;
@@ -507,145 +750,20 @@ export const FamilyTreeChart = forwardRef<
             z-index: 5;
             box-shadow: 0 2px 4px rgba(0,0,0,0.5);
           }
-          
-  /* --- LIBRARY'S DEFAULT ADD RELATIVE BUTTONS --- */
-.card.card-new-rel {
-  background: rgba(30, 27, 46, 0.95) !important; /* Increased opacity, matches dark theme */
-  border: 2px dashed rgba(255, 255, 255, 0.25) !important;
-  border-radius: 16px !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important; /* Added subtle shadow */
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
-  backdrop-filter: blur(10px) !important; /* Blur effect for background */
-}
 
-.card.card-new-rel:hover {
-  background: rgba(45, 36, 56, 0.98) !important; /* Even more opaque on hover */
-  border-color: rgba(255, 255, 255, 0.5) !important;
-  border-style: solid !important; /* Change from dashed to solid on hover */
-  transform: translate(-50%, -50%) scale(1.05) !important; /* Slightly bigger scale */
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important; /* Stronger shadow on hover */
-}
+          .card-profile.card-deceased {
+            background: #1a1a1a;
+            border-color: #444;
+            filter: grayscale(100%) brightness(0.9);
+            transition: all 0.5s ease;
+          }
 
-.card.card-new-rel .card-inner {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 10px !important; /* Slightly more spacing */
-}
-
-/* The + icon container */
-.card.card-new-rel .person-icon {
-  width: 44px !important;
-  height: 44px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  background: rgba(255, 255, 255, 0.05) !important; /* Subtle background circle */
-  border-radius: 50% !important;
-  transition: all 0.3s ease !important;
-}
-
-.card.card-new-rel:hover .person-icon {
-  background: rgba(255, 255, 255, 0.1) !important;
-  transform: rotate(90deg) !important; /* Rotate + icon on hover */
-}
-
-.card.card-new-rel .person-icon svg {
-  width: 28px !important;
-  height: 28px !important;
-  color: rgba(255, 255, 255, 0.7) !important; /* Slightly more visible */
-  transition: all 0.3s ease !important;
-}
-
-.card.card-new-rel:hover .person-icon svg {
-  color: #fff !important;
-}
-
-/* The label text */
-.card.card-new-rel .card-label {
-  color: rgba(255, 255, 255, 0.7) !important; /* More visible */
-  font-size: 12px !important;
-  font-weight: 600 !important; /* Bolder */
-  text-transform: uppercase !important;
-  letter-spacing: 1px !important; /* More letter spacing */
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important; /* Text shadow for readability */
-}
-
-.card.card-new-rel:hover .card-label {
-  color: #fff !important;
-  letter-spacing: 1.5px !important; /* Expand on hover */
-}
-
-/* Gender-specific colors with glows */
-.card.card-new-rel.card-male .person-icon {
-  background: rgba(96, 165, 250, 0.08) !important;
-}
-
-.card.card-new-rel.card-male .person-icon svg {
-  color: #60a5fa !important;
-}
-
-.card.card-new-rel.card-male:hover {
-  border-color: #60a5fa !important;
-  box-shadow: 0 4px 16px rgba(96, 165, 250, 0.3) !important; /* Blue glow */
-}
-
-.card.card-new-rel.card-male:hover .person-icon {
-  background: rgba(96, 165, 250, 0.15) !important;
-}
-
-.card.card-new-rel.card-male:hover .person-icon svg {
-  color: #93c5fd !important;
-}
-
-.card.card-new-rel.card-female .person-icon {
-  background: rgba(244, 114, 182, 0.08) !important;
-}
-
-.card.card-new-rel.card-female .person-icon svg {
-  color: #f472b6 !important;
-}
-
-.card.card-new-rel.card-female:hover {
-  border-color: #f472b6 !important;
-  box-shadow: 0 4px 16px rgba(244, 114, 182, 0.3) !important; /* Pink glow */
-}
-
-.card.card-new-rel.card-female:hover .person-icon {
-  background: rgba(244, 114, 182, 0.15) !important;
-}
-
-.card.card-new-rel.card-female:hover .person-icon svg {
-  color: #f9a8d4 !important;
-}
-
-/* Specific rel-type styling */
-.card.card-new-rel [data-rel-type="son"] {
-  color: #60a5fa !important;
-}
-
-.card.card-new-rel [data-rel-type="daughter"] {
-  color: #f472b6 !important;
-}
-
-.card.card-new-rel [data-rel-type="spouse"] {
-  color: rgba(216, 180, 254, 0.9) !important; /* Purple for spouse */
-}
-
-.card.card-new-rel:hover [data-rel-type="son"],
-.card.card-new-rel:hover [data-rel-type="daughter"],
-.card.card-new-rel:hover [data-rel-type="spouse"] {
-  color: #fff !important;
-}
-
-/* Remove any default card styling that might interfere */
-.card.card-new-rel .card-inner.card-image-circle {
-  border-radius: 0 !important;
-}
+          .card-profile.card-deceased:hover {
+            filter: grayscale(0%) brightness(1.1);
+            background: #252525;
+            box-shadow: 0 0 20px rgba(167, 139, 250, 0.4);
+            border-color: #a78bfa;
+          }
         `}</style>
 
         <div

@@ -60,6 +60,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import CreateAlbumDialog from "@/components/gallery/CreateAlbumDialog";
 import BulkUploadDialog from "@/components/gallery/BulkUploadDialog";
+import EditAlbumDialog from "@/components/gallery/EditAlbumDialog";
 
 interface Album {
   id: string;
@@ -70,7 +71,7 @@ interface Album {
   coverImage: string | null;
   tags: string[];
   createdAt: string;
-  createdBy: string; 
+  createdBy: string;
   creator: {
     id: string;
     name: string | null;
@@ -117,6 +118,10 @@ export default function GalleryPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
 
+  // Add this state near other dialog states (around line 85)
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editAlbumId, setEditAlbumId] = useState<string | null>(null);
+
   useEffect(() => {
     fetchAlbums();
   }, []);
@@ -157,9 +162,22 @@ export default function GalleryPage() {
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, album: Album) => {
     event.stopPropagation();
-    event.preventDefault(); 
+    event.preventDefault();
     setAnchorEl(event.currentTarget);
     setMenuAlbum(album);
+  };
+
+  // Add this handler function (around line 160, after handleDeleteAlbum)
+  const handleEditAlbum = () => {
+    if (!menuAlbum) return;
+    setEditAlbumId(menuAlbum.id);
+    setEditDialogOpen(true);
+    handleMenuClose();
+  };
+
+  const handleEditSuccess = () => {
+    fetchAlbums();
+    setEditAlbumId(null);
   };
 
   const handleMenuClose = () => {
@@ -766,7 +784,7 @@ export default function GalleryPage() {
 
       {/* Album Context Menu */}
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
-        
+
         {/* Everyone can upload */}
         <MenuItem onClick={() => menuAlbum && handleUploadToAlbum(menuAlbum.id)}>
           <ListItemIcon>
@@ -777,7 +795,7 @@ export default function GalleryPage() {
 
         {/* Edit: Only Creator or Admin */}
         {canEditMenuAlbum && (
-          <MenuItem onClick={handleMenuClose}>
+          <MenuItem onClick={handleEditAlbum}>
             <ListItemIcon>
               <Edit fontSize="small" />
             </ListItemIcon>
@@ -819,6 +837,15 @@ export default function GalleryPage() {
         open={createDialogOpen}
         onClose={() => setCreateDialogOpen(false)}
         onSuccess={handleCreateSuccess}
+      />
+      <EditAlbumDialog
+        open={editDialogOpen}
+        onClose={() => {
+          setEditDialogOpen(false);
+          setEditAlbumId(null);
+        }}
+        albumId={editAlbumId}
+        onSuccess={handleEditSuccess}
       />
 
       {selectedAlbumId && (

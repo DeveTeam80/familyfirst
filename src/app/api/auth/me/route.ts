@@ -4,82 +4,72 @@ import { authOptions } from "@/lib/nextauth.config";
 import { prisma } from "@/lib/prisma";
 import cloudinary, { getPublicIdFromUrl } from "@/lib/cloudinary"; 
 
-// Types for session user
-interface SessionUser {
-  id?: string;
-  email?: string;
+// Helper to clear cookies if user is invalid
+function clearAuthCookies() {
+  const headers = new Headers();
+  // Clear both NextAuth and your custom cookie just in case
+  headers.append("Set-Cookie", "next-auth.session-token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+  headers.append("Set-Cookie", "ff_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+  return headers;
 }
 
-// Type for family membership from database (GET)
-interface FamilyMembershipDataWithJoinedAt {
-  role: string;
-  joinedAt: Date;
-  family: {
-    id: string;
-    name: string;
-  };
-}
-
-// Type for family membership from database (PATCH)
+// Type for family membership from database
 interface FamilyMembershipData {
   role: string;
+  joinedAt?: Date;
   family: {
     id: string;
     name: string;
   };
 }
 
-export async function GET(_req: NextRequest) {
+export async function GET() {
   try {
+    // 1. Get Session
     const session = await getServerSession(authOptions);
 
-    if (!session) {
+    // Check if session exists (NextAuth session usually has user object)
+    if (!session || !session.user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const sessionUser = session.user as SessionUser;
-    const sessionUserId = sessionUser?.id;
-    const sessionEmail = sessionUser?.email;
-
-    if (!sessionUserId && !sessionEmail) {
-      return NextResponse.json({ error: "Session missing identifying information" }, { status: 401 });
-    }
-
+    const sessionEmail = session.user.email;
+    
+    // 2. 🛡️ SECURITY CHECK: Does this user actually exist in the DB?
+    // We prefer ID if available, otherwise email
     const user = await prisma.user.findUnique({
-      where: sessionUserId ? { id: sessionUserId } : { email: sessionEmail },
+      where: { email: sessionEmail as string },
       select: {
         id: true,
         email: true,
         name: true,
-        // 👇 CRITICAL: These missing fields caused the button/data to vanish
-        username: true, 
+        username: true,
         avatarUrl: true,
         bio: true,
         location: true,
         birthday: true,
         weddingAnniversary: true,
-        
         familyMemberships: {
           select: {
             role: true,
             joinedAt: true,
-            family: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
+            family: { select: { id: true, name: true } },
           },
         },
       },
     });
 
+    // 3. HANDLE ZOMBIE SESSIONS (User deleted from DB but cookie remains)
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      console.warn(`Zombie session detected for ${sessionEmail}. Logging out.`);
+      return NextResponse.json(
+        { error: "User account no longer exists" }, 
+        { status: 401, headers: clearAuthCookies() }
+      );
     }
 
-    // Transform memberships
-    const memberships = (user.familyMemberships || []).map((m: FamilyMembershipDataWithJoinedAt) => ({
+    // 4. Transform Data for Frontend
+    const memberships = (user.familyMemberships || []).map((m) => ({
       familyId: m.family.id,
       familyName: m.family.name,
       role: m.role,
@@ -91,7 +81,7 @@ export async function GET(_req: NextRequest) {
         id: user.id,
         email: user.email,
         name: user.name,
-        username: user.username, // 👈 Return this so "isOwner" logic works
+        username: user.username,
         avatarUrl: user.avatarUrl ?? null,
         bio: user.bio ?? null,
         location: user.location ?? null,
@@ -110,16 +100,13 @@ export async function GET(_req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-
-    const sessionUser = session.user as SessionUser;
-    const sessionUserId = sessionUser?.id;
-    const sessionEmail = sessionUser?.email;
-
-    if (!sessionUserId && !sessionEmail) {
-      return NextResponse.json({ error: "Session missing identifying information" }, { status: 401 });
+    if (!session || !session.user?.email) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
+    const sessionEmail = session.user.email;
+
+    // Parse Body
     const body = await req.json().catch(() => ({}));
     const { name, bio, avatarUrl, location, avatar, birthday, anniversary } = body;
 
@@ -137,6 +124,7 @@ export async function PATCH(req: NextRequest) {
     if (typeof bio === "string") data.bio = bio;
     if (typeof location === "string") data.location = location;
     
+    // Handle Avatar (supports both field names)
     if (typeof avatarUrl === "string") data.avatarUrl = avatarUrl;
     else if (typeof avatar === "string") data.avatarUrl = avatar;
 
@@ -151,10 +139,11 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
     }
 
-    // CLOUDINARY CLEANUP
+    // 1. CLOUDINARY CLEANUP
+    // Fetch current avatar to see if we need to delete it
     if (data.avatarUrl) {
       const currentUser = await prisma.user.findUnique({
-        where: sessionUserId ? { id: sessionUserId } : { email: sessionEmail },
+        where: { email: sessionEmail },
         select: { avatarUrl: true }
       });
 
@@ -170,9 +159,9 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    // 1. UPDATE USER ACCOUNT
+    // 2. UPDATE USER ACCOUNT
     const updatedUser = await prisma.user.update({
-      where: sessionUserId ? { id: sessionUserId } : { email: sessionEmail },
+      where: { email: sessionEmail },
       data,
       select: {
         id: true,
@@ -192,15 +181,14 @@ export async function PATCH(req: NextRequest) {
       },
     });
 
-    // ⭐ 2. SYNC TO FAMILY TREE NODE (The Missing Piece)
-    // If any relevant data changed, update the linked tree node(s)
+    // 3. SYNC TO FAMILY TREE NODE
+    // If name, avatar, or dates changed, update the linked visual tree node
     if (
         data.birthday !== undefined || 
         data.weddingAnniversary !== undefined || 
         data.name !== undefined ||
         data.avatarUrl !== undefined
     ) {
-      // Split name safely
       const firstName = data.name ? data.name.split(" ")[0] : undefined;
       const lastName = data.name && data.name.split(" ").length > 1 
         ? data.name.split(" ").slice(1).join(" ") 
@@ -209,15 +197,10 @@ export async function PATCH(req: NextRequest) {
       await prisma.familyTreeNode.updateMany({
         where: { userId: updatedUser.id },
         data: {
-          // Sync Dates
           ...(data.birthday !== undefined && { birthDate: data.birthday }),
           ...(data.weddingAnniversary !== undefined && { weddingAnniversary: data.weddingAnniversary }),
-          
-          // Sync Name
           ...(firstName !== undefined && { firstName }),
           ...(lastName !== undefined && { lastName }),
-          
-          // Sync Avatar
           ...(data.avatarUrl !== undefined && { photoUrl: data.avatarUrl }),
         }
       });
@@ -225,7 +208,7 @@ export async function PATCH(req: NextRequest) {
       console.log(`✅ Synced profile updates to Family Tree for user ${updatedUser.id}`);
     }
 
-    // 3. PREPARE RESPONSE
+    // 4. PREPARE RESPONSE
     const memberships = (updatedUser.familyMemberships || []).map((m: FamilyMembershipData) => ({
       familyId: m.family.id,
       familyName: m.family.name,
@@ -246,6 +229,7 @@ export async function PATCH(req: NextRequest) {
       },
       memberships,
     });
+
   } catch (error) {
     console.error("PATCH /api/auth/me error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
