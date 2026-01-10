@@ -17,7 +17,6 @@ export async function cleanupOldNotifications() {
       },
     });
 
-    console.log(`🧹 Cleaned up ${deleted.count} old notifications`);
     return deleted.count;
   } catch (error) {
     console.error("Error cleaning up notifications:", error);
@@ -54,7 +53,6 @@ async function enforceUserNotificationLimit(userId: string, limit: number = 100)
             },
           },
         });
-        console.log(`🗑️  Deleted ${oldestRead.length} old notifications for user ${userId}`);
       }
     }
   } catch (error) {
@@ -106,7 +104,6 @@ export async function createNotification({
       },
     });
 
-    console.log(`✅ Created notification for user ${userId}: ${title}`);
   } catch (error) {
     console.error("Error creating notification:", error);
   }

@@ -98,16 +98,7 @@ export default function EditProfileDialog({
         fileType: "image/jpeg" as const,
       };
 
-      console.log("🔄 Compressing avatar...");
       const compressedFile = await imageCompression(file, options);
-      console.log(
-        `✅ Compressed: ${(file.size / 1024 / 1024).toFixed(2)} MB → ${(
-          compressedFile.size /
-          1024 /
-          1024
-        ).toFixed(2)} MB`
-      );
-
       // Upload to Cloudinary
       const formData = new FormData();
       formData.append("file", compressedFile);
@@ -127,7 +118,6 @@ export default function EditProfileDialog({
       }
 
       const data = await response.json();
-      console.log("✅ Upload successful:", data.secure_url);
       return data.secure_url;
     } catch (error) {
       console.error("❌ Upload error:", error);
@@ -143,7 +133,6 @@ export default function EditProfileDialog({
 
       // If there's a selected file (blob URL), upload it first
       if (selectedFile && avatar?.startsWith('blob:')) {
-        console.log("🔄 Uploading avatar to Cloudinary...");
         finalAvatarUrl = await uploadToCloudinary(selectedFile);
       }
 
@@ -165,8 +154,6 @@ export default function EditProfileDialog({
       setUploading(false);
     }
   };
-console.log("Birthday input value:", formatDateForInput(birthday));
-console.log("Anniversary input value:", formatDateForInput(anniversary));
   const previewSrc = avatar === null ? undefined : (avatar ?? currentAvatar) || undefined;
 
   return (

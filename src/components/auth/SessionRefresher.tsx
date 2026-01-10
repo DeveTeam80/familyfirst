@@ -36,7 +36,6 @@ export default function SessionRefresher() {
                // Data is fresh, do nothing
             } else {
                dispatch(setCurrentUser(fullUser)); 
-               console.log("🔄 Session refreshed & Memberships merged. Role:", newRole);
             }
           }
         }

@@ -42,8 +42,6 @@ export async function sendEmail({
       console.error("Resend error:", error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
-
-    console.log("✅ Email sent successfully:", data?.id);
     return { success: true, id: data?.id };
   } catch (error) {
     console.error("❌ Error sending email:", error);

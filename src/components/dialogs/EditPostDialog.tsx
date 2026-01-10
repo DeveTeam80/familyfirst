@@ -80,14 +80,11 @@ export default function EditPostDialog({
 
         for (const file of filesArray) {
           try {
-            console.log(`🔄 Compressing ${file.name}...`);
             const compressedFile = await imageCompression(file, options);
 
-            console.log(`☁️ Uploading ${file.name} to Cloudinary...`);
             // ⭐ CHANGED: Upload to Cloudinary instead of reading as Base64
             const url = await uploadToCloudinary(compressedFile);
 
-            console.log(`✅ Uploaded: ${url}`);
             newImages.push(url);
           } catch (error) {
             console.error(`❌ Error processing ${file.name}:`, error);

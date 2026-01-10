@@ -85,13 +85,6 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
-    // Optional: Log the first album to server console to verify data
-    if (albums.length > 0) {
-      console.log("🔥 [API] Album Data Sample:", { 
-        id: albums[0].id, 
-        createdBy: albums[0].createdBy 
-      });
-    }
 
     // Transform to flatten cover image (optional but cleaner for frontend)
     const formattedAlbums = albums.map(album => ({

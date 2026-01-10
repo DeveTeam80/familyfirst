@@ -205,7 +205,6 @@ export async function PATCH(req: NextRequest) {
         }
       });
       
-      console.log(`✅ Synced profile updates to Family Tree for user ${updatedUser.id}`);
     }
 
     // 4. PREPARE RESPONSE

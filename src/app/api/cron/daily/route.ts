@@ -18,7 +18,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log("Starting daily maintenance...");
 
     // Run all tasks in parallel
     const [deletedCount, _bd, _an] = await Promise.all([

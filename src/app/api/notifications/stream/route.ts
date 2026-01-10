@@ -176,7 +176,6 @@ export async function GET(_request: NextRequest) {
         },
       }).catch(console.error);
 
-      console.log(`SSE connection closed for user: ${userId}`);
     },
   });
 

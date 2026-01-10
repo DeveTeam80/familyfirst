@@ -282,7 +282,6 @@ export async function DELETE(
     const folderPath = `firstfamily/albums/${id}`;
     
     try {
-      console.log(`🗑️ Cleaning up Cloudinary folder: ${folderPath}`);
       await cloudinary.api.delete_resources_by_prefix(folderPath);
       await cloudinary.api.delete_folder(folderPath);
     } catch (cleanupError) {

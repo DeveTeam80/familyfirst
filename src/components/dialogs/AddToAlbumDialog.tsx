@@ -101,7 +101,6 @@ export default function AddToAlbumDialog({ open, onClose, photoIds }: AddToAlbum
                 msg = `Added ${added} new photo${added !== 1 ? 's' : ''}. (${duplicates} already existed)`;
             }
             setSuccess(true);
-            console.log(msg);
 
             setTimeout(() => {
                 setSuccess(false);

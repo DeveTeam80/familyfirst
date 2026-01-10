@@ -203,7 +203,7 @@ export const FamilyTreeChart = forwardRef<
           f3EditTreeRef.current = editTree;
         }
 
-        // ⭐ CLICK HANDLER (Restored from your working version)
+        // ⭐ CLICK HANDLER
         f3Card.setOnCardClick((e: MouseEvent, d: any) => {
           e.stopPropagation();
           const dataAny = d.data as any;
@@ -493,11 +493,12 @@ export const FamilyTreeChart = forwardRef<
             z-index: 10;
           }
 
+          /* ⭐ MOBILE NAME LABEL (FIXED: Visible on Light Mode) */
           .card-name-mobile {
             text-align: center;
             font-size: 10px;
             font-weight: 600;
-            color: #ececec;
+            color: ${theme.palette.mode === 'dark' ? '#ececec' : '#1e1b29'};
             margin-top: 6px;
             white-space: nowrap;
             overflow: hidden;
@@ -506,26 +507,27 @@ export const FamilyTreeChart = forwardRef<
             padding: 0 2px;
           }
 
-          /* --- MOBILE ADD BUTTON (Ghost Style with Z-Index Fix) --- */
+          /* --- MOBILE ADD BUTTON --- */
           .card-add-mobile {
             flex-direction: column;
             gap: 4px;
             padding-top: 10px;
             position: relative;
-            z-index: 2; /* ⭐ Ensure clickable above svg lines */
+            z-index: 2; /* ⭐ Ensure clickable */
           }
 
+          /* ⭐ MOBILE ADD ICON (FIXED: Darker border in Light Mode) */
           .add-icon-mobile {
             width: 60px;
             height: 60px;
             border-radius: 50%;
-            background: rgba(30, 27, 46, 0.9);
-            border: 2px dashed rgba(255, 255, 255, 0.3);
+            background: ${theme.palette.mode === 'dark' ? 'rgba(30, 27, 46, 0.9)' : 'rgba(255, 255, 255, 0.8)'};
+            border: 2px dashed ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.2)'};
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 24px;
-            color: rgba(255, 255, 255, 0.7);
+            color: ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)'};
             transition: all 0.2s ease;
             pointer-events: auto;
           }
@@ -536,14 +538,15 @@ export const FamilyTreeChart = forwardRef<
             background: rgba(45, 36, 56, 1);
           }
 
+          /* ⭐ MOBILE ADD LABEL (FIXED: Visible in Light Mode) */
           .add-label-mobile {
             font-size: 10px;
             font-weight: 600;
-            color: #ececec;
+            color: ${theme.palette.mode === 'dark' ? '#ececec' : '#1e1b29'};
             margin-top: 6px;
           }
 
-          /* --- DESKTOP PROFILE CARD STYLE (Dark Theme) --- */
+          /* --- DESKTOP PROFILE CARD STYLE --- */
           .card-profile {
             background: linear-gradient(145deg, #2d2438, #1e1b2e);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -672,9 +675,7 @@ export const FamilyTreeChart = forwardRef<
             letter-spacing: 1.5px;
           }
 
-          /* --- LIBRARY DEFAULT NODE OVERRIDES (RESTORES FANCY CSS FOR DEFAULT NODES) --- */
-          /* If the library renders its own .card-inner nodes (ignoring our HTML), we style them here. */
-          
+          /* --- LIBRARY DEFAULT NODE OVERRIDES --- */
           .card-inner {
             background: rgba(30, 27, 46, 0.95) !important; 
             border: 2px dashed rgba(255, 255, 255, 0.25) !important;
@@ -682,8 +683,6 @@ export const FamilyTreeChart = forwardRef<
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
             backdrop-filter: blur(10px) !important;
             transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
-            
-            /* Center Content */
             display: flex !important;
             flex-direction: column !important;
             align-items: center !important;
@@ -691,7 +690,6 @@ export const FamilyTreeChart = forwardRef<
             gap: 10px !important;
           }
 
-          /* Hover State */
           .card-inner:hover {
             background: rgba(45, 36, 56, 0.98) !important;
             border-color: rgba(255, 255, 255, 0.5) !important;
@@ -701,7 +699,6 @@ export const FamilyTreeChart = forwardRef<
             z-index: 10 !important;
           }
 
-          /* Icon inside default library node */
           .card-inner .person-icon {
             width: 44px !important;
             height: 44px !important;
@@ -718,7 +715,6 @@ export const FamilyTreeChart = forwardRef<
             transform: rotate(90deg) !important;
           }
 
-          /* Text inside default library node */
           .card-inner .card-label {
             color: rgba(255, 255, 255, 0.7) !important;
             font-size: 12px !important;
@@ -732,6 +728,14 @@ export const FamilyTreeChart = forwardRef<
             color: #fff !important;
             letter-spacing: 1.5px !important;
           }
+
+          .card-inner [data-rel-type="son"] { color: #60a5fa !important; }
+          .card-inner [data-rel-type="daughter"] { color: #f472b6 !important; }
+          .card-inner [data-rel-type="spouse"] { color: rgba(216, 180, 254, 0.9) !important; }
+          .card-inner [data-rel-type="father"] { color: #a78bfa !important; }
+          .card-inner [data-rel-type="mother"] { color: #f472b6 !important; }
+          
+          .card-inner:hover [data-rel-type] { color: #fff !important; }
 
           /* --- DECEASED / RIBBON --- */
           .ribbon {
