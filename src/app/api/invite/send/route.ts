@@ -81,7 +81,6 @@ export async function POST(req: NextRequest) {
         include: { family: { select: { name: true } } },
       });
 
-      console.log(`✅ Created temporary tree node: ${treeNode.id}`);
     }
 
     if (treeNode.familyId !== familyId) {

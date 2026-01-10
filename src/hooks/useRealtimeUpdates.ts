@@ -41,7 +41,6 @@ export function useRealtimeUpdates() {
       eventSource = new EventSource('/api/notifications/stream');
 
       eventSource.onopen = () => {
-        console.log('✅ SSE Connected');
         setConnected(true);
       };
 
@@ -50,7 +49,6 @@ export function useRealtimeUpdates() {
           const data = JSON.parse(event.data);
 
           if (data.type === 'connected') {
-            console.log('🔌 SSE stream established');
           } else if (data.type === 'update') {
             setNotifications(data.notifications || []);
             setUnreadCount(data.unreadCount || 0);
@@ -68,7 +66,6 @@ export function useRealtimeUpdates() {
 
         // Reconnect after 3 seconds
         reconnectTimeout = setTimeout(() => {
-          console.log('🔄 Reconnecting SSE...');
           connect();
         }, 3000);
       };

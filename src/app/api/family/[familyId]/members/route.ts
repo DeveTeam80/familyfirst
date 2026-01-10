@@ -191,7 +191,6 @@ export async function POST(
               { person1Id: node.id, person2Id: existingParentId, relationshipType: "SPOUSE" },
               { person1Id: existingParentId, person2Id: node.id, relationshipType: "SPOUSE" }
             );
-            console.log(`✅ Auto-linked parents as spouses: ${node.id} ↔ ${existingParentId}`);
           }
 
           // 4. ⭐ NEW: Auto-link new parent to ALL SIBLINGS
@@ -210,7 +209,6 @@ export async function POST(
               { person1Id: node.id, person2Id: sibling.person2Id, relationshipType: "PARENT" }, // New Parent -> Sibling
               { person1Id: sibling.person2Id, person2Id: node.id, relationshipType: "CHILD" }   // Sibling -> New Parent
             );
-            console.log(`✅ Auto-linked new parent to sibling: ${sibling.person2Id}`);
           }
         }
       } 
@@ -237,7 +235,6 @@ export async function POST(
             { person1Id: node.id, person2Id: child.person2Id, relationshipType: "PARENT" }, // New Spouse -> Child
             { person1Id: child.person2Id, person2Id: node.id, relationshipType: "CHILD" }   // Child -> New Spouse
           );
-          console.log(`✅ Auto-linked new spouse to existing child: ${child.person2Id}`);
         }
       }
 

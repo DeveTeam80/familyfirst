@@ -296,7 +296,6 @@ export default function FamilyTreePage() {
       }
 
       const createdMember = await res.json();
-      console.log("Member created:", createdMember);
 
       try {
         if (chartRef.current) {

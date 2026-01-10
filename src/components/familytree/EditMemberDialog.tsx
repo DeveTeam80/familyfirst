@@ -117,9 +117,7 @@ export function EditMemberDialog({
         fileType: "image/jpeg" as const,
       };
 
-      console.log("🔄 Compressing image...");
       const compressedFile = await imageCompression(file, options);
-      console.log(`✅ Compressed: ${file.size / 1024 / 1024} MB → ${compressedFile.size / 1024 / 1024} MB`);
 
       // Upload to Cloudinary
       const formData = new FormData();
@@ -143,7 +141,6 @@ export function EditMemberDialog({
       }
 
       const data = await response.json();
-      console.log("✅ Upload successful:", data.secure_url);
       return data.secure_url;
     } catch (error) {
       console.error("❌ Upload error:", error);
@@ -161,7 +158,6 @@ export function EditMemberDialog({
 
       // If there's a new file selected and it's a blob URL, upload it
       if (selectedFile && formData.avatar.startsWith("blob:")) {
-        console.log("🔄 Uploading new avatar...");
         finalAvatarUrl = await uploadToCloudinary(selectedFile);
       }
 

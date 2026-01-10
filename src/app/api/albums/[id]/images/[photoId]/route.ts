@@ -72,7 +72,6 @@ export async function DELETE(
     const wasInOnlyThisAlbum = albumPhoto.photo._count.albums === 1;
 
     if (!hasPostParent && wasInOnlyThisAlbum) {
-      console.log("🗑️ Photo is now an orphan. Destroying file...");
       
       // Delete from Cloudinary
       if (albumPhoto.photo.cloudinaryId && 

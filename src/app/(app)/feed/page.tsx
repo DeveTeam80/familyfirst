@@ -270,7 +270,6 @@ export default function Feed() {
       return;
     }
 
-    console.log(" Saving photos to album:", photoIds);
     setPhotosToSave(photoIds);
     setSaveToAlbumOpen(true);
   };
@@ -312,7 +311,6 @@ export default function Feed() {
 
   React.useEffect(() => {
     const unsubscribe = notificationEmitter.subscribe((postId: string) => {
-      console.log(" Feed received notification for post:", postId);
       handleNotificationPostOpen(postId);
     });
     return () => {

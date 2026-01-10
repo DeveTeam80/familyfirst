@@ -65,7 +65,6 @@ function AppLayoutContent({ children }: LayoutProps) {
 
   // --- Notification Handler (From File B) ---
   const handleNotificationClick = useCallback((postId: string) => {
-    console.log("📱 Notification clicked for post:", postId);
     // Emit event that Feed page will listen to
     notificationEmitter.emit(postId);
   }, []);
@@ -83,7 +82,6 @@ function AppLayoutContent({ children }: LayoutProps) {
 
     // If already set, do nothing
     if (activeFamilyId) {
-      console.log("[AppLayout] activeFamilyId already set:", activeFamilyId);
       return;
     }
 
@@ -91,7 +89,6 @@ function AppLayoutContent({ children }: LayoutProps) {
 
     (async () => {
       try {
-        console.log("[AppLayout] fetching /api/auth/me to initialize families");
         const res = await fetch("/api/auth/me", { credentials: "include" });
         if (!mounted) return;
 
@@ -105,10 +102,8 @@ function AppLayoutContent({ children }: LayoutProps) {
           json?.memberships ??
           (json?.family ? [{ familyId: json.family.id, role: json.family.role }] : []);
 
-        console.log("[AppLayout] memberships from /api/auth/me:", memberships);
 
         if (!Array.isArray(memberships) || memberships.length === 0) {
-          console.log("[AppLayout] no family memberships found for user");
           return;
         }
 
@@ -123,7 +118,6 @@ function AppLayoutContent({ children }: LayoutProps) {
           return;
         }
 
-        console.log("[AppLayout] selecting familyId:", familyId);
         dispatch(setActiveFamily(familyId));
         dispatch(fetchMembers(familyId));
       } catch (err) {

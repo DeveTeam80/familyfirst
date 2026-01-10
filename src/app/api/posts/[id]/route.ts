@@ -328,14 +328,12 @@ export async function DELETE(
         if (photo._count.albums > 0) {
           // ✅ Case A: Photo IS in an album -> SAVE IT
           // We detach it from the post so it stays in the gallery
-          console.log(`🛡️ Preserving photo ${photo.id} (used in ${photo._count.albums} albums)`);
           await prisma.photo.update({
             where: { id: photo.id },
             data: { postId: null } // Detach from post
           });
         } else {
           // ❌ Case B: Photo is NOT in an album -> DESTROY IT
-          console.log(`🗑️ Deleting photo ${photo.id} (unused)`);
           
           // Delete from Cloudinary
           if (photo.cloudinaryId && !["uploaded", "manual-update"].includes(photo.cloudinaryId)) {
