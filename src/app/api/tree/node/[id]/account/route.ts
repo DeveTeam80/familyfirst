@@ -10,6 +10,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // 🔒 SECURITY: Require authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id: nodeId } = await params;
     if (!nodeId) {
       return NextResponse.json({ error: "Missing node id" }, { status: 400 });

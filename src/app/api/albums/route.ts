@@ -6,12 +6,12 @@ import { prisma } from "@/lib/prisma";
 
 // ✅ Define proper types for the where clause
 interface AlbumWhereClause {
-    calendarEvent?: {
-        eventType: string;
-    };
-    tags?: {
-        has: string;
-    };
+  calendarEvent?: {
+    eventType: string;
+  };
+  tags?: {
+    has: string;
+  };
 }
 
 // GET all albums
@@ -27,14 +27,38 @@ export async function GET(req: NextRequest) {
     const eventType = searchParams.get("eventType");
     const tag = searchParams.get("tag");
 
-    const where: AlbumWhereClause = {};
-    
+    // 🔒 SECURITY: Get user's families to filter albums
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true },
+    });
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const userFamilies = await prisma.familyMember.findMany({
+      where: { userId: user.id },
+      select: { familyId: true },
+    });
+    const familyIds = userFamilies.map((f) => f.familyId);
+
+    // Build where clause with family filter
+    interface AlbumWhere {
+      familyId: { in: string[] };
+      calendarEvent?: { eventType: string };
+      tags?: { has: string };
+    }
+
+    const where: AlbumWhere = {
+      familyId: { in: familyIds }, // 🔒 Only user's families
+    };
+
     if (eventType && eventType !== "all") {
       where.calendarEvent = {
         eventType: eventType
       };
     }
-    
+
     if (tag && tag !== "all") {
       where.tags = { has: tag };
     }
@@ -50,9 +74,9 @@ export async function GET(req: NextRequest) {
         tags: true,
         createdAt: true,
         updatedAt: true,
-        
+
         // 👇 CRITICAL: Explicitly select the ID for permission checks
-        createdBy: true, 
+        createdBy: true,
 
         // Relations
         creator: {
@@ -88,8 +112,8 @@ export async function GET(req: NextRequest) {
 
     // Transform to flatten cover image (optional but cleaner for frontend)
     const formattedAlbums = albums.map(album => ({
-        ...album,
-        coverImage: album.coverImage || album.photos[0]?.photo.url || null,
+      ...album,
+      coverImage: album.coverImage || album.photos[0]?.photo.url || null,
     }));
 
     return NextResponse.json(formattedAlbums);
@@ -104,81 +128,81 @@ export async function GET(req: NextRequest) {
 
 // POST create new album
 export async function POST(req: NextRequest) {
-    try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-
-        const user = await prisma.user.findUnique({
-            where: { email: session.user.email },
-        });
-
-        if (!user) {
-            return NextResponse.json({ error: "User not found" }, { status: 404 });
-        }
-
-        let body;
-        try {
-            body = await req.json();
-        } catch (error) { // ✅ Changed from 'e' to 'error'
-            console.error("JSON parse error:", error);
-            return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-        }
-
-        const { title, description, tags, coverImage, calendarEventId, familyId } = body;
-
-        // Get user's family if not provided
-        const targetFamilyId = familyId || (
-            await prisma.familyMember.findFirst({
-                where: { userId: user.id },
-                select: { familyId: true },
-            })
-        )?.familyId;
-
-        if (!targetFamilyId) {
-            return NextResponse.json({ error: "No family found" }, { status: 400 });
-        }
-
-        const album = await prisma.album.create({
-            data: {
-                title,
-                description,
-                tags: tags || [],
-                coverImage,
-                calendarEventId: calendarEventId || null,
-                familyId: targetFamilyId,
-                createdBy: user.id,
-            },
-            include: {
-                creator: {
-                    select: {
-                        id: true,
-                        name: true,
-                        username: true,
-                        avatarUrl: true,
-                    },
-                },
-                calendarEvent: {
-                    select: {
-                        id: true,
-                        title: true,
-                        startTime: true,
-                        eventType: true,
-                    },
-                },
-                _count: {
-                    select: { photos: true },
-                },
-            },
-        });
-
-        return NextResponse.json(album);
-    } catch (error) {
-        console.error("Error creating album:", error);
-        return NextResponse.json(
-            { error: "Failed to create album" },
-            { status: 500 }
-        );
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    let body;
+    try {
+      body = await req.json();
+    } catch (error) { // ✅ Changed from 'e' to 'error'
+      console.error("JSON parse error:", error);
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const { title, description, tags, coverImage, calendarEventId, familyId } = body;
+
+    // Get user's family if not provided
+    const targetFamilyId = familyId || (
+      await prisma.familyMember.findFirst({
+        where: { userId: user.id },
+        select: { familyId: true },
+      })
+    )?.familyId;
+
+    if (!targetFamilyId) {
+      return NextResponse.json({ error: "No family found" }, { status: 400 });
+    }
+
+    const album = await prisma.album.create({
+      data: {
+        title,
+        description,
+        tags: tags || [],
+        coverImage,
+        calendarEventId: calendarEventId || null,
+        familyId: targetFamilyId,
+        createdBy: user.id,
+      },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            avatarUrl: true,
+          },
+        },
+        calendarEvent: {
+          select: {
+            id: true,
+            title: true,
+            startTime: true,
+            eventType: true,
+          },
+        },
+        _count: {
+          select: { photos: true },
+        },
+      },
+    });
+
+    return NextResponse.json(album);
+  } catch (error) {
+    console.error("Error creating album:", error);
+    return NextResponse.json(
+      { error: "Failed to create album" },
+      { status: 500 }
+    );
+  }
 }

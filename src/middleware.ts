@@ -17,6 +17,8 @@ export default withAuth(
     callbacks: {
       authorized: ({ token, req }) => {
         const path = req.nextUrl.pathname;
+
+        // Allow static assets
         if (
           path.startsWith("/_next") ||
           path.startsWith("/static") ||
@@ -26,24 +28,26 @@ export default withAuth(
           return true;
         }
 
+        // Public pages that don't require auth
         if (
-          path.startsWith("/post") ||      
+          path === "/" ||  // 🔒 FIX: Only exact homepage, not all paths!
+          path.startsWith("/post") ||
           path.startsWith("/login") ||
-          path.startsWith("/register") ||
-          path.startsWith("/") 
+          path.startsWith("/register")
         ) {
-
           return true;
         }
 
+        // Public API routes
         if (
           path.startsWith("/api/auth") ||
           path.startsWith("/api/invite") ||
-          path.startsWith("/api/public") 
+          path.startsWith("/api/public")
         ) {
           return true;
         }
 
+        // 🔒 Everything else requires valid token
         return !!token;
       },
     },

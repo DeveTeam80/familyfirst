@@ -3,25 +3,49 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateInviteCode } from "@/lib/auth";
 import { sendInvitationEmail } from "@/lib/email";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/nextauth.config";
 
 interface SendInviteBody {
   email: string;
   treeNodeId: string;
   familyId: string;
-  invitedBy: string;
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as SendInviteBody;
-    const { email, treeNodeId, familyId, invitedBy } = body;
+    // 🔒 SECURITY: Require authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    if (!email || !treeNodeId || !familyId || !invitedBy) {
+    const body = (await req.json()) as SendInviteBody;
+    const { email, treeNodeId, familyId } = body;
+
+    if (!email || !treeNodeId || !familyId) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
     }
+
+    // 🔒 SECURITY: Verify caller is ADMIN or OWNER of this family
+    const membership = await prisma.familyMember.findUnique({
+      where: {
+        userId_familyId: { userId: session.user.id, familyId },
+      },
+    });
+
+    if (!membership || !["ADMIN", "OWNER"].includes(membership.role)) {
+      return NextResponse.json(
+        { error: "Only admins can send invites" },
+        { status: 403 }
+      );
+    }
+
+    // Use session user ID as inviter (don't trust request body)
+    const invitedBy = session.user.id;
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -52,7 +76,7 @@ export async function POST(req: NextRequest) {
 
     if (!treeNode) {
       console.warn(`⚠️ Tree node ${treeNodeId} not found in DB. Creating temporary node...`);
-      
+
       // Create family if it doesn't exist
       let family = await prisma.family.findUnique({
         where: { id: familyId },
@@ -108,11 +132,10 @@ export async function POST(req: NextRequest) {
     });
 
     if (existingInvite) {
+      // 🔒 SECURITY: Do NOT expose invite code in response
       return NextResponse.json(
         {
           error: "An active invite is already pending for this user",
-          inviteCode: existingInvite.inviteCode,
-          expiresAt: existingInvite.expiresAt,
         },
         { status: 409 }
       );

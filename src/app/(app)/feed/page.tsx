@@ -439,15 +439,27 @@ export default function Feed() {
   const startEditFor = (postId: string) => {
     const post = postsArr.find((x) => x.id === postId);
     if (!post) return;
-    // Note: Admin check is handled in PostCard via props, but for starting edit:
-    // Only author can EDIT text. Admin can DELETE. 
-    // So logic remains: must be user's own post to edit content.
+
+    // ✅ Check permissions (only author can edit)
     if (post.userId !== currentUserId) return;
 
     setEditTargetId(postId);
     setEditContent(post.content ?? "");
     setEditTags([...post.tags]);
-    setEditImages(post.images ? post.images : post.image ? [post.image] : []);
+
+    // ⭐ FIX: Check all possible image sources in priority order
+    // Priority: photos array (new format) > images array > single image
+    if (post.photos && post.photos.length > 0) {
+      // New format: photos array with { id, url }
+      setEditImages(post.photos.map((photo: { id: string; url: string }) => photo.url));
+    } else if (post.images && post.images.length > 0) {
+      setEditImages(post.images);
+    } else if (post.image) {
+      setEditImages([post.image]);
+    } else {
+      setEditImages([]);
+    }
+
     setEditOpen(true);
   };
 

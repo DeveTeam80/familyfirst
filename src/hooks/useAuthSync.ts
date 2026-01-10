@@ -18,7 +18,12 @@ interface ApiUserResponse {
     avatarUrl?: string;
     bio?: string;
     location?: string;
+    birthday?: string | null;
+    anniversary?: string | null;
+    // 🔧 FIX: Include memberships for role checks
+    memberships?: Array<{ familyId: string; role: string }>;
   };
+  memberships?: Array<{ familyId: string; role: string }>;
 }
 
 // Extended session user type
@@ -79,6 +84,10 @@ export function useAuthSync() {
               avatar: user.avatarUrl ?? null,
               bio: user.bio ?? "",
               location: user.location ?? "",
+              birthday: user.birthday ?? null,
+              anniversary: user.anniversary ?? null,
+              // 🔧 FIX: Include memberships for role-based permissions
+              memberships: user.memberships || [],
             })
           );
         } catch (err) {

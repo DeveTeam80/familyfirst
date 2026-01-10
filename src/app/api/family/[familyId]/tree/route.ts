@@ -31,6 +31,7 @@ export async function GET(
       );
     }
 
+    // Fetch nodes AND their linked user avatars in one query
     const nodes = await prisma.familyTreeNode.findMany({
       where: { familyId },
       select: {
@@ -43,6 +44,12 @@ export async function GET(
         deathDate: true,
         weddingAnniversary: true,
         photoUrl: true,
+        // 🚀 Include linked user avatar to avoid separate fetch
+        user: {
+          select: {
+            avatarUrl: true,
+          },
+        },
         relationshipsFrom: {
           select: {
             relationshipType: true,
@@ -61,7 +68,7 @@ export async function GET(
     // ⭐ FIX: Format dates properly to preserve month and day
     const formatDate = (date: Date | null) => {
       if (!date) return undefined;
-      
+
       // Return full ISO date string (YYYY-MM-DD)
       return date.toISOString().split('T')[0];
     };
@@ -99,7 +106,8 @@ export async function GET(
           // ⭐ FIX: Send full date string in YYYY-MM-DD format
           birthday: formatDate(node.birthDate),
           photoUrl: node.photoUrl,
-          avatar: node.photoUrl ?? undefined,
+          // 🚀 Include user avatar directly (eliminates extra API call)
+          avatar: node.user?.avatarUrl || node.photoUrl || undefined,
           gender: node.gender === "F" ? "F" : "M",
           deathDate: formatDate(node.deathDate),
           weddingAnniversary: formatDate(node.weddingAnniversary),
