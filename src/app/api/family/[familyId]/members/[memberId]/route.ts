@@ -17,6 +17,14 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
     }
 
+    // 🔒 SECURITY: Verify requester is member of this family
+    const requesterMembership = await prisma.familyMember.findUnique({
+      where: { userId_familyId: { userId: requesterId, familyId } },
+    });
+    if (!requesterMembership) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     // 1. Check if member exists
     const existingNode = await prisma.familyTreeNode.findUnique({
       where: { id: memberId },
@@ -28,27 +36,27 @@ export async function PUT(
 
     // 2. Parse Body
     const body = await req.json();
-    const { 
-      firstName, 
-      lastName, 
-      gender, 
-      birthday, 
+    const {
+      firstName,
+      lastName,
+      gender,
+      birthday,
       avatar, // This is the NEW URL
-      deathDate, 
-      weddingAnniversary 
+      deathDate,
+      weddingAnniversary
     } = body;
 
     // ⭐ NEW: Cloudinary Cleanup Logic
     // If we have a new avatar, and there was an old one, and they are different...
     if (avatar && existingNode.photoUrl && avatar !== existingNode.photoUrl) {
-       const publicId = getPublicIdFromUrl(existingNode.photoUrl);
-       if (publicId) {
-          try {
-             await cloudinary.uploader.destroy(publicId);
-          } catch (e) {
-             console.error("Failed to delete old member photo", e);
-          }
-       }
+      const publicId = getPublicIdFromUrl(existingNode.photoUrl);
+      if (publicId) {
+        try {
+          await cloudinary.uploader.destroy(publicId);
+        } catch (e) {
+          console.error("Failed to delete old member photo", e);
+        }
+      }
     }
 
     // 3. Update in Database
@@ -86,40 +94,48 @@ export async function DELETE(
     const requesterId = await getUserIdFromRequest(req);
     if (!requesterId) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
 
+    // 🔒 SECURITY: Verify requester is member of this family
+    const requesterMembership = await prisma.familyMember.findUnique({
+      where: { userId_familyId: { userId: requesterId, familyId } },
+    });
+    if (!requesterMembership) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     // 1. Fetch the node FIRST to get the photo URL
     const node = await prisma.familyTreeNode.findUnique({
-       where: { id: memberId },
-       select: { id: true, photoUrl: true, familyId: true } 
+      where: { id: memberId },
+      select: { id: true, photoUrl: true, familyId: true }
     });
 
     if (!node || node.familyId !== familyId) {
-       return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
     // ⭐ NEW: Cloudinary Cleanup Logic
     if (node.photoUrl) {
-       const publicId = getPublicIdFromUrl(node.photoUrl);
-       if (publicId) {
-          // Fire and forget (don't await blocking the UI response if you want speed, 
-          // but awaiting ensures cleanliness)
-          await cloudinary.uploader.destroy(publicId).catch(err => 
-             console.error("Failed to delete member photo", err)
-          );
-       }
+      const publicId = getPublicIdFromUrl(node.photoUrl);
+      if (publicId) {
+        // Fire and forget (don't await blocking the UI response if you want speed, 
+        // but awaiting ensures cleanliness)
+        await cloudinary.uploader.destroy(publicId).catch(err =>
+          console.error("Failed to delete member photo", err)
+        );
+      }
     }
 
     await prisma.$transaction(async (tx) => {
-       // Delete relationships first
-       await tx.familyRelationship.deleteMany({
-         where: {
-           OR: [{ person1Id: memberId }, { person2Id: memberId }],
-         },
-       });
+      // Delete relationships first
+      await tx.familyRelationship.deleteMany({
+        where: {
+          OR: [{ person1Id: memberId }, { person2Id: memberId }],
+        },
+      });
 
-       // Delete the node
-       await tx.familyTreeNode.delete({
-         where: { id: memberId },
-       });
+      // Delete the node
+      await tx.familyTreeNode.delete({
+        where: { id: memberId },
+      });
     });
 
     return NextResponse.json({ success: true });

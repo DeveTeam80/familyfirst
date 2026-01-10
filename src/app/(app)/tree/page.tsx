@@ -3,8 +3,8 @@
 import React, { useRef, useState, useCallback, useEffect } from "react";
 // 👇 Import Redux hooks and selectors
 import { useSelector } from "react-redux";
-import {  selectCurrentUser,selectUserLoading } from "@/store/userSlice";
-import { selectActiveFamilyId,selectIsAdminForActiveFamily } from "@/store/familySlice";
+import { selectCurrentUser, selectUserLoading } from "@/store/userSlice";
+import { selectActiveFamilyId, selectIsAdminForActiveFamily } from "@/store/familySlice";
 import {
   Box,
   IconButton,
@@ -15,6 +15,8 @@ import {
   alpha,
   CircularProgress,
   Typography,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import { MdOutlineArrowBack } from "react-icons/md";
 import { RxCross2 } from "react-icons/rx";
@@ -33,7 +35,6 @@ import {
   FamilyTreeNode,
   FamilyTreeChartHandle,
   RelationType,
-  UserAvatarDTO,
 } from "@/components/familytree/types";
 
 // Define the new member data type
@@ -84,6 +85,13 @@ export default function FamilyTreePage() {
   const [isAddMode, setIsAddMode] = useState(false);
   const [isAtDefaultView, setIsAtDefaultView] = useState(true);
 
+  // 🎉 Snackbar State for Success Feedback
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: "success" | "error";
+  }>({ open: false, message: "", severity: "success" });
+
   // 1. 🛡️ BLOCKING LOADER (Crucial Fix)
   // If we don't have a family ID yet, DO NOT render the main UI.
   // This prevents the Chart from crashing and prevents requests to "/null/"
@@ -96,30 +104,16 @@ export default function FamilyTreePage() {
     try {
       setTreeLoading(true);
 
-      // Helper defined inside to ensure it uses the current familyId
-      const fetchAvatars = async () => {
-        const res = await fetch(`/api/users?familyId=${familyId}`);
-        if (!res.ok) return new Map<string, string>();
-        const json = await res.json();
-        const map = new Map<string, string>();
-        json.users?.forEach((u: UserAvatarDTO) => {
-          if (u.id && u.avatarUrl) map.set(u.id, u.avatarUrl);
-        });
-        return map;
-      };
-
-      const [treeRes, userAvatarMap] = await Promise.all([
-        fetch(`/api/family/${familyId}/tree`, { credentials: "include" }),
-        fetchAvatars(),
-      ]);
+      // 🚀 Single API call - avatars now included in tree response
+      const treeRes = await fetch(`/api/family/${familyId}/tree`, { credentials: "include" });
 
       if (!treeRes.ok) throw new Error("Tree fetch failed");
 
       const rawData: FamilyTreeNode[] = await treeRes.json();
 
       const normalized = rawData.map((node) => {
-        const userAvatar = node.userId && userAvatarMap.get(node.userId);
-        const finalAvatar = userAvatar || node.data.photoUrl || node.data.avatar;
+        // Avatar is now included directly from the API
+        const finalAvatar = node.data.avatar || node.data.photoUrl;
 
         return {
           ...node,
@@ -163,7 +157,7 @@ export default function FamilyTreePage() {
     const freshNode = treeData.find((n) => n.id === node.id) || node;
     setQuickActionNode(freshNode);
     setInspectorNode(null);
-    setIsAtDefaultView(false); 
+    setIsAtDefaultView(false);
   }, [treeData]);
 
   const handleTriggerAddFromPill = () => {
@@ -217,13 +211,13 @@ export default function FamilyTreePage() {
         const slug =
           typeof username === "string"
             ? encodeURIComponent(
-                username
-                  .toString()
-                  .trim()
-                  .toLowerCase()
-                  .replace(/\s+/g, "-")
-                  .replace(/[^a-z0-9\-._~]/g, "")
-              )
+              username
+                .toString()
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, "-")
+                .replace(/[^a-z0-9\-._~]/g, "")
+            )
             : data.user.id;
 
         router.push(`/${slug}`);
@@ -259,13 +253,24 @@ export default function FamilyTreePage() {
       });
 
       if (!res.ok) throw new Error("Failed");
-      
+
       setTreeData((prev) => prev.map((n) => (n.id === updatedNode.id ? updatedNode : n)));
       setInspectorNode(updatedNode);
       await fetchTreeData();
+
+      // 🎉 Show success notification
+      setSnackbar({
+        open: true,
+        message: `${updatedNode.data["first name"]} updated successfully!`,
+        severity: "success",
+      });
     } catch (error) {
       console.error("Edit failed", error);
-      alert("Failed to save.");
+      setSnackbar({
+        open: true,
+        message: "Failed to save changes. Please try again.",
+        severity: "error",
+      });
     }
   };
 
@@ -306,9 +311,21 @@ export default function FamilyTreePage() {
       }
 
       await fetchTreeData();
+
+      // 🎉 Show success notification
+      const memberName = newMemberData.firstName + (newMemberData.lastName ? ` ${newMemberData.lastName}` : "");
+      setSnackbar({
+        open: true,
+        message: `${memberName} added to the family tree!`,
+        severity: "success",
+      });
     } catch (error) {
       console.error("❌ Error adding member:", error);
-      alert("Failed to add member. Please try again.");
+      setSnackbar({
+        open: true,
+        message: "Failed to add member. Please try again.",
+        severity: "error",
+      });
     }
   };
 
@@ -318,7 +335,7 @@ export default function FamilyTreePage() {
     setAddSpecificRole(null);
     handleExitEditMode();
   };
-if (isNotReady) {
+  if (isNotReady) {
     return (
       <Box sx={{ height: "calc(100vh - 64px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", bgcolor: theme.palette.background.default }}>
         <CircularProgress size={40} />
@@ -469,6 +486,23 @@ if (isNotReady) {
           specificRole={addSpecificRole}
           onAdd={handleAddMember}
         />
+
+        {/* 🎉 Success/Error Snackbar */}
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={3000}
+          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+          anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        >
+          <Alert
+            onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+            severity={snackbar.severity}
+            variant="filled"
+            sx={{ width: "100%" }}
+          >
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
       </Box>
     </LocalizationProvider>
   );

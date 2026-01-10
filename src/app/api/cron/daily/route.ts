@@ -1,9 +1,9 @@
 // src/app/api/cron/daily/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { 
-  cleanupOldNotifications, 
-  checkDailyBirthdays, 
-  checkDailyAnniversaries 
+import {
+  cleanupOldNotifications,
+  checkDailyBirthdays,
+  checkDailyAnniversaries
 } from "@/lib/notifications";
 
 export const dynamic = 'force-dynamic';
@@ -14,7 +14,13 @@ export async function POST(request: NextRequest) {
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    // 🔒 SECURITY: CRON_SECRET must be configured
+    if (!cronSecret) {
+      console.error("CRON_SECRET not configured - rejecting request");
+      return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
+    }
+
+    if (authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -49,7 +55,7 @@ export async function GET(_request: NextRequest) {
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "Use POST in production" }, { status: 405 });
   }
-  
+
   // Re-use logic for dev test
   const [deletedCount] = await Promise.all([
     cleanupOldNotifications(),

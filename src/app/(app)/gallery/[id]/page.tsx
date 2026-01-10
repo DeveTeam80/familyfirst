@@ -143,7 +143,7 @@ export default function AlbumDetailPage() {
       const response = await fetch(`/api/albums/${params.id}`);
       if (response.ok) {
         const data = await response.json();
-        
+
         const formattedAlbum: AlbumDetails = {
           id: data.id,
           title: data.title,
@@ -185,7 +185,7 @@ export default function AlbumDetailPage() {
   const uploaderStats = useMemo(() => {
     if (!album) return [];
     const stats = new Map<string, { name: string; count: number }>();
-    
+
     album.images.forEach((img) => {
       const name = img.user.name || img.user.username || "Unknown";
       if (stats.has(name)) {
@@ -194,7 +194,7 @@ export default function AlbumDetailPage() {
         stats.set(name, { name, count: 1 });
       }
     });
-    
+
     return Array.from(stats.values()).sort((a, b) => b.count - a.count);
   }, [album]);
 
@@ -241,7 +241,7 @@ export default function AlbumDetailPage() {
 
   const handleDeleteImage = async () => {
     if (!selectedImageId || !album) return;
-    
+
     // We don't need a confirm here if the logic is safe, but it's good UX
     if (!confirm("Remove this photo from the album?")) return;
 
@@ -334,7 +334,7 @@ export default function AlbumDetailPage() {
 
   // 👇 Permission Check Helpers
   const canManageAlbum = album ? (isAdmin || album.createdBy === currentUser?.id) : false;
-  
+
   const getSelectedPhoto = () => {
     if (lightboxOpen) return filteredImages[lightboxIndex];
     if (selectedImageId) return album?.images.find(i => i.id === selectedImageId);
@@ -343,8 +343,8 @@ export default function AlbumDetailPage() {
 
   const selectedPhoto = getSelectedPhoto();
   const canDeleteCurrentPhoto = selectedPhoto ? (
-    isAdmin || 
-    album?.createdBy === currentUser?.id || 
+    isAdmin ||
+    album?.createdBy === currentUser?.id ||
     selectedPhoto.uploadedBy === currentUser?.id
   ) : false;
 
@@ -647,14 +647,14 @@ export default function AlbumDetailPage() {
           )}
         </Box>
       ) : (
-        <ImageList variant="masonry" cols={cols} gap={isMobile ? 8 : 12}>
+        <ImageList cols={cols} gap={isMobile ? 8 : 12} sx={{ overflow: "visible" }}>
           {filteredImages.map((img, index) => (
             <ImageListItem
               key={img.id}
               sx={{
                 borderRadius: 2,
                 overflow: "hidden",
-                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                transition: "transform 0.2s, box-shadow 0.2s",
                 position: "relative",
                 cursor: "pointer",
                 "&:hover": {
@@ -671,7 +671,13 @@ export default function AlbumDetailPage() {
                   alt={img.title || `Photo ${index + 1}`}
                   width={400}
                   height={400}
-                  style={{ width: "100%", height: "auto", display: "block" }}
+                  style={{
+                    width: "100%",
+                    height: "auto",
+                    display: "block",
+                    aspectRatio: "1", // Square images for consistent grid
+                    objectFit: "cover",
+                  }}
                   loading="lazy"
                 />
               </Box>
@@ -769,7 +775,7 @@ export default function AlbumDetailPage() {
             <ListItemText>Set as Album Cover</ListItemText>
           </MenuItem>
         )}
-        
+
         {/* Copy Link: Everyone */}
         <MenuItem onClick={handleCopyLink}>
           <ListItemIcon>
@@ -777,9 +783,9 @@ export default function AlbumDetailPage() {
           </ListItemIcon>
           <ListItemText>Copy Link</ListItemText>
         </MenuItem>
-        
+
         <Divider />
-        
+
         {/* Delete: Admin, Owner, or Uploader */}
         {canDeleteCurrentPhoto && (
           <MenuItem onClick={handleDeleteImage} sx={{ color: "error.main" }}>
@@ -995,6 +1001,6 @@ export default function AlbumDetailPage() {
         message={snackbarMsg}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       />
-    </Box>
+    </Box >
   );
 }

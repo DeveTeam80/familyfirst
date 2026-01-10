@@ -4,16 +4,16 @@
 import { useParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store";
-import { setPosts, Post as ReduxPost } from "@/store/postSlice"; 
+import { setPosts, Post as ReduxPost } from "@/store/postSlice";
 import { updateProfile, setCurrentUser, UserProfile } from "@/store/userSlice";
 
 // ✅ FIXED IMPORTS: Added Paper, alpha, and Theme
-import { 
-  Avatar, 
-  Box, 
-  Button, 
-  Stack, 
-  Typography, 
+import {
+  Avatar,
+  Box,
+  Button,
+  Stack,
+  Typography,
   CircularProgress,
   Paper,   // 👈 Added
   alpha,   // 👈 Added
@@ -93,7 +93,7 @@ export default function UserProfilePage() {
     // If we have initial profile, not loading, else will fetch
     return profile ? false : true;
   });
-  
+
 
   React.useEffect(() => {
     let mounted = true;
@@ -185,9 +185,12 @@ export default function UserProfilePage() {
     try {
       // 👇 PASS THE PROFILE ID HERE
       // fetchPosts(page, limit, userId)
-      const postsData = await fetchPosts(1, 10, profile.id);
+      const response = await fetchPosts(1, 10, profile.id);
 
-      dispatch(setPosts(postsData));
+      // 🔧 FIX: API returns { posts: [...], pagination: {...} }
+      // We need to extract the posts array
+      const posts = response.posts || response;
+      dispatch(setPosts(posts));
     } catch (error) {
       console.error("Error loading posts:", error);
     }
@@ -302,7 +305,12 @@ export default function UserProfilePage() {
     setEditContent(p.content ?? "");
     setEditTags([...p.tags]);
 
-    if (p.images && p.images.length > 0) {
+    // 🔧 FIX: Check all possible image sources
+    // Priority: photos array (new format) > images array > single image
+    if (p.photos && p.photos.length > 0) {
+      // New format: photos array with { id, url }
+      setEditImages(p.photos.map((photo) => photo.url));
+    } else if (p.images && p.images.length > 0) {
       setEditImages(p.images);
     } else if (p.image) {
       setEditImages([p.image]);
@@ -420,6 +428,8 @@ export default function UserProfilePage() {
           avatar: updatedUser.avatarUrl ?? null,
           bio: updatedUser.bio ?? "",
           location: updatedUser.location ?? "",
+          birthday: updatedUser.birthday ?? null,
+          anniversary: updatedUser.anniversary ?? null,
         })
       );
 
@@ -435,11 +445,28 @@ export default function UserProfilePage() {
             avatar: updatedUser.avatarUrl,
             location: updatedUser.location,
             email: updatedUser.email,
+            // 🔧 FIX: Include birthday and anniversary for immediate UI update
+            birthday: updatedUser.birthday ?? null,
+            anniversary: updatedUser.anniversary ?? null,
           },
         })
       );
 
-      // 3) Re-fetch posts so all post/comment avatars are refreshed immediately
+      // 3) Update local profile state immediately for instant UI update
+      setProfile((prev) => ({
+        ...prev!,
+        id: updatedUser.id,
+        username: derivedUsername,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        avatar: updatedUser.avatarUrl ?? null,
+        bio: updatedUser.bio ?? "",
+        location: updatedUser.location ?? "",
+        birthday: updatedUser.birthday ?? null,
+        anniversary: updatedUser.anniversary ?? null,
+      }));
+
+      // 4) Re-fetch posts so all post/comment avatars are refreshed immediately
       await loadPosts();
 
       setEditProfileOpen(false);
@@ -503,13 +530,13 @@ export default function UserProfilePage() {
     }
   };
   const formatDate = (dateString?: string | null) => {
-  if (!dateString) return null;
-  return new Date(dateString).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-};
+    if (!dateString) return null;
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
 
 
   // ---- render -----------------------------------------------------
@@ -532,179 +559,179 @@ export default function UserProfilePage() {
       </Box>
     );
   }
-  
-const formattedBirthday = formatDate(profile.birthday);
-const formattedAnniversary = formatDate(profile.anniversary);
+
+  const formattedBirthday = formatDate(profile.birthday);
+  const formattedAnniversary = formatDate(profile.anniversary);
 
   return (
-  <Box sx={{ p: 3, maxWidth: 1100, mx: "auto" }}>
-    <Paper
-      elevation={0}
-      sx={{
-        p: 3,
-        mb: 3,
-        borderRadius: 4,
-        background: (theme) => alpha(theme.palette.background.paper, 0.8),
-        backdropFilter: "blur(10px)",
-        border: "1px solid",
-        borderColor: "divider",
-      }}
-    >
-      <Box
+    <Box sx={{ p: 3, maxWidth: 1100, mx: "auto" }}>
+      <Paper
+        elevation={0}
         sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", sm: "160px 1fr" },
-          gap: 3,
-          alignItems: "start", // Changed to start for better text alignment
+          p: 3,
+          mb: 3,
+          borderRadius: 4,
+          background: (theme) => alpha(theme.palette.background.paper, 0.8),
+          backdropFilter: "blur(10px)",
+          border: "1px solid",
+          borderColor: "divider",
         }}
       >
-        {/* Avatar Column */}
-        <Box sx={{ display: "grid", placeItems: "center" }}>
-          <Avatar
-            src={profile.avatar || undefined}
-            alt={profile.name}
-            sx={{
-              width: { xs: 120, sm: 160 },
-              height: { xs: 120, sm: 160 },
-              border: "4px solid",
-              borderColor: "background.paper",
-              boxShadow: 3,
-            }}
-          >
-            {profile.name?.[0]}
-          </Avatar>
-        </Box>
-
-        {/* Info Column */}
-        <Box>
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            spacing={2}
-            alignItems={{ xs: "center", sm: "center" }} // Center on mobile, left on desktop
-            justifyContent="space-between"
-            sx={{ mb: 1, textAlign: { xs: "center", sm: "left" } }}
-          >
-            <Box>
-              <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
-                {profile.name}
-              </Typography>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
-                @{profile.username}
-              </Typography>
-            </Box>
-
-            {isOwner && (
-              <Button
-                variant="outlined"
-                onClick={openEditProfile}
-                sx={{ borderRadius: 20, textTransform: "none", fontWeight: 600 }}
-              >
-                Edit Profile
-              </Button>
-            )}
-          </Stack>
-
-          {/* 📝 Bio Section */}
-          {profile.bio && (
-            <Typography 
-              variant="body1" 
-              sx={{ 
-                mb: 2, 
-                whiteSpace: "pre-wrap", 
-                textAlign: { xs: "center", sm: "left" },
-                color: "text.primary"
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", sm: "160px 1fr" },
+            gap: 3,
+            alignItems: "start", // Changed to start for better text alignment
+          }}
+        >
+          {/* Avatar Column */}
+          <Box sx={{ display: "grid", placeItems: "center" }}>
+            <Avatar
+              src={profile.avatar || undefined}
+              alt={profile.name}
+              sx={{
+                width: { xs: 120, sm: 160 },
+                height: { xs: 120, sm: 160 },
+                border: "4px solid",
+                borderColor: "background.paper",
+                boxShadow: 3,
               }}
             >
-              {profile.bio}
-            </Typography>
-          )}
+              {profile.name?.[0]}
+            </Avatar>
+          </Box>
 
-          {/* 📅 Details Grid (Location, Bday, Anniversary) */}
-          <Stack
-            direction="row"
-            spacing={2}
-            flexWrap="wrap"
-            justifyContent={{ xs: "center", sm: "flex-start" }}
-            sx={{ mt: 2, gap: 2 }} // gap handles wrapping spacing better
-          >
-            {/* Location */}
-            {profile.location && (
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, color: "text.secondary" }}>
-                <Typography variant="body2">📍 {profile.location}</Typography>
-              </Box>
-            )}
-
-            {/* Birthday */}
-            {formattedBirthday && (
-              <Box 
-                sx={{ 
-                  display: "flex", 
-                  alignItems: "center", 
-                  gap: 1, 
-                  color: "text.secondary",
-                  bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
-                  px: 1.5,
-                  py: 0.5,
-                  borderRadius: 2
-                }}
-              >
-                <Cake sx={{ fontSize: 18, color: "primary.main" }} />
-                <Typography variant="body2" fontWeight={500}>
-                  {formattedBirthday}
+          {/* Info Column */}
+          <Box>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={2}
+              alignItems={{ xs: "center", sm: "center" }} // Center on mobile, left on desktop
+              justifyContent="space-between"
+              sx={{ mb: 1, textAlign: { xs: "center", sm: "left" } }}
+            >
+              <Box>
+                <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
+                  {profile.name}
+                </Typography>
+                <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
+                  @{profile.username}
                 </Typography>
               </Box>
-            )}
 
-            {/* Anniversary */}
-            {formattedAnniversary && (
-              <Box 
-                sx={{ 
-                  display: "flex", 
-                  alignItems: "center", 
-                  gap: 1, 
-                  color: "text.secondary",
-                  bgcolor: (theme) => alpha(theme.palette.secondary.main, 0.08),
-                  px: 1.5,
-                  py: 0.5,
-                  borderRadius: 2
+              {isOwner && (
+                <Button
+                  variant="outlined"
+                  onClick={openEditProfile}
+                  sx={{ borderRadius: 20, textTransform: "none", fontWeight: 600 }}
+                >
+                  Edit Profile
+                </Button>
+              )}
+            </Stack>
+
+            {/* 📝 Bio Section */}
+            {profile.bio && (
+              <Typography
+                variant="body1"
+                sx={{
+                  mb: 2,
+                  whiteSpace: "pre-wrap",
+                  textAlign: { xs: "center", sm: "left" },
+                  color: "text.primary"
                 }}
               >
-                <Favorite sx={{ fontSize: 18, color: "secondary.main" }} />
-                <Typography variant="body2" fontWeight={500}>
-                  {formattedAnniversary}
-                </Typography>
-              </Box>
+                {profile.bio}
+              </Typography>
             )}
-          </Stack>
+
+            {/* 📅 Details Grid (Location, Bday, Anniversary) */}
+            <Stack
+              direction="row"
+              spacing={2}
+              flexWrap="wrap"
+              justifyContent={{ xs: "center", sm: "flex-start" }}
+              sx={{ mt: 2, gap: 2 }} // gap handles wrapping spacing better
+            >
+              {/* Location */}
+              {profile.location && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, color: "text.secondary" }}>
+                  <Typography variant="body2">📍 {profile.location}</Typography>
+                </Box>
+              )}
+
+              {/* Birthday */}
+              {formattedBirthday && (
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    color: "text.secondary",
+                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
+                    px: 1.5,
+                    py: 0.5,
+                    borderRadius: 2
+                  }}
+                >
+                  <Cake sx={{ fontSize: 18, color: "primary.main" }} />
+                  <Typography variant="body2" fontWeight={500}>
+                    {formattedBirthday}
+                  </Typography>
+                </Box>
+              )}
+
+              {/* Anniversary */}
+              {formattedAnniversary && (
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    color: "text.secondary",
+                    bgcolor: (theme) => alpha(theme.palette.secondary.main, 0.08),
+                    px: 1.5,
+                    py: 0.5,
+                    borderRadius: 2
+                  }}
+                >
+                  <Favorite sx={{ fontSize: 18, color: "secondary.main" }} />
+                  <Typography variant="body2" fontWeight={500}>
+                    {formattedAnniversary}
+                  </Typography>
+                </Box>
+              )}
+            </Stack>
+          </Box>
         </Box>
-      </Box>
-    </Paper>
+      </Paper>
 
-    {/* Posts Tab / Content */}
-    <Stack spacing={2}>
-      {/* ... existing posts map ... */}
-      {userPosts.length === 0 ? (
-        <Typography variant="body2" color="text.secondary" textAlign="center" py={4}>
-          No posts yet.
-        </Typography>
-      ) : (
-        userPosts.map((post: ReduxPost) => (
-           <React.Fragment key={post.id}>
-             <PostCard 
-               // ... keep your existing props ...
-               currentUserId={currentUser?.id ?? ""}
-               post={post}
-               currentUserName={currentUserName}
-               onLike={onLike}
-               onCommentClick={onCommentClick}
-               onEdit={startEditFor}
-               onDelete={askDeleteFor}
-               onShare={onShare}
-               canEdit={isOwner}
-               commentsOpen={activeCommentPost === post.id}
-               commentSection={
-                 // ... keep existing comment box logic ...
-                 <CommentBox
+      {/* Posts Tab / Content */}
+      <Stack spacing={2}>
+        {/* ... existing posts map ... */}
+        {userPosts.length === 0 ? (
+          <Typography variant="body2" color="text.secondary" textAlign="center" py={4}>
+            No posts yet.
+          </Typography>
+        ) : (
+          userPosts.map((post: ReduxPost) => (
+            <React.Fragment key={post.id}>
+              <PostCard
+                // ... keep your existing props ...
+                currentUserId={currentUser?.id ?? ""}
+                post={post}
+                currentUserName={currentUserName}
+                onLike={onLike}
+                onCommentClick={onCommentClick}
+                onEdit={startEditFor}
+                onDelete={askDeleteFor}
+                onShare={onShare}
+                canEdit={isOwner}
+                commentsOpen={activeCommentPost === post.id}
+                commentSection={
+                  // ... keep existing comment box logic ...
+                  <CommentBox
                     openForPostId={activeCommentPost}
                     postId={post.id}
                     comments={post.comments}
@@ -717,13 +744,13 @@ const formattedAnniversary = formatDate(profile.anniversary);
                     onEditComment={handleEditComment}
                     onDeleteComment={handleDeleteComment}
                     onReplyComment={handleReplyComment}
-                 />
-               }
-             />
-           </React.Fragment>
-        ))
-      )}
-    </Stack>
+                  />
+                }
+              />
+            </React.Fragment>
+          ))
+        )}
+      </Stack>
 
       {/* Dialogs */}
       <ShareDialog

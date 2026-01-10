@@ -13,16 +13,19 @@ import {
   TextField,
   Typography,
   CircularProgress,
+  Snackbar,
+  Alert,
 } from "@mui/material";
+import { CheckCircle } from "@mui/icons-material";
 import imageCompression from "browser-image-compression";
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  onSave: (changes: { 
-    name?: string; 
-    bio?: string; 
-    avatar?: string | null; 
+  onSave: (changes: {
+    name?: string;
+    bio?: string;
+    avatar?: string | null;
     location?: string;
     birthday?: string | null; // ✅ Added
     anniversary?: string | null; // ✅ Added
@@ -42,7 +45,7 @@ type Props = {
 
 const formatDateForInput = (dateString?: string | null) => {
   if (!dateString) return "";
-  return dateString.split("T")[0]; 
+  return dateString.split("T")[0];
 };
 
 export default function EditProfileDialog({
@@ -63,7 +66,12 @@ export default function EditProfileDialog({
 }: Props) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+
+  // 🎉 Success/Error feedback state
+  const [showSuccess, setShowSuccess] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
   const triggerFile = () => {
     if (!inputRef.current) return;
@@ -127,30 +135,43 @@ export default function EditProfileDialog({
 
   const handleSave = async () => {
     try {
-      setUploading(true);
+      setSaving(true);
+      setError(null);
 
       let finalAvatarUrl = avatar;
 
       // If there's a selected file (blob URL), upload it first
       if (selectedFile && avatar?.startsWith('blob:')) {
+        setUploading(true); // Only set uploading when actually uploading image
         finalAvatarUrl = await uploadToCloudinary(selectedFile);
+        setUploading(false);
       }
 
       // Call onSave with all fields
-      onSave({
+      await onSave({
         name: name.trim(),
         bio: bio.trim(),
         avatar: finalAvatarUrl,
-        birthday: birthday || null, // ✅ Include birthday
-        anniversary: anniversary || null, // ✅ Include anniversary
+        birthday: birthday || null,
+        anniversary: anniversary || null,
       });
+
+      // ✅ Show success feedback
+      setShowSuccess(true);
 
       // Clean up
       setSelectedFile(null);
-    } catch (error) {
-      console.error("Error uploading avatar:", error);
-      alert("Failed to upload avatar. Please try again.");
+
+      // Close dialog after brief delay to show success
+      setTimeout(() => {
+        onClose();
+        setShowSuccess(false);
+      }, 800);
+    } catch (err) {
+      console.error("Error saving profile:", err);
+      setError(err instanceof Error ? err.message : "Failed to save profile. Please try again.");
     } finally {
+      setSaving(false);
       setUploading(false);
     }
   };
@@ -186,7 +207,7 @@ export default function EditProfileDialog({
               <Button
                 variant="outlined"
                 onClick={triggerFile}
-                disabled={uploading}
+                disabled={saving}
                 size="small"
                 sx={{ borderRadius: 2 }}
               >
@@ -196,7 +217,7 @@ export default function EditProfileDialog({
                 variant="text"
                 color="error"
                 onClick={onRemoveAvatar}
-                disabled={(!currentAvatar && avatar !== null) || uploading}
+                disabled={(!currentAvatar && avatar !== null) || saving}
                 size="small"
                 sx={{ borderRadius: 2 }}
               >
@@ -227,7 +248,7 @@ export default function EditProfileDialog({
             fullWidth
             value={name}
             onChange={(e) => setName(e.target.value)}
-            disabled={uploading}
+            disabled={saving}
             sx={{
               '& .MuiOutlinedInput-root': {
                 borderRadius: 2,
@@ -243,7 +264,7 @@ export default function EditProfileDialog({
             minRows={3}
             value={bio}
             onChange={(e) => setBio(e.target.value)}
-            disabled={uploading}
+            disabled={saving}
             sx={{
               '& .MuiOutlinedInput-root': {
                 borderRadius: 2,
@@ -257,14 +278,14 @@ export default function EditProfileDialog({
             type="date"
             fullWidth
             // ⭐ Use helper here!
-            value={formatDateForInput(birthday)} 
+            value={formatDateForInput(birthday)}
             onChange={(e) => setBirthday?.(e.target.value || null)}
-            disabled={uploading}
+            disabled={saving}
             InputLabelProps={{ shrink: true }}
             helperText="Your birthday"
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
           />
-          
+
 
           {/* ✅ FIXED ANNIVERSARY FIELD */}
           <TextField
@@ -272,9 +293,9 @@ export default function EditProfileDialog({
             type="date"
             fullWidth
             // ⭐ Use helper here!
-            value={formatDateForInput(anniversary)} 
+            value={formatDateForInput(anniversary)}
             onChange={(e) => setAnniversary?.(e.target.value || null)}
-            disabled={uploading}
+            disabled={saving}
             InputLabelProps={{ shrink: true }}
             helperText="Your anniversary"
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
@@ -284,7 +305,7 @@ export default function EditProfileDialog({
       <DialogActions sx={{ p: 2.5 }}>
         <Button
           onClick={onClose}
-          disabled={uploading}
+          disabled={saving}
           sx={{
             borderRadius: 2,
             textTransform: 'none',
@@ -296,17 +317,64 @@ export default function EditProfileDialog({
         <Button
           variant="contained"
           onClick={handleSave}
-          disabled={(!name.trim() && !bio.trim() && avatar === undefined && !birthday && !anniversary) || uploading}
+          disabled={(!name.trim() && !bio.trim() && avatar === undefined && !birthday && !anniversary) || saving}
+          startIcon={
+            saving ? (
+              <CircularProgress size={20} color="inherit" />
+            ) : showSuccess ? (
+              <CheckCircle />
+            ) : null
+          }
           sx={{
             borderRadius: 2,
             textTransform: 'none',
             fontWeight: 600,
             px: 3,
+            minWidth: 120,
+            bgcolor: showSuccess ? 'success.main' : 'primary.main',
+            '&:hover': {
+              bgcolor: showSuccess ? 'success.dark' : 'primary.dark',
+            },
+            transition: 'all 0.3s',
           }}
         >
-          {uploading ? "Saving..." : "Save"}
+          {saving ? (uploading ? "Uploading..." : "Saving...") : showSuccess ? "Saved!" : "Save"}
         </Button>
       </DialogActions>
+
+      {/* Error Snackbar */}
+      <Snackbar
+        open={!!error}
+        autoHideDuration={5000}
+        onClose={() => setError(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setError(null)}
+          severity="error"
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {error}
+        </Alert>
+      </Snackbar>
+
+      {/* Success Snackbar */}
+      <Snackbar
+        open={showSuccess}
+        autoHideDuration={3000}
+        onClose={() => setShowSuccess(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setShowSuccess(false)}
+          severity="success"
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          Profile updated successfully!
+        </Alert>
+      </Snackbar>
     </Dialog>
   );
 }

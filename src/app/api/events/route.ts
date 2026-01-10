@@ -16,10 +16,28 @@ export async function GET(req: NextRequest) {
         const endDate = searchParams.get("endDate");
         const eventType = searchParams.get("eventType");
 
+        // 🔒 SECURITY: Get user's families to filter events
+        const user = await prisma.user.findUnique({
+            where: { email: session.user.email },
+            select: { id: true },
+        });
+        if (!user) {
+            return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
+
+        const userFamilies = await prisma.familyMember.findMany({
+            where: { userId: user.id },
+            select: { familyId: true },
+        });
+        const familyIds = userFamilies.map((f) => f.familyId);
+
         const where: {
+            familyId: { in: string[] };
             startTime?: { gte?: Date; lte?: Date };
             eventType?: string;
-        } = {};
+        } = {
+            familyId: { in: familyIds }, // 🔒 Only user's families
+        };
 
         // Date range filter
         if (startDate || endDate) {

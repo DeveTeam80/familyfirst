@@ -33,6 +33,14 @@ export async function GET(
       return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
     }
 
+    // 🔒 SECURITY: Verify requester is member of this family
+    const membership = await prisma.familyMember.findUnique({
+      where: { userId_familyId: { userId: requesterId, familyId } },
+    });
+    if (!membership) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     // confirm family exists (optional)
     const family = await prisma.family.findUnique({ where: { id: familyId } });
     if (!family) {
@@ -72,10 +80,10 @@ export async function GET(
       },
     }));
 
-    return NextResponse.json({ 
-      ok: true, 
-      family: { id: family.id, name: family.name }, 
-      members: payload 
+    return NextResponse.json({
+      ok: true,
+      family: { id: family.id, name: family.name },
+      members: payload
     });
   } catch (err) {
     console.error("[GET /api/family/:id/members] error:", err);
@@ -95,6 +103,14 @@ export async function POST(
     const requesterId = await getUserIdFromRequest(req);
     if (!requesterId) {
       return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
+
+    // 🔒 SECURITY: Verify requester is ADMIN or OWNER of this family
+    const membership = await prisma.familyMember.findUnique({
+      where: { userId_familyId: { userId: requesterId, familyId } },
+    });
+    if (!membership || !["ADMIN", "OWNER"].includes(membership.role)) {
+      return NextResponse.json({ error: "Only admins can add members" }, { status: 403 });
     }
 
     const body = await req.json();
@@ -160,8 +176,8 @@ export async function POST(
             { person1Id: node.id, person2Id: spouse.person2Id, relationshipType: "CHILD" }
           );
         }
-      } 
-      
+      }
+
       // =========================================================
       // SCENARIO B: Adding a PARENT to a child
       // =========================================================
@@ -180,7 +196,7 @@ export async function POST(
 
         if (existingParents.length === 1) {
           const existingParentId = existingParents[0].person1Id;
-          
+
           // 3. Auto-link parents as SPOUSES
           const existingSpouseLink = await tx.familyRelationship.findFirst({
             where: { person1Id: node.id, person2Id: existingParentId, relationshipType: "SPOUSE" },
@@ -196,8 +212,8 @@ export async function POST(
           // 4. ⭐ NEW: Auto-link new parent to ALL SIBLINGS
           // Find all children of the *existing parent* (these are siblings of relativeId)
           const siblings = await tx.familyRelationship.findMany({
-            where: { 
-              person1Id: existingParentId, 
+            where: {
+              person1Id: existingParentId,
               relationshipType: "PARENT",
               person2Id: { not: relativeId } // Exclude the child we already linked above
             },
@@ -211,8 +227,8 @@ export async function POST(
             );
           }
         }
-      } 
-      
+      }
+
       // =========================================================
       // SCENARIO C: Adding a SPOUSE
       // =========================================================
