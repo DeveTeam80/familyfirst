@@ -33,7 +33,9 @@ export default withAuth(
           path === "/" ||  // 🔒 FIX: Only exact homepage, not all paths!
           path.startsWith("/post") ||
           path.startsWith("/login") ||
-          path.startsWith("/register")
+          path.startsWith("/register") ||
+          path.startsWith("/forgot-password") ||
+          path.startsWith("/reset-password")
         ) {
           return true;
         }
