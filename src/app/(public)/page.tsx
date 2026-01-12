@@ -49,7 +49,7 @@ export default function LandingPage() {
         <Box sx={{ mb: 3, display: "flex", justifyContent: "center" }}>
           <Image
             src="/assets/russell-issac.jpg" // Ensure you have this image in your public/assets folder
-            alt="Mr. Russell Issac"
+            alt="Mr. Russell Isaac"
             width={180}
             height={180}
             style={{
@@ -79,7 +79,7 @@ export default function LandingPage() {
             component="h1"
             sx={{ fontWeight: 700, color: "text.primary", mb: 0.5 }}
           >
-            Russell Issac
+            Russell Isaac
           </Typography>
           <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 2 }}>
             (12th July 1946 - 12th January 2025)
